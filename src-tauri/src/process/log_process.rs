@@ -67,21 +67,32 @@ pub struct LogProcessState {
 }
 impl Default for LogProcessState {
     fn default() -> Self {
-        Self { active: Mutex::new(None) }
+        Self {
+            active: Mutex::new(None),
+        }
     }
 }
 
 fn now_ms() -> u128 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 fn is_dns_label(value: &str) -> bool {
     let bytes = value.as_bytes();
     !bytes.is_empty()
         && bytes.len() <= 63
-        && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
-        && bytes.first().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
-        && bytes.last().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+        && bytes
+            .first()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && bytes
+            .last()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
 }
 
 fn is_dns_subdomain(value: &str) -> bool {
@@ -95,22 +106,40 @@ fn validate(r: &StartLogStreamRequest) -> Result<(), CommandError> {
         || r.container.trim().is_empty()
         || r.file_path.trim().is_empty()
     {
-        return Err(CommandError::new("invalid_source_config", "stream request fields must be non-empty"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "stream request fields must be non-empty",
+        ));
     }
     if !matches!(r.source_type.as_str(), "app" | "access" | "error") {
-        return Err(CommandError::new("invalid_source_config", "sourceType must be app, access, or error"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "sourceType must be app, access, or error",
+        ));
     }
     if !is_dns_label(&r.namespace) {
-        return Err(CommandError::new("invalid_source_config", "namespace must be a valid Kubernetes DNS label"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "namespace must be a valid Kubernetes DNS label",
+        ));
     }
     if !is_dns_subdomain(&r.pod) {
-        return Err(CommandError::new("invalid_source_config", "pod must be a valid Kubernetes DNS subdomain"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "pod must be a valid Kubernetes DNS subdomain",
+        ));
     }
     if !r.file_path.starts_with('/') || r.file_path.contains('\0') {
-        return Err(CommandError::new("invalid_source_config", "filePath must be absolute and contain no null byte"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "filePath must be absolute and contain no null byte",
+        ));
     }
     if r.initial_tail_lines > 100000 {
-        return Err(CommandError::new("invalid_source_config", "initialTailLines must be <= 100000"));
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "initialTailLines must be <= 100000",
+        ));
     }
     Ok(())
 }
@@ -132,12 +161,21 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
                         if let Some(st) = &source_type {
                             let _ = app.emit(
                                 "log://line",
-                                LogLineEvent { stream_id: stream_id.clone(), source_type: st.clone(), raw: line, received_at: now_ms() },
+                                LogLineEvent {
+                                    stream_id: stream_id.clone(),
+                                    source_type: st.clone(),
+                                    raw: line,
+                                    received_at: now_ms(),
+                                },
                             );
                         } else {
                             let _ = app.emit(
                                 "log://stderr",
-                                LogStreamStderrEvent { stream_id: stream_id.clone(), line, received_at: now_ms() },
+                                LogStreamStderrEvent {
+                                    stream_id: stream_id.clone(),
+                                    line,
+                                    received_at: now_ms(),
+                                },
                             );
                         }
                     }
@@ -147,41 +185,94 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
         }
         if let Some(line) = sp.flush() {
             if let Some(st) = source_type {
-                let _ = app.emit("log://line", LogLineEvent { stream_id, source_type: st, raw: line, received_at: now_ms() });
+                let _ = app.emit(
+                    "log://line",
+                    LogLineEvent {
+                        stream_id,
+                        source_type: st,
+                        raw: line,
+                        received_at: now_ms(),
+                    },
+                );
             } else {
-                let _ = app.emit("log://stderr", LogStreamStderrEvent { stream_id, line, received_at: now_ms() });
+                let _ = app.emit(
+                    "log://stderr",
+                    LogStreamStderrEvent {
+                        stream_id,
+                        line,
+                        received_at: now_ms(),
+                    },
+                );
             }
         }
     })
 }
 
 impl LogProcessState {
-    pub fn start<R: tauri::Runtime>(&self, app: tauri::AppHandle<R>, request: StartLogStreamRequest) -> Result<(), CommandError> {
+    pub fn start<R: tauri::Runtime>(
+        &self,
+        app: tauri::AppHandle<R>,
+        request: StartLogStreamRequest,
+    ) -> Result<(), CommandError> {
         validate(&request)?;
         let mut guard = self.active.lock().unwrap();
         if guard.is_some() {
-            return Err(CommandError::new("stream_already_running", "a log stream is already running"));
+            return Err(CommandError::new(
+                "stream_already_running",
+                "a log stream is already running",
+            ));
         }
         let tail_n = request.initial_tail_lines.to_string();
         let mut child = Command::new("kubectl")
-            .args(["exec", "-n", &request.namespace, &request.pod, "-c", &request.container, "--", "tail", "-n", &tail_n, "-F", &request.file_path])
+            .args([
+                "exec",
+                "-n",
+                &request.namespace,
+                &request.pod,
+                "-c",
+                &request.container,
+                "--",
+                "tail",
+                "-n",
+                &tail_n,
+                "-F",
+                &request.file_path,
+            ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| CommandError::new("stream_spawn_failed", "failed to spawn kubectl exec tail").with_details(e.to_string()))?;
+            .map_err(|e| {
+                CommandError::new("stream_spawn_failed", "failed to spawn kubectl exec tail")
+                    .with_details(e.to_string())
+            })?;
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
         let child = Arc::new(Mutex::new(child));
         let requested = Arc::new(AtomicBool::new(false));
         let stream_id = request.stream_id.clone();
         let source_type = request.source_type.clone();
-        *guard = Some(ActiveLogProcess { stream_id: stream_id.clone(), child: child.clone(), requested_stop: requested.clone() });
+        *guard = Some(ActiveLogProcess {
+            stream_id: stream_id.clone(),
+            child: child.clone(),
+            requested_stop: requested.clone(),
+        });
         drop(guard);
 
-        let _ = app.emit("log://started", LogStreamStartedEvent { stream_id: stream_id.clone(), received_at: now_ms() });
+        let _ = app.emit(
+            "log://started",
+            LogStreamStartedEvent {
+                stream_id: stream_id.clone(),
+                received_at: now_ms(),
+            },
+        );
         let mut readers = Vec::new();
         if let Some(out) = stdout {
-            readers.push(spawn_reader(out, app.clone(), stream_id.clone(), Some(source_type)));
+            readers.push(spawn_reader(
+                out,
+                app.clone(),
+                stream_id.clone(),
+                Some(source_type),
+            ));
         }
         if let Some(err) = stderr {
             readers.push(spawn_reader(err, app.clone(), stream_id.clone(), None));
@@ -203,10 +294,21 @@ impl LogProcessState {
             let requested_stop = requested.load(Ordering::SeqCst);
             let code = status.as_ref().and_then(|s| s.code());
             #[cfg(unix)]
-            let signal = status.as_ref().and_then(|s| s.signal()).map(|s| s.to_string());
+            let signal = status
+                .as_ref()
+                .and_then(|s| s.signal())
+                .map(|s| s.to_string());
             #[cfg(not(unix))]
             let signal = None;
-            let _ = app2.emit("log://exit", LogStreamExitEvent { stream_id: sid.clone(), exit_code: code, signal, requested_stop });
+            let _ = app2.emit(
+                "log://exit",
+                LogStreamExitEvent {
+                    stream_id: sid.clone(),
+                    exit_code: code,
+                    signal,
+                    requested_stop,
+                },
+            );
             if let Some(state) = app2.try_state::<LogProcessState>() {
                 let mut g = state.active.lock().unwrap();
                 if g.as_ref().map(|a| a.stream_id.as_str()) == Some(sid.as_str()) {
@@ -242,7 +344,12 @@ impl LogProcessState {
                         sent_kill = true;
                     }
                 }
-                Err(e) => return Err(CommandError::new("stream_stop_failed", "failed to stop stream").with_details(e.to_string())),
+                Err(e) => {
+                    return Err(
+                        CommandError::new("stream_stop_failed", "failed to stop stream")
+                            .with_details(e.to_string()),
+                    )
+                }
             }
             drop(child);
             if Instant::now() >= deadline {

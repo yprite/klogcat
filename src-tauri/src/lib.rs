@@ -3,6 +3,8 @@ pub mod error;
 pub mod process;
 pub mod settings;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -23,7 +25,9 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                if let Some(state) = app.try_state::<process::log_process::LogProcessState>() { state.stop_all_blocking(); }
+                if let Some(state) = app.try_state::<process::log_process::LogProcessState>() {
+                    state.stop_all_blocking();
+                }
             }
         });
 }

@@ -1,1 +1,3 @@
-fn main() { klogcat_lib::run() }
+fn main() {
+    klogcat_lib::run()
+}
