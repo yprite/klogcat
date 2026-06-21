@@ -4,6 +4,15 @@ Tauri + React desktop log tailer for Kubernetes pod log files.
 
 ## Install from GitHub
 
+Debian/Ubuntu Linux에서 처음 빌드한다면 먼저 native dependency를 설치하세요:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y pkg-config libdbus-1-dev
+```
+
+그 다음:
+
 ```bash
 npm install -g git+ssh://git@github.com/yprite/klogcat.git
 klogcat
