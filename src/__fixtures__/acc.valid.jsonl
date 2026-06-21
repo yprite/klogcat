@@ -1,0 +1,2 @@
+{"time":"2026-01-01T00:00:00.000Z","epochTime":1767225600000,"method":"POST","url":"/data/internal/open-tab/migration","status":500,"elapsed":11908,"trId":"acc-trace-1","host":"h","service":"svc","module":"dapi","serviceId":"sid","srcIp":"1.2.3.4","userId":"u","appId":"a","length":"14","pSpanId":"p","spanId":"s","body":{"rcode":"5000999","rmsg":"Internal Server Error","exceptionName":"OpenTabMigrationFailedException","api_name":"triggerOpenTabMigration"}}
+{"time":"2026-01-01T00:00:01.000Z","method":"GET","url":"/health","status":"200","elapsed":"34","trId":"acc-trace-2"}

@@ -1,0 +1,18 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import type { ActiveStreamMeta, LogLineEvent } from '../types/log'
+import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
+
+const meta = (streamId = 's1'): ActiveStreamMeta => ({ streamId, sourceId: 'src', sourceType: 'app', namespace: 'ns', pod: 'pod', container: 'app', filePath: '/x' })
+const event = (streamId = 's1', raw = '{"message":"hello"}'): LogLineEvent => ({ streamId, sourceType: 'app', raw, receivedAt: 1 })
+
+describe('logStore', () => {
+  beforeEach(() => resetLogStoreForTests())
+  it('clear empties buffer and visible list but not id or auto-scroll', () => { const s = useLogStore.getState(); s.prepareStarting(meta()); s.appendLine(event()); useLogStore.getState().setAutoScrollEnabled(false); useLogStore.getState().clear(); const n = useLogStore.getState(); expect(n.rows).toHaveLength(0); expect(n.visibleRows).toHaveLength(0); expect(n.nextLineId).toBe(2); expect(n.autoScrollEnabled).toBe(false) })
+  it('pause buffers but freezes visible list then resume applies grep', () => { const s = useLogStore.getState(); s.prepareStarting(meta()); s.appendLine(event('s1','{"message":"first"}')); s.pause(); useLogStore.getState().appendLine(event('s1','{"message":"second"}')); useLogStore.getState().setGrepQuery('second'); expect(useLogStore.getState().rows).toHaveLength(2); expect(useLogStore.getState().visibleRows).toHaveLength(1); useLogStore.getState().resume(); expect(useLogStore.getState().visibleRows.map(r=>r.summary)).toEqual(['second']) })
+  it('stale streamId event is ignored', () => { const s = useLogStore.getState(); s.prepareStarting(meta('s1')); s.appendLine(event('old')); expect(useLogStore.getState().rows).toHaveLength(0) })
+  it('uses bufferLimit and tracks drops', () => { const s = useLogStore.getState(); s.prepareStarting(meta()); s.setBufferLimit(2); s.appendLine(event('s1','{"message":"1"}')); s.appendLine(event('s1','{"message":"2"}')); s.appendLine(event('s1','{"message":"3"}')); expect(useLogStore.getState().rows.map(r=>r.summary)).toEqual(['2','3']); expect(useLogStore.getState().totalDroppedCount).toBe(1) })
+  it('setBufferLimit trims and counts paused drops', () => { const s = useLogStore.getState(); s.prepareStarting(meta()); s.appendLine(event('s1','{"message":"1"}')); s.appendLine(event('s1','{"message":"2"}')); s.pause(); useLogStore.getState().setBufferLimit(1); expect(useLogStore.getState().rows.map(r=>r.summary)).toEqual(['2']); expect(useLogStore.getState().totalDroppedCount).toBe(1); expect(useLogStore.getState().droppedWhilePaused).toBe(1) })
+  it('start/running/stopping/reject semantics are streamId safe', () => { const s = useLogStore.getState(); s.prepareStarting(meta('s1')); s.markRunning('s1'); s.markStopping('other'); expect(useLogStore.getState().streamStatus).toBe('running'); s.markStartRejected('other', new Error('x')); expect(useLogStore.getState().activeStreamId).toBe('s1'); s.markStopping('s1'); expect(useLogStore.getState().streamStatus).toBe('stopping') })
+  it('exit semantics distinguish requestedStop and runtime errors', () => { const s = useLogStore.getState(); s.prepareStarting(meta('s1')); s.markStopped('s1'); expect(useLogStore.getState().streamStatus).toBe('stopped'); s.prepareStarting(meta('s2')); s.markError('s2','failed'); expect(useLogStore.getState().streamStatus).toBe('error') })
+  it('autoScrollEnabled defaults true and toggles independently', () => { expect(useLogStore.getState().autoScrollEnabled).toBe(true); useLogStore.getState().setAutoScrollEnabled(false); expect(useLogStore.getState().streamStatus).toBe('idle') })
+})

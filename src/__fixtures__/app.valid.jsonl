@@ -1,0 +1,3 @@
+{"time":"2026-01-01T00:00:04.000Z","logType":"INFO","message":"application started","trId":"app-trace-1"}
+{"time":"2026-01-01T00:00:05.000Z","body":"plain body message"}
+{"time":"2026-01-01T00:00:06.000Z","body":{"event":"ready","ok":true}}
