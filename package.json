@@ -1,35 +1,47 @@
 {
   "name": "klogcat",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "start": "node ./bin/klogcat.js",
+    "klogcat:build": "node ./bin/klogcat.js --build-only",
+    "klogcat:dev": "node ./bin/klogcat.js --dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tanstack/react-virtual": "^3.14.3",
     "zustand": "^5.0.14",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "@tauri-apps/cli": "^2.11.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.2",
-    "autoprefixer": "^10.5.0",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16",
     "vitest": "^4.1.9"
-  }
+  },
+  "description": "Tauri desktop log tailer for Kubernetes pod log files",
+  "bin": {
+    "klogcat": "./bin/klogcat.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/yprite/klogcat.git"
+  },
+  "license": "UNLICENSED"
 }
