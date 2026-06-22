@@ -5,3 +5,20 @@
 :root { color-scheme: dark; }
 body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 button, input, select { font: inherit; }
+
+.klogcat-select {
+  color: #fff;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 0.25rem;
+}
+
+.klogcat-select option {
+  color: #fff;
+  background: #0f172a;
+}
+
+.klogcat-select option:checked {
+  color: #111827;
+  background: #facc15 linear-gradient(#facc15, #facc15);
+}

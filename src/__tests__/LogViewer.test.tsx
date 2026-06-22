@@ -19,6 +19,14 @@ describe('LogRow', () => {
     expect(screen.getByText('500')).toBeInTheDocument()
   })
 
+  it('sizes parsed columns to their content instead of truncating values', () => {
+    render(<LogRow row={{ ...row, url: '/very/long/path/that/should/remain/fully/visible', rmsg: 'a long response message that should not be ellipsized' }} grepQuery="" visibleColumns={['url','rmsg']} />)
+
+    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).toHaveClass('w-max')
+    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).not.toHaveClass('overflow-hidden')
+    expect(screen.getByText('a long response message that should not be ellipsized').parentElement).not.toHaveClass('text-ellipsis')
+  })
+
   it('renders error logs as key columns', () => {
     render(<LogRow row={errRow} grepQuery="" visibleColumns={['errorMethod','errorPath','errorReason','traceId']} />)
     expect(screen.getByText('errorMethod')).toBeInTheDocument()
