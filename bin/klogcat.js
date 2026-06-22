@@ -21,7 +21,8 @@ Usage:
 
 Notes:
   - First launch requires Node/npm, Rust/Cargo, and native Tauri build tools.
-  - Debian/Ubuntu Linux also needs libdbus-1-dev for libdbus-sys.
+  - Debian/Ubuntu Linux also needs libdbus-1-dev and libglib2.0-dev.
+  - gio-sys requires gio-2.0 >= 2.70; older distros may need an OS upgrade.
   - The production binary is built at src-tauri/target/release/klogcat.
 `);
 }
@@ -39,24 +40,41 @@ function printLinuxDependencyHint() {
   if (process.platform !== 'linux') {
     return;
   }
-  if (commandSucceeds('pkg-config', ['--exists', 'dbus-1'])) {
+
+  const missing = [];
+  if (!commandSucceeds('pkg-config', ['--exists', 'dbus-1'])) {
+    missing.push('dbus-1');
+  }
+  if (!commandSucceeds('pkg-config', ['--atleast-version=2.70', 'gio-2.0'])) {
+    missing.push('gio-2.0 >= 2.70');
+  }
+  if (missing.length === 0) {
     return;
   }
 
   console.warn(`
-klogcat Linux build dependency missing: dbus-1
+klogcat Linux build dependency check failed: ${missing.join(', ')}
 
-The Rust crate libdbus-sys needs the DBus development headers.
+Tauri's Linux dependency chain uses Rust crates such as libdbus-sys and gio-sys.
+Those crates need native development packages discoverable via pkg-config.
 
 Debian/Ubuntu:
   sudo apt-get update
-  sudo apt-get install -y libdbus-1-dev pkg-config
+  sudo apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
+
+Full Debian/Ubuntu Tauri prerequisite set:
+  sudo apt-get install -y nodejs npm cargo rustc pkg-config libdbus-1-dev libglib2.0-dev \\
+    libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+Important:
+  gio-sys requires gio-2.0 >= 2.70. Ubuntu 20.04 / Debian 11 may be too old.
+  Use Ubuntu 22.04+ / Debian 12+, or install a newer GLib/GIO toolchain.
 
 Fedora:
-  sudo dnf install dbus-devel pkgconf-pkg-config
+  sudo dnf install dbus-devel glib2-devel pkgconf-pkg-config
 
 Arch:
-  sudo pacman -S dbus pkgconf
+  sudo pacman -S dbus glib2 pkgconf
 `);
 }
 

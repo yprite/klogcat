@@ -8,8 +8,10 @@ Debian/Ubuntu Linux에서 처음 빌드한다면 먼저 native dependency를 설
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y pkg-config libdbus-1-dev
+sudo apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
 ```
+
+`gio-sys` 에러가 `gio-2.0 >= 2.70`라면 Ubuntu 20.04 / Debian 11 계열은 GLib/GIO가 낮을 수 있습니다. Ubuntu 22.04+ / Debian 12+를 권장합니다.
 
 그 다음:
 
