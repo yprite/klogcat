@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync, spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +15,7 @@ function printHelp() {
 Usage:
   klogcat                 Build if needed, then launch the desktop app
   klogcat --build-only    Build the Tauri binary and exit
+  klogcat --force-build   Rebuild the Tauri binary before launch
   klogcat --dev           Run Tauri dev mode with diagnostics enabled
   klogcat --no-build      Launch existing binary only
   klogcat --debug         Print stream diagnostics to the launching terminal
@@ -95,6 +96,45 @@ function run(command, commandArgs, options = {}) {
   }
 }
 
+function newestMtimeMs(path) {
+  if (!existsSync(path)) {
+    return 0;
+  }
+  const stat = statSync(path);
+  if (!stat.isDirectory()) {
+    return stat.mtimeMs;
+  }
+  let newest = stat.mtimeMs;
+  for (const entry of readdirSync(path, { withFileTypes: true })) {
+    if (['node_modules', 'target', 'dist', '.git'].includes(entry.name)) {
+      continue;
+    }
+    newest = Math.max(newest, newestMtimeMs(join(path, entry.name)));
+  }
+  return newest;
+}
+
+function sourceIsNewerThanBinary() {
+  if (!existsSync(binary)) {
+    return true;
+  }
+  const binaryMtime = statSync(binary).mtimeMs;
+  const sourcePaths = [
+    join(root, 'src'),
+    join(root, 'src-tauri', 'src'),
+    join(root, 'src-tauri', 'capabilities'),
+    join(root, 'src-tauri', 'tauri.conf.json'),
+    join(root, 'src-tauri', 'Cargo.toml'),
+    join(root, 'src-tauri', 'Cargo.lock'),
+    join(root, 'package.json'),
+    join(root, 'package-lock.json'),
+    join(root, 'index.html'),
+    join(root, 'vite.config.ts'),
+    join(root, 'tsconfig.json'),
+  ];
+  return sourcePaths.some((path) => newestMtimeMs(path) > binaryMtime);
+}
+
 if (args.includes('--help') || args.includes('-h')) {
   printHelp();
   process.exit(0);
@@ -107,14 +147,19 @@ if (args.includes('--dev')) {
 }
 
 const debugEnabled = args.includes('--debug');
+const forceBuild = args.includes('--force-build');
 
-if (!existsSync(binary)) {
+if (!existsSync(binary) || forceBuild || sourceIsNewerThanBinary()) {
   if (args.includes('--no-build')) {
     console.error(`klogcat binary not found: ${binary}`);
-    console.error('Run `klogcat --build-only` first.');
+    console.error('Run `klogcat --build-only` or `klogcat --force-build` first.');
     process.exit(1);
   }
-  console.log('klogcat binary not found. Building release binary...');
+  console.log(
+    existsSync(binary)
+      ? 'klogcat source changed since the release binary was built. Rebuilding...'
+      : 'klogcat binary not found. Building release binary...',
+  );
   printLinuxDependencyHint();
   run('npm', ['run', 'tauri', 'build', '--', '--no-bundle']);
 }
@@ -124,7 +169,7 @@ if (args.includes('--build-only')) {
   process.exit(0);
 }
 
-const child = spawn(binary, args.filter((arg) => !['--no-build'].includes(arg)), {
+const child = spawn(binary, args.filter((arg) => !['--no-build', '--force-build'].includes(arg)), {
   cwd: root,
   stdio: 'inherit',
   detached: false,

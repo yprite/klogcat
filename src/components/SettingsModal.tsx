@@ -22,6 +22,6 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     </fieldset>)}
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
     {error && <p className="text-red-300">{error.message}</p>}
-    <div className="flex gap-2 justify-end"><button onClick={() => resetSettings()}>Reset</button><button disabled={errors.length > 0} onClick={async()=>{ await saveSettings(draft); onClose() }}>Save</button></div>
+    <div className="flex gap-2 justify-end"><button onClick={() => resetSettings()}>Reset</button><button disabled={errors.length > 0} onClick={async()=>{ const ok = await saveSettings(draft); if (ok) onClose() }}>Save</button></div>
   </div></div>
 }

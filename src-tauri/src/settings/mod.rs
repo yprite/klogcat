@@ -1,6 +1,6 @@
 use crate::error::{CommandError, SettingsValidationError};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::PathBuf};
+use std::{collections::BTreeMap, env, fs, path::PathBuf};
 use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +62,11 @@ pub fn default_settings() -> PersistedSettings {
             ),
         ]),
     }
+}
+
+fn debug_enabled() -> bool {
+    env::var("KLOGCAT_DEBUG").is_ok_and(|v| !matches!(v.as_str(), "" | "0" | "false" | "False"))
+        || env::args().any(|arg| arg == "--debug")
 }
 pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> {
     let mut e = Vec::new();
@@ -133,6 +138,9 @@ pub fn reset<R: tauri::Runtime>(
     save_to_path(path(app)?, default_settings())
 }
 pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError> {
+    if debug_enabled() {
+        eprintln!("[klogcat debug] loading settings from {}", path.display());
+    }
     if !path.exists() {
         let s = default_settings();
         save_to_path(path, s.clone())?;
@@ -191,6 +199,9 @@ pub fn save_to_path(
     path: PathBuf,
     settings: PersistedSettings,
 ) -> Result<PersistedSettings, CommandError> {
+    if debug_enabled() {
+        eprintln!("[klogcat debug] saving settings to {}", path.display());
+    }
     let errors = validate_settings(&settings);
     if !errors.is_empty() {
         return Err(

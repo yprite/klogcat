@@ -358,6 +358,9 @@ impl LogProcessState {
     }
 
     pub fn stop(&self, stream_id: &str) -> Result<(), CommandError> {
+        if debug_enabled() {
+            eprintln!("[klogcat debug] stopping stream {stream_id}");
+        }
         let active = {
             let mut guard = self.active.lock().unwrap();
             let Some(active) = guard.as_ref() else {

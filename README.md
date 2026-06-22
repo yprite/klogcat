@@ -47,13 +47,22 @@ Useful wrapper commands:
 ```bash
 klogcat              # build if needed, then launch
 klogcat --build-only # build the Tauri binary and exit
+klogcat --force-build # rebuild the Tauri binary before launch
 klogcat --dev        # run Tauri dev mode with diagnostics enabled
 klogcat --no-build   # launch existing binary only
 klogcat --debug      # print stream diagnostics to the launching terminal
 klogcat --help       # show dependency/build notes
 ```
 
-## Debugging log streams
+## Debugging log streams and button actions
+
+If the app opens but button actions appear to do nothing, first make sure the native Tauri binary is not stale after `git pull`:
+
+```bash
+npm start -- --force-build --debug
+```
+
+The wrapper normally rebuilds automatically when source files are newer than `src-tauri/target/release/klogcat`, but `--force-build` is useful when testing a fresh checkout or after manual file changes.
 
 If the app opens but no log lines appear, run it from a terminal with diagnostics enabled:
 
