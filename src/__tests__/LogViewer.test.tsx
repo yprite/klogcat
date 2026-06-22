@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { LogViewer } from '../components/LogViewer'
+import { LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -74,5 +74,10 @@ describe('LogViewer', () => {
     expect(screen.getByTestId('log-scroll')).toHaveClass('overflow-scroll')
     expect(screen.getByLabelText('Filter status')).toBeInTheDocument()
     expect(screen.getByLabelText('Show errorDetails.errors.reason')).toBeChecked()
+  })
+
+  it('restores a re-enabled column at its filter header position instead of appending it', () => {
+    expect(nextVisibleColumnsForToggle(['url', 'status'], ['method', 'url', 'elapsed', 'status'], 'method', true)).toEqual(['method', 'url', 'status'])
+    expect(nextVisibleColumnsForToggle(['method', 'url', 'status'], ['method', 'url', 'elapsed', 'status'], 'url', false)).toEqual(['method', 'status'])
   })
 })

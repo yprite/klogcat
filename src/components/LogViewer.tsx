@@ -4,6 +4,12 @@ import { useLogStore } from '../stores/logStore'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
 
+export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableColumns: LogColumnKey[], key: LogColumnKey, checked: boolean) {
+  if (!checked) return current.filter((column) => column !== key)
+  const next = new Set([...current, key])
+  return availableColumns.filter((column) => next.has(column))
+}
+
 export function LogViewer() {
   const { visibleRows, grepQuery, autoScrollEnabled, viewerPaused } = useLogStore()
   const parentRef = useRef<HTMLDivElement>(null)
@@ -26,7 +32,7 @@ export function LogViewer() {
   }, [columnFilters, visibleRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
   useEffect(() => { if (autoScrollEnabled && !viewerPaused && filteredRows.length > 0) virtualizer.scrollToIndex(filteredRows.length - 1, { align: 'end' }) }, [filteredRows.length, autoScrollEnabled, viewerPaused, virtualizer])
-  const toggleColumn = (key: LogColumnKey, checked: boolean) => setVisibleColumns((current) => checked ? [...current, key] : current.filter((c) => c !== key))
+  const toggleColumn = (key: LogColumnKey, checked: boolean) => setVisibleColumns((current) => nextVisibleColumnsForToggle(current, availableColumns, key, checked))
   const setColumnFilter = (key: LogColumnKey, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }))
   const headerHeight = availableColumns.length ? 58 : 0
   return <div ref={parentRef} data-testid="log-scroll" className="h-[70vh] overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
