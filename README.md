@@ -56,7 +56,15 @@ klogcat --help       # show dependency/build notes
 
 ## Debugging log streams and button actions
 
-If the app opens but button actions appear to do nothing, first make sure the native Tauri binary is not stale after `git pull`:
+If the app opens but button actions appear to do nothing, first make sure the native Tauri binary is not stale after `git pull`.
+
+As of `0.0.2`, Start/Stop/Reset actions should provide visible feedback instead of silently doing nothing:
+
+- **Start** remains clickable when namespace/pod/source settings are incomplete and shows the exact reason in the error banner.
+- **Stop** remains clickable when no stream is active and shows `No active stream to stop`.
+- **Reset** updates the settings draft and shows `Settings reset to defaults` when the reset succeeds.
+
+Then run with diagnostics enabled:
 
 ```bash
 npm start -- --force-build --debug
@@ -104,7 +112,7 @@ KLOGCAT_DEBUG=1 npm run tauri dev
 Main Tauri settings live in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json):
 
 - `productName`: `klogcat`
-- `version`: `0.1.0`
+- `version`: `0.0.2`
 - `identifier`: `com.klogcat.app`
 - `beforeDevCommand`: `npm run dev`
 - `devUrl`: `http://localhost:1420`

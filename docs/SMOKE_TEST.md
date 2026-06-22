@@ -1,4 +1,4 @@
-# klogcat v0.1 smoke test
+# klogcat v0.0.2 smoke test
 
 1. Confirm `kubectl config current-context` works.
 2. Start the app with `npm run tauri dev`.
