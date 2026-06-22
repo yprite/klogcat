@@ -47,9 +47,47 @@ Useful wrapper commands:
 ```bash
 klogcat              # build if needed, then launch
 klogcat --build-only # build the Tauri binary and exit
-klogcat --dev        # run Tauri dev mode
+klogcat --dev        # run Tauri dev mode with diagnostics enabled
 klogcat --no-build   # launch existing binary only
+klogcat --debug      # print stream diagnostics to the launching terminal
 klogcat --help       # show dependency/build notes
+```
+
+## Debugging log streams
+
+If the app opens but no log lines appear, run it from a terminal with diagnostics enabled:
+
+```bash
+klogcat --debug
+```
+
+Then press **Start** in the app. The terminal prints:
+
+- the exact `kubectl exec ... tail -F ...` command
+- stdout lines received from the pod file
+- stderr from `kubectl` / `tail`
+- stream exit code or signal
+
+You can also run the same command manually to isolate whether the problem is Kubernetes access, container selection, file path, or frontend rendering:
+
+```bash
+kubectl exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>
+```
+
+Common causes:
+
+- selected pod is not `Running`
+- configured container name is not in the pod
+- configured file path does not exist inside the container
+- `kubectl` context/permissions differ from the expected cluster
+- grep filter or paused viewer hides incoming lines
+
+For development builds, this also enables diagnostics:
+
+```bash
+npm run klogcat:dev
+# or
+KLOGCAT_DEBUG=1 npm run tauri dev
 ```
 
 ## Tauri configuration

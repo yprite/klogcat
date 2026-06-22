@@ -2,6 +2,7 @@ use crate::error::CommandError;
 use crate::process::line_splitter::LineSplitter;
 use serde::{Deserialize, Serialize};
 use std::{
+    env,
     io::Read,
     process::{Child, Command, Stdio},
     sync::{
@@ -80,6 +81,11 @@ fn now_ms() -> u128 {
         .as_millis()
 }
 
+fn debug_enabled() -> bool {
+    env::var("KLOGCAT_DEBUG").is_ok_and(|v| !matches!(v.as_str(), "" | "0" | "false" | "False"))
+        || env::args().any(|arg| arg == "--debug")
+}
+
 fn is_dns_label(value: &str) -> bool {
     let bytes = value.as_bytes();
     !bytes.is_empty()
@@ -149,6 +155,7 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
     app: tauri::AppHandle<T>,
     stream_id: String,
     source_type: Option<String>,
+    debug: bool,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut sp = LineSplitter::new();
@@ -159,6 +166,9 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
                 Ok(n) => {
                     for line in sp.push(&buf[..n]) {
                         if let Some(st) = &source_type {
+                            if debug {
+                                eprintln!("[klogcat debug] stdout {stream_id} {st}: {line}");
+                            }
                             let _ = app.emit(
                                 "log://line",
                                 LogLineEvent {
@@ -169,6 +179,9 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
                                 },
                             );
                         } else {
+                            if debug {
+                                eprintln!("[klogcat debug] stderr {stream_id}: {line}");
+                            }
                             let _ = app.emit(
                                 "log://stderr",
                                 LogStreamStderrEvent {
@@ -185,6 +198,9 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
         }
         if let Some(line) = sp.flush() {
             if let Some(st) = source_type {
+                if debug {
+                    eprintln!("[klogcat debug] stdout {stream_id} {st}: {line}");
+                }
                 let _ = app.emit(
                     "log://line",
                     LogLineEvent {
@@ -195,6 +211,9 @@ fn spawn_reader<R: Read + Send + 'static, T: tauri::Runtime>(
                     },
                 );
             } else {
+                if debug {
+                    eprintln!("[klogcat debug] stderr {stream_id}: {line}");
+                }
                 let _ = app.emit(
                     "log://stderr",
                     LogStreamStderrEvent {
@@ -223,21 +242,28 @@ impl LogProcessState {
             ));
         }
         let tail_n = request.initial_tail_lines.to_string();
+        let debug = debug_enabled();
+        let args = [
+            "exec",
+            "-n",
+            &request.namespace,
+            &request.pod,
+            "-c",
+            &request.container,
+            "--",
+            "tail",
+            "-n",
+            &tail_n,
+            "-F",
+            &request.file_path,
+        ];
+        if debug {
+            eprintln!("[klogcat debug] starting stream {}", request.stream_id);
+            eprintln!("[klogcat debug] source type: {}", request.source_type);
+            eprintln!("[klogcat debug] command: kubectl {}", args.join(" "));
+        }
         let mut child = Command::new("kubectl")
-            .args([
-                "exec",
-                "-n",
-                &request.namespace,
-                &request.pod,
-                "-c",
-                &request.container,
-                "--",
-                "tail",
-                "-n",
-                &tail_n,
-                "-F",
-                &request.file_path,
-            ])
+            .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -272,10 +298,17 @@ impl LogProcessState {
                 app.clone(),
                 stream_id.clone(),
                 Some(source_type),
+                debug,
             ));
         }
         if let Some(err) = stderr {
-            readers.push(spawn_reader(err, app.clone(), stream_id.clone(), None));
+            readers.push(spawn_reader(
+                err,
+                app.clone(),
+                stream_id.clone(),
+                None,
+                debug,
+            ));
         }
 
         let app2 = app.clone();
@@ -300,6 +333,11 @@ impl LogProcessState {
                 .map(|s| s.to_string());
             #[cfg(not(unix))]
             let signal = None;
+            if debug {
+                eprintln!(
+                    "[klogcat debug] stream {sid} exited: code={code:?} signal={signal:?} requested_stop={requested_stop}"
+                );
+            }
             let _ = app2.emit(
                 "log://exit",
                 LogStreamExitEvent {

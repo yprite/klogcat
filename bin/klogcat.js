@@ -15,8 +15,9 @@ function printHelp() {
 Usage:
   klogcat                 Build if needed, then launch the desktop app
   klogcat --build-only    Build the Tauri binary and exit
-  klogcat --dev           Run Tauri dev mode
+  klogcat --dev           Run Tauri dev mode with diagnostics enabled
   klogcat --no-build      Launch existing binary only
+  klogcat --debug         Print stream diagnostics to the launching terminal
   klogcat --help          Show this help
 
 Notes:
@@ -101,9 +102,11 @@ if (args.includes('--help') || args.includes('-h')) {
 
 if (args.includes('--dev')) {
   printLinuxDependencyHint();
-  run('npm', ['run', 'tauri', 'dev']);
+  run('npm', ['run', 'tauri', 'dev'], { env: { ...process.env, KLOGCAT_DEBUG: '1' } });
   process.exit(0);
 }
+
+const debugEnabled = args.includes('--debug');
 
 if (!existsSync(binary)) {
   if (args.includes('--no-build')) {
@@ -125,6 +128,7 @@ const child = spawn(binary, args.filter((arg) => !['--no-build'].includes(arg)),
   cwd: root,
   stdio: 'inherit',
   detached: false,
+  env: debugEnabled ? { ...process.env, KLOGCAT_DEBUG: '1' } : process.env,
 });
 
 child.on('error', (error) => {
