@@ -6,30 +6,35 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildScloudLogPath } from '../utils/logPath'
 
-export function LogToolbar({ sourceType }: { sourceType: SourceLogType }) {
+export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLogType; sourceTypes?: SourceLogType[] }) {
+  const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'app']
+  const primarySourceType = selectedSourceTypes[0] ?? 'app'
   const kube = useKubeStore(); const { settings } = useSettingsStore(); const log = useLogStore()
   const [containerOverride, setContainerOverride] = useState('')
   const busy = ['starting','stopping'].includes(log.streamStatus)
   const alreadyRunning = log.activeStreamIds.length > 0 || log.streamStatus === 'running'
-  const source = settings?.logSources[sourceType]
+  const source = settings?.logSources[primarySourceType]
   const targets = kube.getSelectedPodTargets()
   const selectedPod = targets[0]?.pod ?? kube.pods.find(p => p.name === kube.selectedPod)
   const podContainers = Array.from(new Set(targets.flatMap((t) => t.pod.containers).concat(selectedPod?.containers ?? [])))
   const containerFor = (containers: string[]) => containerOverride || (source && containers.includes(source.container) ? source.container : containers[0] ?? source?.container ?? '')
   const effectiveContainer = selectedPod ? containerFor(selectedPod.containers) : (containerOverride || source?.container || '')
   const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running' || !containerFor(t.pod.containers))
-  const disabledReason = !settings || !source ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
+  const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
+  const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = busy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
   const start = async () => {
-    log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, source=${sourceType}, startBlockedReason=${startBlockedReason || '(none)'}`)
+    log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`)
     if (alreadyRunning) { log.markError(log.activeStreamId, 'Stream is already running'); return }
-    if (disabledReason || !settings || !source) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
+    if (disabledReason || !settings) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
     for (const target of targets) {
       const container = containerFor(target.pod.containers)
-      const filePath = buildScloudLogPath(target.namespace, target.pod.name, sourceType)
-      const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${sourceType}/${filePath}`
-      log.prepareStarting({ streamId, sourceId, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType })
-      try { await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType, initialTailLines: settings.initialTailLines }); log.markRunning(streamId) } catch (e) { log.markStartRejected(streamId, e) }
+      for (const selectedSourceType of selectedSourceTypes) {
+        const filePath = buildScloudLogPath(target.namespace, target.pod.name, selectedSourceType)
+        const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${selectedSourceType}/${filePath}`
+        log.prepareStarting({ streamId, sourceId, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType })
+        try { await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines }); log.markRunning(streamId) } catch (e) { log.markStartRejected(streamId, e) }
+      }
     }
   }
   const stop = async () => {

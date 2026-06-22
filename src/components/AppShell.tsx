@@ -21,12 +21,12 @@ async function stopAndClearIfActive() {
 }
 
 export function AppShell({ eventError }: { eventError?: string }) {
-  const [sourceType, setSourceType] = useState<SourceLogType>('app')
+  const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['app'])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
   useEffect(() => { (async () => { await settings.loadSettings(); await kube.loadCurrentContext(); await kube.loadContexts(); await kube.loadNamespaces(); const s = useSettingsStore.getState().settings; const namespaces = useKubeStore.getState().namespaces; if (s?.defaultNamespace) { if (namespaces.some(ns => ns.name === s.defaultNamespace)) { await kube.selectNamespace(s.defaultNamespace); setDefaultNamespaceWarning(undefined) } else { setDefaultNamespaceWarning(`Default namespace "${s.defaultNamespace}" was not found in the selected context`) } } })() }, [])
-  const changeSource = async (next: SourceLogType) => { log.recordActionDebug(`Source clicked: ${next}`); if (next === sourceType) return; await stopAndClearIfActive(); setSourceType(next) }
+  const changeSources = async (next: SourceLogType[]) => { log.recordActionDebug(`Sources clicked: ${next.join(', ') || '(none)'}`); if (next.length === sourceTypes.length && next.every((value, index) => value === sourceTypes[index])) return; await stopAndClearIfActive(); setSourceTypes(next) }
   const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectContexts(contexts) }
   const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespaces(namespaces) }
   const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPods(pods) }
@@ -36,8 +36,8 @@ export function AppShell({ eventError }: { eventError?: string }) {
       <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
       {settings.warning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{settings.warning.message}</div>}
       {defaultNamespaceWarning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{defaultNamespaceWarning}</div>}
-      <div className="flex flex-wrap gap-3 items-center"><LogTypeSelector value={sourceType} onChange={changeSource} /><GrepBar /></div>
-      <LogToolbar sourceType={sourceType} />
+      <div className="flex flex-wrap gap-3 items-center"><LogTypeSelector value={sourceTypes} onChange={changeSources} /><GrepBar /></div>
+      <LogToolbar sourceTypes={sourceTypes} />
       <ActionDebugPanel />
       <LogViewer />
     </main>

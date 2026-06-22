@@ -119,13 +119,34 @@ describe('button actions', () => {
       },
       selectedPods: { 'ctx\u0000default': ['pod-1'], 'cluster-a\u0000prod': ['pod-2'] },
     })
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceTypes={['app']} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('starts APP, ACC, and ERR streams when all source types are selected', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
+    })
+    render(<LogToolbar sourceTypes={['app', 'access', 'error']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(3))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ sourceType: 'app', filePath: '/scloud/foo/logs/api-7d9/foo.log' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ sourceType: 'access', filePath: '/scloud/foo/logs/api-7d9/foo_ACC.log' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(3, expect.objectContaining({ sourceType: 'error', filePath: '/scloud/foo/logs/api-7d9/foo_ERR.log' }))
   })
 
   it('uses the fixed scloud namespace and pod log path for each source type', async () => {
