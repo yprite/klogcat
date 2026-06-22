@@ -1,7 +1,7 @@
 import type { ParsedLogLine, SourceLogType } from '../types/log'
 
-export const accessLogColumns = ['method', 'url', 'status', 'elapsed', 'length', 'srcIp', 'userId', 'appId', 'rcode', 'rmsg', 'exceptionName', 'apiName', 'trId'] as const
-export const errorLogColumns = ['errorMethod', 'errorPath', 'errorReason', 'errorServerName', 'errorTimestamp', 'traceId', 'trId', 'logger'] as const
+export const accessLogColumns = ['timestamp', 'jsonLogType', 'host', 'service', 'module', 'serviceId', 'trId', 'epochTime', 'pSpanId', 'spanId', 'method', 'url', 'length', 'srcIp', 'elapsed', 'status', 'userId', 'appId', 'rcode', 'rmsg', 'exceptionName', 'apiName'] as const
+export const errorLogColumns = ['timestamp', 'jsonLogType', 'host', 'logger', 'service', 'module', 'submodule', 'trId', 'epochTime', 'thread', 'errorServerName', 'errorPath', 'errorMethod', 'errorTimestamp', 'traceId', 'errorReason'] as const
 export type LogColumnKey = typeof accessLogColumns[number] | typeof errorLogColumns[number]
 
 export function columnsForSource(sourceType: SourceLogType): LogColumnKey[] {
@@ -20,4 +20,18 @@ export function valueForColumn(row: ParsedLogLine, key: LogColumnKey) {
   const value = row[key as keyof ParsedLogLine]
   if (value === undefined || value === null || value === '') return ''
   return key === 'elapsed' && typeof value === 'number' ? `${value}ms` : String(value)
+}
+
+export function labelForColumn(key: LogColumnKey) {
+  const labels: Partial<Record<LogColumnKey, string>> = {
+    timestamp: 'time',
+    jsonLogType: 'logType',
+    apiName: 'api_name',
+    errorServerName: 'errorDetails.serverName',
+    errorPath: 'errorDetails.path',
+    errorMethod: 'errorDetails.method',
+    errorTimestamp: 'errorDetails.timestamp',
+    errorReason: 'errorDetails.errors.reason',
+  }
+  return labels[key] ?? key
 }

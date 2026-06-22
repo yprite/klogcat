@@ -1,7 +1,7 @@
 import type { ParsedLogLine } from '../types/log'
 import { formatDisplayTime } from '../utils/formatTime'
 import { highlightText } from '../utils/highlight'
-import { type LogColumnKey, valueForColumn } from '../utils/logColumns'
+import { labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { sourceLabels } from '../utils/sourceLabels'
 
 export function LogRow({ row, grepQuery, visibleColumns }: { row: ParsedLogLine; grepQuery: string; visibleColumns?: LogColumnKey[] }) {
@@ -19,7 +19,7 @@ export function LogRow({ row, grepQuery, visibleColumns }: { row: ParsedLogLine;
       {visibleColumns.map((key) => {
         const value = valueForColumn(row, key)
         return <span key={key} className="inline-block w-max min-w-24 border-l border-slate-800 pl-2 pr-2 align-top">
-          <span className="block text-[10px] uppercase text-slate-500">{key}</span>
+          <span className="block text-[10px] uppercase text-slate-500">{labelForColumn(key)}</span>
           <span>{highlightText(value || '-', grepQuery)}</span>
         </span>
       })}

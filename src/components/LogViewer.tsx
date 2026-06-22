@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
-import { columnsForRows, type LogColumnKey } from '../utils/logColumns'
+import { columnsForRows, labelForColumn, type LogColumnKey } from '../utils/logColumns'
 import { LogRow } from './LogRow'
 
 export function LogViewer() {
@@ -29,7 +29,7 @@ export function LogViewer() {
     <fieldset aria-label="Column visibility" className="order-last w-48 max-h-[70vh] overflow-auto border border-slate-800 bg-slate-950 p-2 text-xs">
       <legend className="px-1 text-slate-300">표시여부</legend>
       {availableColumns.length === 0 ? <p className="text-slate-500">ACC/ERR 컬럼 없음</p> : availableColumns.map((key) => <label key={key} className="block whitespace-nowrap py-1">
-        <input className="mr-1" type="checkbox" checked={visibleColumns.includes(key)} onChange={(e)=>toggleColumn(key, e.target.checked)} />{key}
+        <input className="mr-1" type="checkbox" checked={visibleColumns.includes(key)} onChange={(e)=>toggleColumn(key, e.target.checked)} />{labelForColumn(key)}
       </label>)}
     </fieldset>
   </div>
