@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
 import { LogViewer } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
@@ -7,6 +7,7 @@ import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
 
 const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"hello"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), status: '500', method: 'POST', url: '/x', elapsed: 42, summary: 'POST /x 500 42ms', trId: 't' }
+const okRow: ParsedLogLine = { ...row, id: 3, status: '200', method: 'GET', url: '/ok', summary: 'GET /ok 200 5ms', raw: '{"status":200}' }
 const errRow: ParsedLogLine = { id: 2, streamId: 's', sourceId: 'src', sourceType: 'error', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"oops"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), errorMethod: 'GET', errorPath: '/fail', errorReason: 'boom', summary: 'boom GET /fail', traceId: 'trace' }
 
 describe('LogRow', () => {
@@ -52,13 +53,26 @@ describe('LogRow', () => {
 describe('LogViewer', () => {
   beforeEach(() => resetLogStoreForTests())
 
-  it('uses an always-visible scroll container and shows right-side column visibility options', () => {
+  it('uses an Excel-style header to filter rows and toggle column visibility', async () => {
+    useLogStore.setState({ rows: [row, okRow], visibleRows: [row, okRow] })
+    render(<LogViewer />)
+
+    expect(screen.queryByRole('group', { name: /column visibility/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /Excel-style column filters/i })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Filter status'), { target: { value: '500' } })
+
+    await waitFor(() => expect(screen.getByText('Rows: 1/2')).toBeInTheDocument())
+    fireEvent.click(screen.getByLabelText('Show status'))
+    expect(screen.getByLabelText('Show status')).not.toBeChecked()
+    await waitFor(() => expect(screen.queryByText('500')).not.toBeInTheDocument())
+  })
+
+  it('uses an always-visible scroll container and exposes filter controls in the header', () => {
     useLogStore.setState({ rows: [row, errRow], visibleRows: [row, errRow] })
     render(<LogViewer />)
 
     expect(screen.getByTestId('log-scroll')).toHaveClass('overflow-scroll')
-    expect(screen.getByRole('group', { name: /column visibility/i })).toHaveClass('order-last')
-    expect(screen.getByLabelText('status')).toBeChecked()
-    expect(screen.getByLabelText('errorDetails.errors.reason')).toBeChecked()
+    expect(screen.getByLabelText('Filter status')).toBeInTheDocument()
+    expect(screen.getByLabelText('Show errorDetails.errors.reason')).toBeChecked()
   })
 })
