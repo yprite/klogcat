@@ -4,6 +4,7 @@ import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
+import { buildScloudLogPath } from '../utils/logPath'
 
 export function LogToolbar({ sourceType }: { sourceType: SourceLogType }) {
   const kube = useKubeStore(); const { settings } = useSettingsStore(); const log = useLogStore()
@@ -25,9 +26,10 @@ export function LogToolbar({ sourceType }: { sourceType: SourceLogType }) {
     if (disabledReason || !settings || !source) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
     for (const target of targets) {
       const container = containerFor(target.pod.containers)
-      const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${sourceType}/${source.filePath}`
-      log.prepareStarting({ streamId, sourceId, namespace: target.namespace, pod: target.pod.name, container, filePath: source.filePath, sourceType })
-      try { await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath: source.filePath, sourceType, initialTailLines: settings.initialTailLines }); log.markRunning(streamId) } catch (e) { log.markStartRejected(streamId, e) }
+      const filePath = buildScloudLogPath(target.namespace, target.pod.name, sourceType)
+      const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${sourceType}/${filePath}`
+      log.prepareStarting({ streamId, sourceId, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType })
+      try { await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType, initialTailLines: settings.initialTailLines }); log.markRunning(streamId) } catch (e) { log.markStartRejected(streamId, e) }
     }
   }
   const stop = async () => {

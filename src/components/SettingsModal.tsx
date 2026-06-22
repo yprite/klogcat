@@ -37,7 +37,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
     {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{sourceLabels[type]}</legend>
       <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
-      <label>File path <input className="text-black mx-2 w-80" value={draft.logSources[type].filePath} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], filePath: e.target.value } } })} /></label>
+      <span className="text-slate-300 text-sm">Fixed path: {type === 'app' ? '/scloud/[namespace]/logs/[podname]/[namespace].log' : type === 'access' ? '/scloud/[namespace]/logs/[podname]/[namespace]_ACC.log' : '/scloud/[namespace]/logs/[podname]/[namespace]_ERR.log'}</span>
     </fieldset>)}
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
     {notice && <p className="text-green-300">{notice}</p>}

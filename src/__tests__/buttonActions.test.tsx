@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogToolbar } from '../components/LogToolbar'
 import { SettingsModal } from '../components/SettingsModal'
 import { defaultSettings } from '../config/defaultSettings'
@@ -47,7 +47,7 @@ function resetStores() {
 }
 
 describe('button actions', () => {
-  beforeEach(() => resetStores())
+  beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
   it('keeps Start clickable and reports why it cannot start', () => {
     render(<LogToolbar sourceType="app" />)
@@ -126,6 +126,35 @@ describe('button actions', () => {
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('uses the fixed scloud namespace and pod log path for each source type', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
+    })
+    const { rerender } = render(<LogToolbar sourceType="app" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(startLogStream).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: '/scloud/foo/logs/api-7d9/foo.log' })))
+
+    act(() => useLogStore.getState().resetForSelectionChange())
+    vi.clearAllMocks()
+    rerender(<LogToolbar sourceType="access" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(startLogStream).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: '/scloud/foo/logs/api-7d9/foo_ACC.log' })))
+
+    act(() => useLogStore.getState().resetForSelectionChange())
+    vi.clearAllMocks()
+    rerender(<LogToolbar sourceType="error" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(startLogStream).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: '/scloud/foo/logs/api-7d9/foo_ERR.log' })))
   })
 
   it('makes Reset visibly update the draft and show feedback', async () => {
