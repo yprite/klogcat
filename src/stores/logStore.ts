@@ -19,8 +19,10 @@ export type LogStoreState = {
   grepQuery: string
   latestStderr?: string
   errorMessage?: string
+  actionDebugMessages: string[]
   totalDroppedCount: number
   droppedWhilePaused: number
+  recordActionDebug(message: string): void
   prepareStarting(meta: ActiveStreamMeta): void
   markRunning(streamId: string): void
   markStopping(streamId: string): void
@@ -52,12 +54,19 @@ const initial = {
   grepQuery: '',
   latestStderr: undefined,
   errorMessage: undefined,
+  actionDebugMessages: [] as string[],
   totalDroppedCount: 0,
   droppedWhilePaused: 0,
 }
 
 export const useLogStore = create<LogStoreState>((set, get) => ({
   ...initial,
+  recordActionDebug(message) {
+    const line = `${new Date().toLocaleTimeString()} ${message}`
+    console.info(`[klogcat action] ${message}`)
+    const messages = [...get().actionDebugMessages, line].slice(-8)
+    set({ actionDebugMessages: messages })
+  },
   prepareStarting(meta) { set({ activeStreamId: meta.streamId, activeStreamMeta: meta, streamStatus: 'starting', errorMessage: undefined, latestStderr: undefined }) },
   markRunning(streamId) { if (get().activeStreamId === streamId) set({ streamStatus: 'running' }) },
   markStopping(streamId) { if (get().activeStreamId === streamId) set({ streamStatus: 'stopping' }) },

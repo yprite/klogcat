@@ -4,6 +4,7 @@ import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { stopLogStream } from '../commands/tauriLogs'
+import { ActionDebugPanel } from './ActionDebugPanel'
 import { ErrorBanner } from './ErrorBanner'
 import { GrepBar } from './GrepBar'
 import { LogToolbar } from './LogToolbar'
@@ -24,17 +25,18 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
   useEffect(() => { (async () => { await settings.loadSettings(); await kube.loadCurrentContext(); await kube.loadNamespaces(); const s = useSettingsStore.getState().settings; const namespaces = useKubeStore.getState().namespaces; if (s?.defaultNamespace) { if (namespaces.some(ns => ns.name === s.defaultNamespace)) { await kube.selectNamespace(s.defaultNamespace); setDefaultNamespaceWarning(undefined) } else { setDefaultNamespaceWarning(`Default namespace "${s.defaultNamespace}" was not found in the current context`) } } })() }, [])
-  const changeSource = async (next: SourceLogType) => { if (next === sourceType) return; await stopAndClearIfActive(); setSourceType(next) }
-  const changeNamespace = async (namespace: string) => { await stopAndClearIfActive(); await useKubeStore.getState().selectNamespace(namespace) }
-  const changePod = async (pod: string) => { await stopAndClearIfActive(); useKubeStore.getState().selectPod(pod) }
+  const changeSource = async (next: SourceLogType) => { log.recordActionDebug(`Source clicked: ${next}`); if (next === sourceType) return; await stopAndClearIfActive(); setSourceType(next) }
+  const changeNamespace = async (namespace: string) => { log.recordActionDebug(`Namespace selected: ${namespace || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespace(namespace) }
+  const changePod = async (pod: string) => { log.recordActionDebug(`Pod selected: ${pod || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPod(pod) }
   return <div className="min-h-screen">
-    <TopBar onSettings={() => setSettingsOpen(true)} onNamespaceChange={changeNamespace} onPodChange={changePod} />
+    <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onNamespaceChange={changeNamespace} onPodChange={changePod} />
     <main className="p-3 space-y-3">
       <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
       {settings.warning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{settings.warning.message}</div>}
       {defaultNamespaceWarning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{defaultNamespaceWarning}</div>}
       <div className="flex flex-wrap gap-3 items-center"><LogTypeSelector value={sourceType} onChange={changeSource} /><GrepBar /></div>
       <LogToolbar sourceType={sourceType} />
+      <ActionDebugPanel />
       <LogViewer />
     </main>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

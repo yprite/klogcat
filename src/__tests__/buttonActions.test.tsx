@@ -66,6 +66,26 @@ describe('button actions', () => {
     expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
   })
 
+  it('shows Start enabled after selecting a Running pod with the configured container', () => {
+    useKubeStore.setState({
+      selectedNamespace: 'default',
+      selectedPod: 'pod-1',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['app'] }],
+    })
+    render(<LogToolbar sourceType="app" />)
+
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
+  })
+
+  it('records visible action debug when Start is clicked', () => {
+    render(<LogToolbar sourceType="app" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    expect(useLogStore.getState().actionDebugMessages.at(-1)).toMatch(/Start clicked/)
+  })
+
   it('makes Reset visibly update the draft and show feedback', async () => {
     const custom = { ...defaultSettings, initialTailLines: 7, bufferLimit: 11 }
     useSettingsStore.setState({ settings: custom })
