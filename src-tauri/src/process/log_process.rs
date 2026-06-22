@@ -2,6 +2,7 @@ use crate::error::CommandError;
 use crate::process::line_splitter::LineSplitter;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env,
     io::Read,
     process::{Child, Command, Stdio},
@@ -65,12 +66,12 @@ pub struct ActiveLogProcess {
     pub requested_stop: Arc<AtomicBool>,
 }
 pub struct LogProcessState {
-    pub active: Mutex<Option<ActiveLogProcess>>,
+    pub active: Mutex<HashMap<String, ActiveLogProcess>>,
 }
 impl Default for LogProcessState {
     fn default() -> Self {
         Self {
-            active: Mutex::new(None),
+            active: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -236,10 +237,10 @@ impl LogProcessState {
     ) -> Result<(), CommandError> {
         validate(&request)?;
         let mut guard = self.active.lock().unwrap();
-        if guard.is_some() {
+        if guard.contains_key(&request.stream_id) {
             return Err(CommandError::new(
                 "stream_already_running",
-                "a log stream is already running",
+                "a log stream with this id is already running",
             ));
         }
         let tail_n = request.initial_tail_lines.to_string();
@@ -283,11 +284,14 @@ impl LogProcessState {
         let requested = Arc::new(AtomicBool::new(false));
         let stream_id = request.stream_id.clone();
         let source_type = request.source_type.clone();
-        *guard = Some(ActiveLogProcess {
-            stream_id: stream_id.clone(),
-            child: child.clone(),
-            requested_stop: requested.clone(),
-        });
+        guard.insert(
+            stream_id.clone(),
+            ActiveLogProcess {
+                stream_id: stream_id.clone(),
+                child: child.clone(),
+                requested_stop: requested.clone(),
+            },
+        );
         drop(guard);
 
         let _ = app.emit(
@@ -355,9 +359,7 @@ impl LogProcessState {
             );
             if let Some(state) = app2.try_state::<LogProcessState>() {
                 let mut g = state.active.lock().unwrap();
-                if g.as_ref().map(|a| a.stream_id.as_str()) == Some(sid.as_str()) {
-                    *g = None;
-                }
+                g.remove(&sid);
             }
         });
         Ok(())
@@ -369,14 +371,11 @@ impl LogProcessState {
         }
         let active = {
             let mut guard = self.active.lock().unwrap();
-            let Some(active) = guard.as_ref() else {
+            let Some(active) = guard.get(stream_id) else {
                 return Err(CommandError::new("stream_not_found", "stream not found"));
             };
-            if active.stream_id != stream_id {
-                return Err(CommandError::new("stream_not_found", "stream not found"));
-            }
             active.requested_stop.store(true, Ordering::SeqCst);
-            guard.take().unwrap()
+            guard.remove(stream_id).unwrap()
         };
 
         let deadline = Instant::now() + Duration::from_secs(2);
@@ -407,8 +406,14 @@ impl LogProcessState {
     }
 
     pub fn stop_all_blocking(&self) {
-        let active = self.active.lock().unwrap().take();
-        if let Some(active) = active {
+        let active: Vec<_> = self
+            .active
+            .lock()
+            .unwrap()
+            .drain()
+            .map(|(_, active)| active)
+            .collect();
+        for active in active {
             active.requested_stop.store(true, Ordering::SeqCst);
             let _ = active.child.lock().unwrap().kill();
         }

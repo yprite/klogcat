@@ -25,10 +25,15 @@ function resetStores() {
     contexts: [{ name: 'ctx' }, { name: 'cluster-a' }],
     currentContext: 'ctx',
     selectedContext: 'ctx',
+    selectedContexts: ['ctx'],
     namespaces: [],
+    namespacesByContext: {},
     selectedNamespace: undefined,
+    selectedNamespaces: {},
     pods: [],
+    podsByScope: {},
     selectedPod: undefined,
+    selectedPods: {},
     loadingNamespaces: false,
     loadingPods: false,
     error: undefined,
@@ -100,6 +105,27 @@ describe('button actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
     expect(useLogStore.getState().actionDebugMessages.at(-1)).toMatch(/Start clicked/)
+  })
+
+  it('starts one stream for every selected running pod', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx', 'cluster-a'],
+      selectedNamespaces: { ctx: ['default'], 'cluster-a': ['prod'] },
+      podsByScope: {
+        'ctx\u0000default': [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['app'] }],
+        'cluster-a\u0000prod': [{ name: 'pod-2', namespace: 'prod', phase: 'Running', containers: ['worker'] }],
+      },
+      selectedPods: { 'ctx\u0000default': ['pod-1'], 'cluster-a\u0000prod': ['pod-2'] },
+    })
+    render(<LogToolbar sourceType="app" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
   })
 
   it('makes Reset visibly update the draft and show feedback', async () => {

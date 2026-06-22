@@ -15,7 +15,8 @@ import { TopBar } from './TopBar'
 
 async function stopAndClearIfActive() {
   const log = useLogStore.getState()
-  if (log.activeStreamId) { const id = log.activeStreamId; log.markStopping(id); try { await stopLogStream(id); log.markStopped(id) } catch (e) { log.markError(id, e instanceof Error ? e.message : String(e)) } }
+  const ids = log.activeStreamIds.length ? log.activeStreamIds : log.activeStreamId ? [log.activeStreamId] : []
+  await Promise.all(ids.map(async (id) => { log.markStopping(id); try { await stopLogStream(id); log.markStopped(id) } catch (e) { log.markError(id, e instanceof Error ? e.message : String(e)) } }))
   useLogStore.getState().resetForSelectionChange()
 }
 
@@ -26,9 +27,9 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
   useEffect(() => { (async () => { await settings.loadSettings(); await kube.loadCurrentContext(); await kube.loadContexts(); await kube.loadNamespaces(); const s = useSettingsStore.getState().settings; const namespaces = useKubeStore.getState().namespaces; if (s?.defaultNamespace) { if (namespaces.some(ns => ns.name === s.defaultNamespace)) { await kube.selectNamespace(s.defaultNamespace); setDefaultNamespaceWarning(undefined) } else { setDefaultNamespaceWarning(`Default namespace "${s.defaultNamespace}" was not found in the selected context`) } } })() }, [])
   const changeSource = async (next: SourceLogType) => { log.recordActionDebug(`Source clicked: ${next}`); if (next === sourceType) return; await stopAndClearIfActive(); setSourceType(next) }
-  const changeContext = async (context: string) => { log.recordActionDebug(`Context selected: ${context || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectContext(context) }
-  const changeNamespace = async (namespace: string) => { log.recordActionDebug(`Namespace selected: ${namespace || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespace(namespace) }
-  const changePod = async (pod: string) => { log.recordActionDebug(`Pod selected: ${pod || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPod(pod) }
+  const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectContexts(contexts) }
+  const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespaces(namespaces) }
+  const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPods(pods) }
   return <div className="min-h-screen">
     <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} />
     <main className="p-3 space-y-3">

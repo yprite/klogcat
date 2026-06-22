@@ -10,6 +10,8 @@ export type LogStoreState = {
   streamStatus: StreamStatus
   activeStreamId?: string
   activeStreamMeta?: ActiveStreamMeta
+  activeStreamIds: string[]
+  activeStreamMetas: Record<string, ActiveStreamMeta>
   viewerPaused: boolean
   autoScrollEnabled: boolean
   bufferLimit: number
@@ -45,6 +47,8 @@ const initial = {
   streamStatus: 'idle' as StreamStatus,
   activeStreamId: undefined,
   activeStreamMeta: undefined,
+  activeStreamIds: [] as string[],
+  activeStreamMetas: {} as Record<string, ActiveStreamMeta>,
   viewerPaused: false,
   autoScrollEnabled: true,
   bufferLimit: defaultSettings.bufferLimit,
@@ -59,6 +63,12 @@ const initial = {
   droppedWhilePaused: 0,
 }
 
+function removeStream(state: LogStoreState, streamId: string) {
+  const { [streamId]: _removed, ...activeStreamMetas } = state.activeStreamMetas
+  const activeStreamIds = state.activeStreamIds.filter((id) => id !== streamId)
+  return { activeStreamIds, activeStreamMetas, activeStreamId: activeStreamIds[0], activeStreamMeta: activeStreamIds[0] ? activeStreamMetas[activeStreamIds[0]] : undefined }
+}
+
 export const useLogStore = create<LogStoreState>((set, get) => ({
   ...initial,
   recordActionDebug(message) {
@@ -67,22 +77,44 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     const messages = [...get().actionDebugMessages, line].slice(-8)
     set({ actionDebugMessages: messages })
   },
-  prepareStarting(meta) { set({ activeStreamId: meta.streamId, activeStreamMeta: meta, streamStatus: 'starting', errorMessage: undefined, latestStderr: undefined }) },
-  markRunning(streamId) { if (get().activeStreamId === streamId) set({ streamStatus: 'running' }) },
-  markStopping(streamId) { if (get().activeStreamId === streamId) set({ streamStatus: 'stopping' }) },
-  markStopped(streamId) { if (get().activeStreamId === streamId) set({ streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined }) },
-  markStartRejected(streamId, error) { if (get().activeStreamId === streamId) set({ streamStatus: 'error', activeStreamId: undefined, activeStreamMeta: undefined, errorMessage: commandErrorMessage(error) }) },
-  markError(streamId, message) { if (!streamId || get().activeStreamId === streamId) set({ streamStatus: 'error', errorMessage: message, activeStreamId: undefined, activeStreamMeta: undefined }) },
+  prepareStarting(meta) {
+    const s = get()
+    const activeStreamIds = s.activeStreamIds.includes(meta.streamId) ? s.activeStreamIds : [...s.activeStreamIds, meta.streamId]
+    const activeStreamMetas = { ...s.activeStreamMetas, [meta.streamId]: meta }
+    set({ activeStreamIds, activeStreamMetas, activeStreamId: activeStreamIds[0], activeStreamMeta: activeStreamMetas[activeStreamIds[0]], streamStatus: 'starting', errorMessage: undefined, latestStderr: undefined })
+  },
+  markRunning(streamId) { if (get().activeStreamIds.includes(streamId)) set({ streamStatus: 'running' }) },
+  markStopping(streamId) { if (get().activeStreamIds.includes(streamId)) set({ streamStatus: 'stopping' }) },
+  markStopped(streamId) {
+    const s = get()
+    if (!s.activeStreamIds.includes(streamId)) return
+    const next = removeStream(s, streamId)
+    set({ ...next, streamStatus: next.activeStreamIds.length ? 'running' : 'stopped' })
+  },
+  markStartRejected(streamId, error) {
+    const s = get()
+    if (!s.activeStreamIds.includes(streamId)) return
+    const next = removeStream(s, streamId)
+    set({ ...next, streamStatus: next.activeStreamIds.length ? 'running' : 'error', errorMessage: commandErrorMessage(error) })
+  },
+  markError(streamId, message) {
+    const s = get()
+    if (!streamId) { set({ streamStatus: 'error', errorMessage: message }); return }
+    if (!s.activeStreamIds.includes(streamId)) return
+    const next = removeStream(s, streamId)
+    set({ ...next, streamStatus: 'error', errorMessage: message })
+  },
   appendLine(event) {
     const state = get()
-    if (event.streamId !== state.activeStreamId || !state.activeStreamMeta) return
-    const parsed = parseLogLine(event.raw, event.sourceType, state.activeStreamMeta, event.receivedAt)
+    const meta = state.activeStreamMetas[event.streamId]
+    if (!meta) return
+    const parsed = parseLogLine(event.raw, event.sourceType, meta, event.receivedAt)
     const row: ParsedLogLine = { ...parsed, id: state.nextLineId }
     const result = appendWithLimit(state.rows, row, state.bufferLimit)
     const visibleRows = state.viewerPaused ? state.visibleRows : filterRows(result.items, state.grepQuery)
     set({ rows: result.items, visibleRows, nextLineId: state.nextLineId + 1, totalDroppedCount: state.totalDroppedCount + result.dropped, droppedWhilePaused: state.droppedWhilePaused + (state.viewerPaused ? result.dropped : 0) })
   },
-  recordStderr(streamId, line) { if (get().activeStreamId === streamId) set({ latestStderr: line }) },
+  recordStderr(streamId, line) { if (get().activeStreamIds.includes(streamId)) set({ latestStderr: line }) },
   setGrepQuery(query) { const s = get(); set({ grepQuery: query, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, query) }) },
   setAutoScrollEnabled(enabled) { set({ autoScrollEnabled: enabled }) },
   setBufferLimit(limit) {
@@ -92,7 +124,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   pause() { set({ viewerPaused: true }) },
   resume() { const s = get(); set({ viewerPaused: false, visibleRows: filterRows(s.rows, s.grepQuery), droppedWhilePaused: 0 }) },
   clear() { set({ rows: [], visibleRows: [], totalDroppedCount: 0, droppedWhilePaused: 0 }) },
-  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, latestStderr: undefined, errorMessage: undefined }) },
+  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, latestStderr: undefined, errorMessage: undefined }) },
 }))
 
 export function resetLogStoreForTests() { useLogStore.setState({ ...initial }) }
