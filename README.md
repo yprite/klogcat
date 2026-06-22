@@ -22,7 +22,58 @@ klogcat
 
 First launch builds the native Tauri binary locally.
 
-For prerequisites and alternatives, see [docs/INSTALL.md](docs/INSTALL.md).
+For full prerequisites and install alternatives, see [docs/INSTALL.md](docs/INSTALL.md).
+
+## Tauri build and runtime flow
+
+`klogcat` is distributed as an npm-style launcher, but the desktop app is still a native Tauri binary.
+
+- `npm install -g git+ssh://git@github.com/yprite/klogcat.git` installs the source package and the `klogcat` CLI wrapper.
+- First `klogcat` launch checks for `src-tauri/target/release/klogcat`.
+- If the binary is missing, the wrapper runs:
+
+```bash
+npm run tauri build -- --no-bundle
+```
+
+- The production binary is then launched from:
+
+```text
+src-tauri/target/release/klogcat
+```
+
+Useful wrapper commands:
+
+```bash
+klogcat              # build if needed, then launch
+klogcat --build-only # build the Tauri binary and exit
+klogcat --dev        # run Tauri dev mode
+klogcat --no-build   # launch existing binary only
+klogcat --help       # show dependency/build notes
+```
+
+## Tauri configuration
+
+Main Tauri settings live in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json):
+
+- `productName`: `klogcat`
+- `version`: `0.1.0`
+- `identifier`: `com.klogcat.app`
+- `beforeDevCommand`: `npm run dev`
+- `devUrl`: `http://localhost:1420`
+- `beforeBuildCommand`: `npm run build`
+- `frontendDist`: `../dist`
+- Default window: `1200x800`, title `klogcat`
+- Bundle setting: `active: true`, `targets: all`
+
+The npm scripts mirror this flow:
+
+```bash
+npm run tauri       # pass-through to Tauri CLI
+npm run klogcat:dev # node ./bin/klogcat.js --dev
+npm run klogcat:build # node ./bin/klogcat.js --build-only
+npm start           # node ./bin/klogcat.js
+```
 
 ## Development
 
