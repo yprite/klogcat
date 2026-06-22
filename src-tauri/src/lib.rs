@@ -12,6 +12,7 @@ pub fn run() {
         .manage(process::log_process::LogProcessState::default())
         .invoke_handler(tauri::generate_handler![
             commands::kube::get_current_context,
+            commands::kube::list_contexts,
             commands::kube::list_namespaces,
             commands::kube::list_pods,
             commands::settings::get_settings,

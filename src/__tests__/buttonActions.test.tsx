@@ -22,7 +22,9 @@ vi.mock('../commands/tauriLogs', () => ({
 function resetStores() {
   resetLogStoreForTests()
   useKubeStore.setState({
+    contexts: [{ name: 'ctx' }, { name: 'cluster-a' }],
     currentContext: 'ctx',
+    selectedContext: 'ctx',
     namespaces: [],
     selectedNamespace: undefined,
     pods: [],
@@ -64,6 +66,20 @@ describe('button actions', () => {
 
     expect(useLogStore.getState().streamStatus).toBe('error')
     expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
+  })
+
+  it('auto-selects the pod container when configured app container is missing', () => {
+    useKubeStore.setState({
+      selectedContext: 'cluster-a',
+      selectedNamespace: 'default',
+      selectedPod: 'pod-1',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['worker'] }],
+    })
+    render(<LogToolbar sourceType="app" />)
+
+    expect(screen.getByRole('combobox', { name: /container/i })).toHaveValue('worker')
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })
 
   it('shows Start enabled after selecting a Running pod with the configured container', () => {

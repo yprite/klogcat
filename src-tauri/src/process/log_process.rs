@@ -21,6 +21,7 @@ use std::os::unix::process::ExitStatusExt;
 #[serde(rename_all = "camelCase")]
 pub struct StartLogStreamRequest {
     pub stream_id: String,
+    pub context: Option<String>,
     pub namespace: String,
     pub pod: String,
     pub container: String,
@@ -243,20 +244,25 @@ impl LogProcessState {
         }
         let tail_n = request.initial_tail_lines.to_string();
         let debug = debug_enabled();
-        let args = [
-            "exec",
-            "-n",
-            &request.namespace,
-            &request.pod,
-            "-c",
-            &request.container,
-            "--",
-            "tail",
-            "-n",
-            &tail_n,
-            "-F",
-            &request.file_path,
-        ];
+        let mut args = Vec::new();
+        if let Some(context) = request.context.as_deref().filter(|c| !c.trim().is_empty()) {
+            args.push("--context".to_string());
+            args.push(context.to_string());
+        }
+        args.extend([
+            "exec".to_string(),
+            "-n".to_string(),
+            request.namespace.clone(),
+            request.pod.clone(),
+            "-c".to_string(),
+            request.container.clone(),
+            "--".to_string(),
+            "tail".to_string(),
+            "-n".to_string(),
+            tail_n,
+            "-F".to_string(),
+            request.file_path.clone(),
+        ]);
         if debug {
             eprintln!("[klogcat debug] starting stream {}", request.stream_id);
             eprintln!("[klogcat debug] source type: {}", request.source_type);
@@ -416,6 +422,7 @@ mod mocked_process {
     fn request() -> StartLogStreamRequest {
         StartLogStreamRequest {
             stream_id: "s".into(),
+            context: Some("ctx".into()),
             namespace: "ns".into(),
             pod: "pod-1".into(),
             container: "c".into(),

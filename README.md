@@ -61,6 +61,8 @@ If the app opens but button actions appear to do nothing, first make sure the na
 As of `0.0.2`, Start/Stop/Reset actions should provide visible feedback instead of silently doing nothing:
 
 - **Start** remains clickable when namespace/pod/source settings are incomplete and shows the exact reason in the error banner.
+- **Context** dropdown lists `kubectl` contexts so clusters can be switched without changing the global current context.
+- **Container** dropdown uses the selected pod's real containers; if configured `app` is not present, the first pod container is selected instead of blocking with `Container app not in pod`.
 - **Stop** remains clickable when no stream is active and shows `No active stream to stop`.
 - **Reset** updates the settings draft and shows `Settings reset to defaults` when the reset succeeds.
 

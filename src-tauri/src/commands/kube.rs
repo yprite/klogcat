@@ -5,12 +5,23 @@ use std::{io, process::Command};
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct ContextInfo {
+    pub name: String,
+}
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListContextsResponse {
+    pub contexts: Vec<ContextInfo>,
+}
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct NamespaceInfo {
     pub name: String,
 }
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ListNamespacesResponse {
+    pub context: Option<String>,
     pub namespaces: Vec<NamespaceInfo>,
 }
 #[derive(Debug, Serialize, PartialEq)]
@@ -24,6 +35,7 @@ pub struct PodInfo {
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPodsResponse {
+    pub context: Option<String>,
     pub namespace: String,
     pub pods: Vec<PodInfo>,
 }
@@ -33,7 +45,7 @@ struct Output {
     stdout: String,
     stderr: String,
 }
-fn run_kubectl(args: &[&str]) -> Result<Output, CommandError> {
+fn run_kubectl(args: &[String]) -> Result<Output, CommandError> {
     let output = Command::new("kubectl").args(args).output().map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
             CommandError::new("kubectl_not_found", "kubectl was not found")
@@ -48,9 +60,15 @@ fn run_kubectl(args: &[&str]) -> Result<Output, CommandError> {
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
     })
 }
+fn context_args(context: Option<&str>) -> Vec<String> {
+    context
+        .filter(|c| !c.trim().is_empty())
+        .map(|c| vec!["--context".into(), c.into()])
+        .unwrap_or_default()
+}
 #[tauri::command]
 pub async fn get_current_context() -> Result<String, CommandError> {
-    let o = run_kubectl(&["config", "current-context"])?;
+    let o = run_kubectl(&["config".into(), "current-context".into()])?;
     if o.status != 0 {
         return Err(
             CommandError::new("current_context_failed", "failed to get current context")
@@ -60,28 +78,76 @@ pub async fn get_current_context() -> Result<String, CommandError> {
     Ok(o.stdout.trim().to_string())
 }
 #[tauri::command]
-pub async fn list_namespaces() -> Result<ListNamespacesResponse, CommandError> {
-    let o = run_kubectl(&["get", "namespaces", "-o", "json"])?;
+pub async fn list_contexts() -> Result<ListContextsResponse, CommandError> {
+    let o = run_kubectl(&[
+        "config".into(),
+        "get-contexts".into(),
+        "-o".into(),
+        "name".into(),
+    ])?;
+    if o.status != 0 {
+        return Err(
+            CommandError::new("list_contexts_failed", "failed to list contexts")
+                .with_details(o.stderr),
+        );
+    }
+    Ok(ListContextsResponse {
+        contexts: o
+            .stdout
+            .lines()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(|name| ContextInfo { name: name.into() })
+            .collect(),
+    })
+}
+#[tauri::command]
+pub async fn list_namespaces(
+    context: Option<String>,
+) -> Result<ListNamespacesResponse, CommandError> {
+    let mut args = context_args(context.as_deref());
+    args.extend([
+        "get".into(),
+        "namespaces".into(),
+        "-o".into(),
+        "json".into(),
+    ]);
+    let o = run_kubectl(&args)?;
     if o.status != 0 {
         return Err(
             CommandError::new("list_namespaces_failed", "failed to list namespaces")
                 .with_details(o.stderr),
         );
     }
-    parse_namespaces_json(&o.stdout)
+    parse_namespaces_json(context, &o.stdout)
 }
 #[tauri::command]
-pub async fn list_pods(namespace: String) -> Result<ListPodsResponse, CommandError> {
-    let o = run_kubectl(&["get", "pods", "-n", &namespace, "-o", "json"])?;
+pub async fn list_pods(
+    namespace: String,
+    context: Option<String>,
+) -> Result<ListPodsResponse, CommandError> {
+    let mut args = context_args(context.as_deref());
+    args.extend([
+        "get".into(),
+        "pods".into(),
+        "-n".into(),
+        namespace.clone(),
+        "-o".into(),
+        "json".into(),
+    ]);
+    let o = run_kubectl(&args)?;
     if o.status != 0 {
         return Err(
             CommandError::new("list_pods_failed", "failed to list pods").with_details(o.stderr)
         );
     }
-    parse_pods_json(&namespace, &o.stdout)
+    parse_pods_json(context, &namespace, &o.stdout)
 }
 
-pub fn parse_namespaces_json(input: &str) -> Result<ListNamespacesResponse, CommandError> {
+pub fn parse_namespaces_json(
+    context: Option<String>,
+    input: &str,
+) -> Result<ListNamespacesResponse, CommandError> {
     let v: Value = serde_json::from_str(input).map_err(|e| {
         CommandError::new("list_namespaces_failed", "invalid namespace json")
             .with_details(e.to_string())
@@ -96,9 +162,16 @@ pub fn parse_namespaces_json(input: &str) -> Result<ListNamespacesResponse, Comm
                 .map(|name| NamespaceInfo { name: name.into() })
         })
         .collect();
-    Ok(ListNamespacesResponse { namespaces })
+    Ok(ListNamespacesResponse {
+        context,
+        namespaces,
+    })
 }
-pub fn parse_pods_json(namespace: &str, input: &str) -> Result<ListPodsResponse, CommandError> {
+pub fn parse_pods_json(
+    context: Option<String>,
+    namespace: &str,
+    input: &str,
+) -> Result<ListPodsResponse, CommandError> {
     let v: Value = serde_json::from_str(input).map_err(|e| {
         CommandError::new("list_pods_failed", "invalid pods json").with_details(e.to_string())
     })?;
@@ -127,6 +200,7 @@ pub fn parse_pods_json(namespace: &str, input: &str) -> Result<ListPodsResponse,
         })
         .collect();
     Ok(ListPodsResponse {
+        context,
         namespace: namespace.into(),
         pods,
     })
@@ -136,12 +210,18 @@ mod tests {
     use super::*;
     #[test]
     fn namespaces_skip_missing() {
-        let r = parse_namespaces_json(r#"{"items":[{"metadata":{"name":"default"}},{}]}"#).unwrap();
+        let r = parse_namespaces_json(
+            Some("ctx".into()),
+            r#"{"items":[{"metadata":{"name":"default"}},{}]}"#,
+        )
+        .unwrap();
+        assert_eq!(r.context, Some("ctx".into()));
         assert_eq!(r.namespaces.len(), 1);
     }
     #[test]
     fn pods_extract() {
-        let r=parse_pods_json("ns", r#"{"items":[{"metadata":{"name":"p"},"status":{"phase":"Running"},"spec":{"containers":[{"name":"app"}]}}]}"#).unwrap();
+        let r=parse_pods_json(Some("ctx".into()), "ns", r#"{"items":[{"metadata":{"name":"p"},"status":{"phase":"Running"},"spec":{"containers":[{"name":"app"}]}}]}"#).unwrap();
+        assert_eq!(r.context, Some("ctx".into()));
         assert_eq!(r.pods[0].containers, vec!["app"]);
     }
 }
