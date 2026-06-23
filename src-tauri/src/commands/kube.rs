@@ -1,7 +1,7 @@
 use crate::error::CommandError;
 use serde::Serialize;
 use serde_json::Value;
-use std::{io, process::Command};
+use std::{io, process::Command, time::Instant};
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -47,12 +47,11 @@ struct Output {
 }
 
 fn debug_log(message: impl AsRef<str>) {
-    #[cfg(debug_assertions)]
     eprintln!("[klogcat:kube] {}", message.as_ref());
 }
 
 fn compact_debug_text(value: &str) -> String {
-    const MAX_LEN: usize = 240;
+    const MAX_LEN: usize = 2000;
     let single_line = value.trim().replace('\n', "\\n");
     if single_line.chars().count() > MAX_LEN {
         format!("{}…", single_line.chars().take(MAX_LEN).collect::<String>())
@@ -232,29 +231,37 @@ fn can_list_pods_in_namespace(context: Option<&str>, namespace: &str) -> bool {
         namespace.into(),
     ]);
     debug_log(format!(
-        "namespace_auth_start context={} namespace={}",
+        "namespace_auth_start context={} namespace={} argv=kubectl {}",
         context.unwrap_or("(default)"),
-        namespace
+        namespace,
+        args.join(" ")
     ));
+    let started_at = Instant::now();
     match run_kubectl(&args) {
         Ok(output) => {
+            let elapsed_ms = started_at.elapsed().as_millis();
             let allowed = output.status == 0 && auth_stdout_allows(&output.stdout);
             debug_log(format!(
-                "namespace_auth context={} namespace={} status={} allowed={} stdout={} stderr={}",
+                "namespace_auth_done context={} namespace={} elapsed_ms={} status={} allowed={} stdout_len={} stderr_len={} stdout={} stderr={}",
                 context.unwrap_or("(default)"),
                 namespace,
+                elapsed_ms,
                 output.status,
                 allowed,
+                output.stdout.len(),
+                output.stderr.len(),
                 compact_debug_text(&output.stdout),
                 compact_debug_text(&output.stderr)
             ));
             allowed
         }
         Err(error) => {
+            let elapsed_ms = started_at.elapsed().as_millis();
             debug_log(format!(
-                "namespace_auth context={} namespace={} command_error={} details={}",
+                "namespace_auth_done context={} namespace={} elapsed_ms={} command_error={} details={}",
                 context.unwrap_or("(default)"),
                 namespace,
+                elapsed_ms,
                 error.code,
                 compact_debug_text(error.details.as_deref().unwrap_or(""))
             ));
