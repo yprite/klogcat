@@ -59,6 +59,24 @@ export function columnWidthsForRows(rows: ParsedLogLine[], columns: LogColumnKey
   return Object.fromEntries(columns.map((key) => [key, columnWidthChForRows(rows, key)])) as LogColumnWidths
 }
 
+export function exportRowsAsJsonl(rows: ParsedLogLine[]) {
+  return rows.map((row) => JSON.stringify(row)).join('\n')
+}
+
+export function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'application/jsonl;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function copyText(text: string) {
+  await navigator.clipboard?.writeText(text)
+}
+
 export function LogViewer() {
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused } = useLogStore()
   const parentRef = useRef<HTMLDivElement>(null)
@@ -71,6 +89,7 @@ export function LogViewer() {
   const [draggedColumn, setDraggedColumn] = useState<LogColumnKey | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<LogColumnKey | null>(null)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
+  const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   useEffect(() => {
     setColumnOrder((current) => {
       const available = new Set(availableColumns)
@@ -91,6 +110,7 @@ export function LogViewer() {
     if (activeFilters.length === 0) return visibleRows
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleRows])
+  const selectedRow = filteredRows.find((row) => row.id === selectedRowId)
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, columnOrder), [columnOrder, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
   useEffect(() => {
@@ -156,7 +176,8 @@ export function LogViewer() {
     setDragOverColumn(key)
   }
   const headerHeight = availableColumns.length ? 72 : 0
-  return <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
+  return <>
+  <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
       {availableColumns.length > 0 && <div role="row" aria-label="Excel-style column filters" className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
         <span className="inline-block min-w-28 text-[10px] uppercase text-slate-400">time/source</span>
@@ -176,7 +197,17 @@ export function LogViewer() {
         })}
       </div>}
       {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
+  <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
+    <button type="button" onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
+    <button type="button" onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
+    <span className="text-slate-400">Selected: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : 'none'}</span>
+  </div>
+  {selectedRow && <aside aria-label="Log row detail" className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">
+    <div className="mb-2 flex gap-2"><strong>Row #{selectedRow.id}</strong><button type="button" onClick={() => void copyText(selectedRow.raw)}>Copy raw</button><button type="button" onClick={() => void copyText(JSON.stringify(selectedRow, null, 2))}>Copy JSON</button><button type="button" onClick={() => setSelectedRowId(null)}>Close</button></div>
+    <pre className="whitespace-pre-wrap text-slate-200">{JSON.stringify(selectedRow, null, 2)}</pre>
+  </aside>}
+  </>
 }

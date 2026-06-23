@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { GrepBar } from '../components/GrepBar'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 
-describe('GrepBar', () => {
+describe('QueryBar', () => {
   beforeEach(() => resetLogStoreForTests())
 
   it('toggles between substring and regex grep modes', () => {
@@ -22,9 +22,9 @@ describe('GrepBar', () => {
     render(<GrepBar />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Regex' }))
-    fireEvent.change(screen.getByLabelText('Grep'), { target: { value: '[' } })
+    fireEvent.change(screen.getByLabelText('Query'), { target: { value: '[' } })
 
-    expect(screen.getByLabelText('Grep')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Query')).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByText('invalid regex')).toBeInTheDocument()
   })
 })

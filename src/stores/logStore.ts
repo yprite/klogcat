@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ActiveStreamMeta, LogLineEvent, ParsedLogLine, StreamStatus } from '../types/log'
 import { defaultSettings } from '../config/defaultSettings'
 import { matchesGrep, type GrepMode } from '../utils/grep'
+import { matchesLogQuery } from '../utils/logQuery'
 import { parseLogLine } from '../utils/parseLogLine'
 import { appendWithLimit } from '../utils/ringBuffer'
 import { commandErrorMessage } from '../commands/types'
@@ -25,6 +26,7 @@ export type LogStoreState = {
   actionDebugMessages: string[]
   totalDroppedCount: number
   droppedWhilePaused: number
+  reconnectEnabled: boolean
   recordActionDebug(message: string): void
   prepareStarting(meta: ActiveStreamMeta): void
   markRunning(streamId: string): void
@@ -37,6 +39,7 @@ export type LogStoreState = {
   setGrepQuery(query: string): void
   setGrepMode(mode: GrepMode): void
   setAutoScrollEnabled(enabled: boolean): void
+  setReconnectEnabled(enabled: boolean): void
   setBufferLimit(limit: number): void
   pause(): void
   resume(): void
@@ -44,7 +47,18 @@ export type LogStoreState = {
   resetForSelectionChange(): void
 }
 
-const filterRows = (rows: ParsedLogLine[], query: string, mode: GrepMode) => rows.filter((r) => matchesGrep(r.raw, query, mode))
+const filterRows = (rows: ParsedLogLine[], query: string, mode: GrepMode) => rows.filter((r) => mode === 'regex' ? matchesGrep(r.raw, query, mode) : matchesLogQuery(r, query))
+const stacktraceContinuationPattern = /^(\s+at\s|Caused by:|Suppressed:|\s*\.\.\. \d+ more|\s*at\s)/
+const exceptionPattern = /(?:Exception|Error|Throwable)(?::|$)/
+export function isStacktraceLine(raw: string) { return stacktraceContinuationPattern.test(raw) }
+export function marksStacktraceStart(raw: string) { return exceptionPattern.test(raw) }
+function appendOrGroupStacktrace(rows: ParsedLogLine[], row: ParsedLogLine, limit: number) {
+  if (!isStacktraceLine(row.raw)) return appendWithLimit(rows, { ...row, isStacktrace: marksStacktraceStart(row.raw) }, limit)
+  const last = rows.at(-1)
+  if (!last || last.streamId !== row.streamId || last.sourceId !== row.sourceId) return appendWithLimit(rows, { ...row, isStacktrace: true, stacktraceLines: [row.raw] }, limit)
+  const grouped: ParsedLogLine = { ...last, raw: `${last.raw}\n${row.raw}`, summary: `${last.summary}\n${row.raw}`, isStacktrace: true, stacktraceLines: [...(last.stacktraceLines ?? []), row.raw] }
+  return { items: [...rows.slice(0, -1), grouped], dropped: 0 }
+}
 const initial = {
   streamStatus: 'idle' as StreamStatus,
   activeStreamId: undefined,
@@ -64,6 +78,7 @@ const initial = {
   actionDebugMessages: [] as string[],
   totalDroppedCount: 0,
   droppedWhilePaused: 0,
+  reconnectEnabled: false,
 }
 
 function removeStream(state: LogStoreState, streamId: string) {
@@ -113,7 +128,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     if (!meta) return
     const parsed = parseLogLine(event.raw, event.sourceType, meta, event.receivedAt)
     const row: ParsedLogLine = { ...parsed, id: state.nextLineId }
-    const result = appendWithLimit(state.rows, row, state.bufferLimit)
+    const result = appendOrGroupStacktrace(state.rows, row, state.bufferLimit)
     const visibleRows = state.viewerPaused ? state.visibleRows : filterRows(result.items, state.grepQuery, state.grepMode)
     set({ rows: result.items, visibleRows, nextLineId: state.nextLineId + 1, totalDroppedCount: state.totalDroppedCount + result.dropped, droppedWhilePaused: state.droppedWhilePaused + (state.viewerPaused ? result.dropped : 0) })
   },
@@ -121,6 +136,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   setGrepQuery(query) { const s = get(); set({ grepQuery: query, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, query, s.grepMode) }) },
   setGrepMode(mode) { const s = get(); set({ grepMode: mode, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, s.grepQuery, mode) }) },
   setAutoScrollEnabled(enabled) { set({ autoScrollEnabled: enabled }) },
+  setReconnectEnabled(enabled) { set({ reconnectEnabled: enabled }) },
   setBufferLimit(limit) {
     const safe = Math.max(0, Math.floor(limit)); const s = get(); const drop = Math.max(0, s.rows.length - safe); const rows = drop ? s.rows.slice(drop) : s.rows
     set({ bufferLimit: safe, rows, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(rows, s.grepQuery, s.grepMode), totalDroppedCount: s.totalDroppedCount + drop, droppedWhilePaused: s.droppedWhilePaused + (s.viewerPaused ? drop : 0) })

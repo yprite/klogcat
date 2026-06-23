@@ -6,7 +6,7 @@ import { sourceLabels } from '../utils/sourceLabels'
 import type { LogColumnWidths } from './LogViewer'
 import type { GrepMode } from '../utils/grep'
 
-export function LogRow({ row, grepQuery, grepMode = 'substring', visibleColumns, columnWidths, isNew = false }: { row: ParsedLogLine; grepQuery: string; grepMode?: GrepMode; visibleColumns?: LogColumnKey[]; columnWidths?: LogColumnWidths; isNew?: boolean }) {
+export function LogRow({ row, grepQuery, grepMode = 'substring', visibleColumns, columnWidths, isNew = false, isSelected = false }: { row: ParsedLogLine; grepQuery: string; grepMode?: GrepMode; visibleColumns?: LogColumnKey[]; columnWidths?: LogColumnWidths; isNew?: boolean; isSelected?: boolean }) {
   const time = formatDisplayTime(row)
   const hasColumnView = row.parseStatus === 'parsed' && row.sourceType !== 'app' && visibleColumns && visibleColumns.length > 0
   let mid = ''
@@ -14,7 +14,7 @@ export function LogRow({ row, grepQuery, grepMode = 'substring', visibleColumns,
   else if (row.sourceType === 'access') mid = [row.status, row.method, row.url, row.elapsed !== undefined ? `${row.elapsed}ms` : undefined, row.summary, row.trId].filter(Boolean).join(' ')
   else if (row.sourceType === 'error') mid = [row.jsonLogType, row.errorMethod, row.errorPath, row.errorReason ?? row.summary, row.trId ?? row.traceId].filter(Boolean).join(' ')
   else mid = [row.jsonLogType, row.summary, row.trId].filter(Boolean).join(' ')
-  return <div data-testid={`log-row-${row.id}`} className={`px-2 py-1 whitespace-nowrap border-b border-slate-900 min-w-max ${isNew ? 'klogcat-new-log' : ''}`} title={row.raw}>
+  return <div data-testid={`log-row-${row.id}`} className={`px-2 py-1 whitespace-nowrap border-b border-slate-900 min-w-max cursor-pointer ${isNew ? 'klogcat-new-log' : ''} ${isSelected ? 'bg-slate-800 ring-1 ring-yellow-300' : ''}`} title={row.raw}>
     <span className="inline-block min-w-28 text-slate-400">{time}</span> <span className="inline-block min-w-12 font-bold text-blue-300">{sourceLabels[row.sourceType]}</span>
     <span className="inline-block min-w-24 pr-2 text-slate-400">{row.namespace}/{row.pod}</span>
     {hasColumnView ? <span className="inline-flex gap-2 align-top">

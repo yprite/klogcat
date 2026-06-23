@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
+import { columnWidthsForRows, exportRowsAsJsonl, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -155,6 +155,13 @@ describe('LogViewer', () => {
     forceScrollToBottom(element)
 
     expect(element.scrollTop).toBe(2400)
+  })
+
+  it('serializes exported rows as JSONL', () => {
+    const exported = exportRowsAsJsonl([row, okRow])
+    expect(exported.split('\n')).toHaveLength(2)
+    expect(exported).toContain('"status":"500"')
+    expect(exported).toContain('"status":"200"')
   })
 
   it('applies a yellow blinking highlight when a row is marked as newly arrived', () => {

@@ -6,10 +6,12 @@ export type SourceMeta = {
   streamId: string
   sourceId: string
   sourceType: SourceLogType
+  context?: string
   namespace: string
   pod: string
   container: string
   filePath: string
+  initialTailLines?: number
 }
 
 export type ActiveStreamMeta = SourceMeta
@@ -22,6 +24,9 @@ export type ParsedLogLine = SourceMeta & {
   epochTime?: number
   receivedAt: number
   jsonLogType?: string
+  level?: string
+  isStacktrace?: boolean
+  stacktraceLines?: string[]
   host?: string
   service?: string
   serviceId?: string

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleLogExit } from '../App'
+import { startLogStream } from '../commands/tauriLogs'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ActiveStreamMeta } from '../types/log'
 
 vi.mock('../commands/tauriLogEvents', () => ({
   subscribeLogEvents: vi.fn(),
+}))
+vi.mock('../commands/tauriLogs', () => ({
+  startLogStream: vi.fn(async () => undefined),
 }))
 
 const meta = (streamId: string): ActiveStreamMeta => ({
@@ -18,7 +22,7 @@ const meta = (streamId: string): ActiveStreamMeta => ({
 })
 
 describe('App log exit handling', () => {
-  beforeEach(() => resetLogStoreForTests())
+  beforeEach(() => { resetLogStoreForTests(); vi.mocked(startLogStream).mockClear() })
 
   it('treats requested stops as stopped', () => {
     useLogStore.getState().prepareStarting(meta('s1'))
@@ -47,5 +51,14 @@ describe('App log exit handling', () => {
     useLogStore.getState().prepareStarting(meta('s1'))
     handleLogExit({ streamId: 's1', requestedStop: false, exitCode: 0 })
     expect(useLogStore.getState().streamStatus).toBe('stopped')
+  })
+
+  it('reconnects unexpected exits when auto-reconnect is enabled', () => {
+    useLogStore.getState().prepareStarting({ ...meta('s1'), context: 'ctx', initialTailLines: 123 })
+    useLogStore.getState().setReconnectEnabled(true)
+    handleLogExit({ streamId: 's1', requestedStop: false, exitCode: 2 })
+
+    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ streamId: 's1', context: 'ctx', initialTailLines: 123 }))
+    expect(useLogStore.getState().actionDebugMessages.at(-1)).toMatch(/Reconnect scheduled/)
   })
 })
