@@ -13,7 +13,7 @@ pub struct ContextInfo {
 pub struct ListContextsResponse {
     pub contexts: Vec<ContextInfo>,
 }
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NamespaceInfo {
     pub name: String,
@@ -231,6 +231,11 @@ fn can_list_pods_in_namespace(context: Option<&str>, namespace: &str) -> bool {
         "-n".into(),
         namespace.into(),
     ]);
+    debug_log(format!(
+        "namespace_auth_start context={} namespace={}",
+        context.unwrap_or("(default)"),
+        namespace
+    ));
     match run_kubectl(&args) {
         Ok(output) => {
             let allowed = output.status == 0 && auth_stdout_allows(&output.stdout);
@@ -265,10 +270,20 @@ fn filter_namespaces_by_access<F>(
 where
     F: FnMut(&str) -> bool,
 {
-    namespaces
-        .into_iter()
+    let filtered: Vec<_> = namespaces
+        .iter()
         .filter(|namespace| can_access(&namespace.name))
-        .collect()
+        .cloned()
+        .collect();
+    if filtered.is_empty() && !namespaces.is_empty() {
+        debug_log(format!(
+            "namespace_auth_fallback reason=all-denied-or-unavailable raw_count={}",
+            namespaces.len()
+        ));
+        namespaces
+    } else {
+        filtered
+    }
 }
 
 fn filter_namespaces_with_pod_access(
@@ -369,5 +384,19 @@ mod tests {
     fn auth_stdout_allows_yes_even_with_warnings() {
         assert!(auth_stdout_allows("warning: ignored\nyes\n"));
         assert!(!auth_stdout_allows("warning: ignored\nno\n"));
+    }
+
+    #[test]
+    fn namespace_access_filter_falls_back_when_all_auth_checks_deny() {
+        let namespaces = vec![
+            NamespaceInfo {
+                name: "default".into(),
+            },
+            NamespaceInfo {
+                name: "team-a".into(),
+            },
+        ];
+        let filtered = filter_namespaces_by_access(namespaces.clone(), |_| false);
+        assert_eq!(filtered, namespaces);
     }
 }
