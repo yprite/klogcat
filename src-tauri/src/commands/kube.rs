@@ -45,6 +45,22 @@ struct Output {
     stdout: String,
     stderr: String,
 }
+
+fn debug_log(message: impl AsRef<str>) {
+    #[cfg(debug_assertions)]
+    eprintln!("[klogcat:kube] {}", message.as_ref());
+}
+
+fn compact_debug_text(value: &str) -> String {
+    const MAX_LEN: usize = 240;
+    let single_line = value.trim().replace('\n', "\\n");
+    if single_line.chars().count() > MAX_LEN {
+        format!("{}…", single_line.chars().take(MAX_LEN).collect::<String>())
+    } else {
+        single_line
+    }
+}
+
 fn run_kubectl(args: &[String]) -> Result<Output, CommandError> {
     let output = Command::new("kubectl").args(args).output().map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
@@ -114,14 +130,42 @@ pub async fn list_namespaces(
     ]);
     let o = run_kubectl(&args)?;
     if o.status != 0 {
+        debug_log(format!(
+            "list_namespaces context={} failed status={} stderr={}",
+            context.as_deref().unwrap_or("(default)"),
+            o.status,
+            compact_debug_text(&o.stderr)
+        ));
         return Err(
             CommandError::new("list_namespaces_failed", "failed to list namespaces")
                 .with_details(o.stderr),
         );
     }
     let mut response = parse_namespaces_json(context.clone(), &o.stdout)?;
+    debug_log(format!(
+        "list_namespaces context={} raw_count={} names={}",
+        context.as_deref().unwrap_or("(default)"),
+        response.namespaces.len(),
+        response
+            .namespaces
+            .iter()
+            .map(|namespace| namespace.name.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    ));
     response.namespaces =
         filter_namespaces_with_pod_access(context.as_deref(), response.namespaces);
+    debug_log(format!(
+        "list_namespaces context={} accessible_count={} names={}",
+        context.as_deref().unwrap_or("(default)"),
+        response.namespaces.len(),
+        response
+            .namespaces
+            .iter()
+            .map(|namespace| namespace.name.as_str())
+            .collect::<Vec<_>>()
+            .join(",")
+    ));
     Ok(response)
 }
 #[tauri::command]
@@ -187,7 +231,31 @@ fn can_list_pods_in_namespace(context: Option<&str>, namespace: &str) -> bool {
         "-n".into(),
         namespace.into(),
     ]);
-    run_kubectl(&args).is_ok_and(|output| output.status == 0 && auth_stdout_allows(&output.stdout))
+    match run_kubectl(&args) {
+        Ok(output) => {
+            let allowed = output.status == 0 && auth_stdout_allows(&output.stdout);
+            debug_log(format!(
+                "namespace_auth context={} namespace={} status={} allowed={} stdout={} stderr={}",
+                context.unwrap_or("(default)"),
+                namespace,
+                output.status,
+                allowed,
+                compact_debug_text(&output.stdout),
+                compact_debug_text(&output.stderr)
+            ));
+            allowed
+        }
+        Err(error) => {
+            debug_log(format!(
+                "namespace_auth context={} namespace={} command_error={} details={}",
+                context.unwrap_or("(default)"),
+                namespace,
+                error.code,
+                compact_debug_text(error.details.as_deref().unwrap_or(""))
+            ));
+            false
+        }
+    }
 }
 
 fn filter_namespaces_by_access<F>(
