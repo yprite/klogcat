@@ -36,11 +36,14 @@ export function columnWidthsForRows(rows: ParsedLogLine[], columns: LogColumnKey
 }
 
 export function LogViewer() {
-  const { visibleRows, grepQuery, autoScrollEnabled, viewerPaused } = useLogStore()
+  const { rows, visibleRows, grepQuery, autoScrollEnabled, viewerPaused } = useLogStore()
   const parentRef = useRef<HTMLDivElement>(null)
+  const seenRowIdsRef = useRef<Set<number> | null>(null)
+  const highlightTimeoutsRef = useRef<number[]>([])
   const availableColumns = useMemo(() => columnsForRows(visibleRows), [visibleRows])
   const [visibleColumns, setVisibleColumns] = useState<LogColumnKey[]>([])
   const [columnFilters, setColumnFilters] = useState<Partial<Record<LogColumnKey, string>>>({})
+  const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   useEffect(() => {
     setVisibleColumns((current) => {
       const available = new Set(availableColumns)
@@ -57,6 +60,31 @@ export function LogViewer() {
   }, [columnFilters, visibleRows])
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, availableColumns), [availableColumns, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
+  useEffect(() => {
+    const currentIds = new Set(rows.map((row) => row.id))
+    const seenRowIds = seenRowIdsRef.current
+    if (!seenRowIds) {
+      seenRowIdsRef.current = currentIds
+      return
+    }
+    const newIds = rows.map((row) => row.id).filter((id) => !seenRowIds.has(id))
+    seenRowIdsRef.current = currentIds
+    if (newIds.length === 0) return
+    setHighlightedRowIds((current) => new Set([...current, ...newIds]))
+    const timeout = window.setTimeout(() => {
+      setHighlightedRowIds((current) => {
+        const next = new Set(current)
+        newIds.forEach((id) => next.delete(id))
+        return next
+      })
+      highlightTimeoutsRef.current = highlightTimeoutsRef.current.filter((id) => id !== timeout)
+    }, 1800)
+    highlightTimeoutsRef.current.push(timeout)
+  }, [rows])
+  useEffect(() => () => {
+    highlightTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout))
+    highlightTimeoutsRef.current = []
+  }, [])
   useEffect(() => {
     if (!autoScrollEnabled || viewerPaused || filteredRows.length === 0) return
     virtualizer.scrollToIndex(filteredRows.length - 1, { align: 'end' })
@@ -81,7 +109,7 @@ export function LogViewer() {
         })}
       </div>}
       {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} visibleColumns={visibleColumns} columnWidths={columnWidths} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} /></div>)}
     </div>
   </div>
 }

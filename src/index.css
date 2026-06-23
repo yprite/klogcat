@@ -23,3 +23,13 @@ button, input, select { font: inherit; }
   color: #111827;
   background: #facc15 linear-gradient(#facc15, #facc15);
 }
+
+@keyframes klogcat-new-log-flash {
+  0%, 100% { background-color: transparent; }
+  18%, 55% { background-color: rgba(250, 204, 21, 0.35); }
+  35%, 75% { background-color: rgba(250, 204, 21, 0.18); }
+}
+
+.klogcat-new-log {
+  animation: klogcat-new-log-flash 0.6s ease-in-out 3;
+}
