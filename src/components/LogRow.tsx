@@ -3,8 +3,9 @@ import { formatDisplayTime } from '../utils/formatTime'
 import { highlightText } from '../utils/highlight'
 import { labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { sourceLabels } from '../utils/sourceLabels'
+import type { LogColumnWidths } from './LogViewer'
 
-export function LogRow({ row, grepQuery, visibleColumns }: { row: ParsedLogLine; grepQuery: string; visibleColumns?: LogColumnKey[] }) {
+export function LogRow({ row, grepQuery, visibleColumns, columnWidths }: { row: ParsedLogLine; grepQuery: string; visibleColumns?: LogColumnKey[]; columnWidths?: LogColumnWidths }) {
   const time = formatDisplayTime(row)
   const hasColumnView = row.parseStatus === 'parsed' && row.sourceType !== 'app' && visibleColumns && visibleColumns.length > 0
   let mid = ''
@@ -18,7 +19,7 @@ export function LogRow({ row, grepQuery, visibleColumns }: { row: ParsedLogLine;
     {hasColumnView ? <span className="inline-flex gap-2 align-top">
       {visibleColumns.map((key) => {
         const value = valueForColumn(row, key)
-        return <span key={key} className="inline-block w-max min-w-24 border-l border-slate-800 pl-2 pr-2 align-top">
+        return <span key={key} data-testid={`log-column-${key}`} style={columnWidths?.[key] ? { width: `${columnWidths[key]}ch` } : undefined} className={`inline-block border-l border-slate-800 pl-2 pr-2 align-top ${columnWidths?.[key] ? '' : 'w-max min-w-24'}`}>
           <span className="block text-[10px] uppercase text-slate-500">{labelForColumn(key)}</span>
           <span>{highlightText(value || '-', grepQuery)}</span>
         </span>

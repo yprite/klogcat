@@ -3,6 +3,12 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
+import type { ParsedLogLine } from '../types/log'
+
+export type LogColumnWidths = Partial<Record<LogColumnKey, number>>
+
+const minColumnWidthCh = 12
+const valuePaddingCh = 2
 
 export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableColumns: LogColumnKey[], key: LogColumnKey, checked: boolean) {
   if (!checked) return current.filter((column) => column !== key)
@@ -13,6 +19,20 @@ export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableCo
 export function forceScrollToBottom(element: HTMLElement | null) {
   if (!element) return
   element.scrollTop = element.scrollHeight
+}
+
+export function textWidthCh(value: string) {
+  return Array.from(value).length
+}
+
+export function columnWidthChForRows(rows: ParsedLogLine[], key: LogColumnKey) {
+  const labelWidth = textWidthCh(labelForColumn(key))
+  const valueWidth = rows.reduce((max, row) => Math.max(max, textWidthCh(valueForColumn(row, key) || '-')), 0)
+  return Math.max(minColumnWidthCh, labelWidth, valueWidth) + valuePaddingCh
+}
+
+export function columnWidthsForRows(rows: ParsedLogLine[], columns: LogColumnKey[]): LogColumnWidths {
+  return Object.fromEntries(columns.map((key) => [key, columnWidthChForRows(rows, key)])) as LogColumnWidths
 }
 
 export function LogViewer() {
@@ -35,6 +55,7 @@ export function LogViewer() {
     if (activeFilters.length === 0) return visibleRows
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleRows])
+  const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, availableColumns), [availableColumns, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
   useEffect(() => {
     if (!autoScrollEnabled || viewerPaused || filteredRows.length === 0) return
@@ -53,14 +74,14 @@ export function LogViewer() {
         {availableColumns.map((key) => {
           const label = labelForColumn(key)
           const checked = visibleColumns.includes(key)
-          return <span key={key} className={`inline-block w-max min-w-24 border-l border-slate-700 pl-2 pr-2 align-top ${checked ? '' : 'opacity-50'}`}>
+          return <span key={key} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block border-l border-slate-700 pl-2 pr-2 align-top ${checked ? '' : 'opacity-50'}`}>
             <label className="block whitespace-nowrap text-[10px] uppercase text-slate-300"><input className="mr-1 align-middle" type="checkbox" aria-label={`Show ${label}`} checked={checked} onChange={(e)=>toggleColumn(key, e.target.checked)} />{label}</label>
             <input aria-label={`Filter ${label}`} className="mt-1 w-full min-w-20 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] text-white placeholder:text-slate-600 disabled:text-slate-600" placeholder="filter" value={columnFilters[key] ?? ''} disabled={!checked} onChange={(e)=>setColumnFilter(key, e.target.value)} />
           </span>
         })}
       </div>}
       {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} visibleColumns={visibleColumns} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} visibleColumns={visibleColumns} columnWidths={columnWidths} /></div>)}
     </div>
   </div>
 }

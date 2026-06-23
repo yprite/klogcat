@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { forceScrollToBottom, LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
+import { columnWidthsForRows, forceScrollToBottom, LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -39,6 +39,22 @@ describe('LogRow', () => {
     expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).toHaveClass('w-max')
     expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).not.toHaveClass('overflow-hidden')
     expect(screen.getByText('a long response message that should not be ellipsized').parentElement).not.toHaveClass('text-ellipsis')
+  })
+
+  it('uses the longest visible value as the shared width for that column', () => {
+    const shortUrlRow = { ...row, url: '/x' }
+    const longUrlRow = { ...row, id: 4, url: '/longest/visible/url/in/current/logs' }
+    const widths = columnWidthsForRows([shortUrlRow, longUrlRow], ['url'])
+
+    render(<>
+      <LogRow row={shortUrlRow} grepQuery="" visibleColumns={['url']} columnWidths={widths} />
+      <LogRow row={longUrlRow} grepQuery="" visibleColumns={['url']} columnWidths={widths} />
+    </>)
+
+    const urlColumns = screen.getAllByTestId('log-column-url')
+    expect(urlColumns[0]).toHaveStyle({ width: `${widths.url}ch` })
+    expect(urlColumns[1]).toHaveStyle({ width: `${widths.url}ch` })
+    expect(widths.url).toBe('/longest/visible/url/in/current/logs'.length + 2)
   })
 
   it('renders error logs as key columns', () => {
