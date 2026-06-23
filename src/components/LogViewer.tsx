@@ -60,7 +60,7 @@ export function columnWidthsForRows(rows: ParsedLogLine[], columns: LogColumnKey
 }
 
 export function LogViewer() {
-  const { rows, visibleRows, grepQuery, autoScrollEnabled, viewerPaused } = useLogStore()
+  const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused } = useLogStore()
   const parentRef = useRef<HTMLDivElement>(null)
   const seenRowIdsRef = useRef<Set<number> | null>(null)
   const highlightTimeoutsRef = useRef<number[]>([])
@@ -176,7 +176,7 @@ export function LogViewer() {
         })}
       </div>}
       {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} /></div>)}
     </div>
   </div>
 }
