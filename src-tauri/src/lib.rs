@@ -3,7 +3,48 @@ pub mod error;
 pub mod process;
 pub mod settings;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLifecycleEvent {
+    ExitRequested,
+    MainWindowCloseRequested,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShutdownRequest {
+    None,
+    StopStreams,
+    StopStreamsAndExit,
+}
+
+fn shutdown_request_for_lifecycle_event(event: AppLifecycleEvent) -> ShutdownRequest {
+    match event {
+        AppLifecycleEvent::ExitRequested => ShutdownRequest::StopStreams,
+        AppLifecycleEvent::MainWindowCloseRequested => ShutdownRequest::StopStreamsAndExit,
+        AppLifecycleEvent::Other => ShutdownRequest::None,
+    }
+}
+
+fn stop_all_log_streams<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(state) = app.try_state::<process::log_process::LogProcessState>() {
+        state.stop_all_blocking();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn main_window_close_stops_streams_and_exits_app() {
+        assert_eq!(
+            shutdown_request_for_lifecycle_event(AppLifecycleEvent::MainWindowCloseRequested),
+            ShutdownRequest::StopStreamsAndExit
+        );
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,9 +66,25 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { .. } = event {
-                if let Some(state) = app.try_state::<process::log_process::LogProcessState>() {
-                    state.stop_all_blocking();
+            let shutdown = match event {
+                tauri::RunEvent::ExitRequested { .. } => {
+                    shutdown_request_for_lifecycle_event(AppLifecycleEvent::ExitRequested)
+                }
+                tauri::RunEvent::WindowEvent {
+                    label,
+                    event: WindowEvent::CloseRequested { .. },
+                    ..
+                } if label == "main" => shutdown_request_for_lifecycle_event(
+                    AppLifecycleEvent::MainWindowCloseRequested,
+                ),
+                _ => shutdown_request_for_lifecycle_event(AppLifecycleEvent::Other),
+            };
+            match shutdown {
+                ShutdownRequest::None => {}
+                ShutdownRequest::StopStreams => stop_all_log_streams(app),
+                ShutdownRequest::StopStreamsAndExit => {
+                    stop_all_log_streams(app);
+                    app.exit(0);
                 }
             }
         });
