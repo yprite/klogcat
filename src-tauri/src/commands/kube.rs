@@ -121,7 +121,7 @@ pub async fn list_namespaces(
     }
     let mut response = parse_namespaces_json(context.clone(), &o.stdout)?;
     response.namespaces =
-        filter_namespaces_with_pod_access(context.as_deref(), response.namespaces)?;
+        filter_namespaces_with_pod_access(context.as_deref(), response.namespaces);
     Ok(response)
 }
 #[tauri::command]
@@ -171,10 +171,13 @@ pub fn parse_namespaces_json(
     })
 }
 
-fn can_list_pods_in_namespace(
-    context: Option<&str>,
-    namespace: &str,
-) -> Result<bool, CommandError> {
+fn auth_stdout_allows(stdout: &str) -> bool {
+    stdout
+        .lines()
+        .any(|line| line.trim().eq_ignore_ascii_case("yes"))
+}
+
+fn can_list_pods_in_namespace(context: Option<&str>, namespace: &str) -> bool {
     let mut args = context_args(context);
     args.extend([
         "auth".into(),
@@ -184,8 +187,7 @@ fn can_list_pods_in_namespace(
         "-n".into(),
         namespace.into(),
     ]);
-    let o = run_kubectl(&args)?;
-    Ok(o.stdout.trim().eq_ignore_ascii_case("yes"))
+    run_kubectl(&args).is_ok_and(|output| output.status == 0 && auth_stdout_allows(&output.stdout))
 }
 
 fn filter_namespaces_by_access<F>(
@@ -195,31 +197,27 @@ fn filter_namespaces_by_access<F>(
 where
     F: FnMut(&str) -> bool,
 {
-    namespaces
-        .into_iter()
+    let filtered: Vec<_> = namespaces
+        .iter()
         .filter(|namespace| can_access(&namespace.name))
-        .collect()
+        .map(|namespace| NamespaceInfo {
+            name: namespace.name.clone(),
+        })
+        .collect();
+    if filtered.is_empty() && !namespaces.is_empty() {
+        namespaces
+    } else {
+        filtered
+    }
 }
 
 fn filter_namespaces_with_pod_access(
     context: Option<&str>,
     namespaces: Vec<NamespaceInfo>,
-) -> Result<Vec<NamespaceInfo>, CommandError> {
-    let mut error: Option<CommandError> = None;
-    let filtered = filter_namespaces_by_access(namespaces, |namespace| {
-        match can_list_pods_in_namespace(context, namespace) {
-            Ok(can_access) => can_access,
-            Err(e) => {
-                error = Some(e);
-                false
-            }
-        }
-    });
-    if let Some(e) = error {
-        Err(e)
-    } else {
-        Ok(filtered)
-    }
+) -> Vec<NamespaceInfo> {
+    filter_namespaces_by_access(namespaces, |namespace| {
+        can_list_pods_in_namespace(context, namespace)
+    })
 }
 
 pub fn parse_pods_json(
@@ -306,5 +304,35 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn namespace_access_filter_falls_back_when_auth_checks_hide_everything() {
+        let namespaces = vec![
+            NamespaceInfo {
+                name: "default".into(),
+            },
+            NamespaceInfo {
+                name: "team-a".into(),
+            },
+        ];
+        let filtered = filter_namespaces_by_access(namespaces, |_| false);
+        assert_eq!(
+            filtered,
+            vec![
+                NamespaceInfo {
+                    name: "default".into()
+                },
+                NamespaceInfo {
+                    name: "team-a".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn auth_stdout_allows_yes_even_when_output_has_extra_lines() {
+        assert!(auth_stdout_allows("warning: ignored\nyes\n"));
+        assert!(!auth_stdout_allows("warning: ignored\nno\n"));
     }
 }
