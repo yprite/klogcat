@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
+import { forceScrollToBottom, LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -79,5 +79,22 @@ describe('LogViewer', () => {
   it('restores a re-enabled column at its filter header position instead of appending it', () => {
     expect(nextVisibleColumnsForToggle(['url', 'status'], ['method', 'url', 'elapsed', 'status'], 'method', true)).toEqual(['method', 'url', 'status'])
     expect(nextVisibleColumnsForToggle(['method', 'url', 'status'], ['method', 'url', 'elapsed', 'status'], 'url', false)).toEqual(['method', 'status'])
+  })
+
+  it('uses a flex-only scroll container so page scrolling stays outside the app shell', () => {
+    useLogStore.setState({ rows: [row, errRow], visibleRows: [row, errRow] })
+    render(<LogViewer />)
+
+    expect(screen.getByTestId('log-scroll')).toHaveClass('flex-1')
+    expect(screen.getByTestId('log-scroll')).toHaveClass('min-h-0')
+    expect(screen.getByTestId('log-scroll')).not.toHaveClass('h-[70vh]')
+  })
+
+  it('forces the log scroll container to the bottom when auto-scroll is on', () => {
+    const element = document.createElement('div')
+    Object.defineProperty(element, 'scrollHeight', { configurable: true, value: 2400 })
+    forceScrollToBottom(element)
+
+    expect(element.scrollTop).toBe(2400)
   })
 })

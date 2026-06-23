@@ -10,6 +10,11 @@ export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableCo
   return availableColumns.filter((column) => next.has(column))
 }
 
+export function forceScrollToBottom(element: HTMLElement | null) {
+  if (!element) return
+  element.scrollTop = element.scrollHeight
+}
+
 export function LogViewer() {
   const { visibleRows, grepQuery, autoScrollEnabled, viewerPaused } = useLogStore()
   const parentRef = useRef<HTMLDivElement>(null)
@@ -31,11 +36,15 @@ export function LogViewer() {
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
-  useEffect(() => { if (autoScrollEnabled && !viewerPaused && filteredRows.length > 0) virtualizer.scrollToIndex(filteredRows.length - 1, { align: 'end' }) }, [filteredRows.length, autoScrollEnabled, viewerPaused, virtualizer])
+  useEffect(() => {
+    if (!autoScrollEnabled || viewerPaused || filteredRows.length === 0) return
+    virtualizer.scrollToIndex(filteredRows.length - 1, { align: 'end' })
+    requestAnimationFrame(() => forceScrollToBottom(parentRef.current))
+  }, [filteredRows.length, autoScrollEnabled, viewerPaused, virtualizer])
   const toggleColumn = (key: LogColumnKey, checked: boolean) => setVisibleColumns((current) => nextVisibleColumnsForToggle(current, availableColumns, key, checked))
   const setColumnFilter = (key: LogColumnKey, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }))
   const headerHeight = availableColumns.length ? 58 : 0
-  return <div ref={parentRef} data-testid="log-scroll" className="h-[70vh] overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
+  return <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
       {availableColumns.length > 0 && <div role="row" aria-label="Excel-style column filters" className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
         <span className="inline-block min-w-28 text-[10px] uppercase text-slate-400">time/source</span>
