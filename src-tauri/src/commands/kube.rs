@@ -1,7 +1,16 @@
 use crate::error::CommandError;
 use serde::Serialize;
 use serde_json::Value;
-use std::{io, process::Command, time::Instant};
+use std::{
+    collections::VecDeque,
+    io,
+    process::Command,
+    sync::{mpsc, Arc, Mutex},
+    thread,
+    time::Instant,
+};
+
+const MAX_NAMESPACE_AUTH_WORKERS: usize = 8;
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -297,9 +306,67 @@ fn filter_namespaces_with_pod_access(
     context: Option<&str>,
     namespaces: Vec<NamespaceInfo>,
 ) -> Vec<NamespaceInfo> {
-    filter_namespaces_by_access(namespaces, |namespace| {
-        can_list_pods_in_namespace(context, namespace)
-    })
+    if namespaces.len() <= 1 {
+        return filter_namespaces_by_access(namespaces, |namespace| {
+            can_list_pods_in_namespace(context, namespace)
+        });
+    }
+
+    let raw_namespaces = namespaces.clone();
+    let worker_count = namespaces.len().min(MAX_NAMESPACE_AUTH_WORKERS);
+    debug_log(format!(
+        "namespace_auth_parallel_start context={} namespace_count={} workers={}",
+        context.unwrap_or("(default)"),
+        namespaces.len(),
+        worker_count
+    ));
+    let started_at = Instant::now();
+    let queue = Arc::new(Mutex::new(
+        namespaces
+            .into_iter()
+            .enumerate()
+            .collect::<VecDeque<(usize, NamespaceInfo)>>(),
+    ));
+    let (tx, rx) = mpsc::channel::<(usize, NamespaceInfo, bool)>();
+    thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let queue = Arc::clone(&queue);
+            let tx = tx.clone();
+            scope.spawn(move || loop {
+                let next = queue.lock().unwrap().pop_front();
+                let Some((index, namespace)) = next else {
+                    break;
+                };
+                let allowed = can_list_pods_in_namespace(context, &namespace.name);
+                if tx.send((index, namespace, allowed)).is_err() {
+                    break;
+                }
+            });
+        }
+        drop(tx);
+    });
+
+    let mut results = rx.into_iter().collect::<Vec<_>>();
+    results.sort_by_key(|(index, _, _)| *index);
+    let filtered = results
+        .into_iter()
+        .filter_map(|(_, namespace, allowed)| allowed.then_some(namespace))
+        .collect::<Vec<_>>();
+    debug_log(format!(
+        "namespace_auth_parallel_done context={} elapsed_ms={} accessible_count={}",
+        context.unwrap_or("(default)"),
+        started_at.elapsed().as_millis(),
+        filtered.len()
+    ));
+    if filtered.is_empty() && !raw_namespaces.is_empty() {
+        debug_log(format!(
+            "namespace_auth_fallback reason=all-denied-or-unavailable raw_count={}",
+            raw_namespaces.len()
+        ));
+        raw_namespaces
+    } else {
+        filtered
+    }
 }
 pub fn parse_pods_json(
     context: Option<String>,
