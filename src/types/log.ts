@@ -50,6 +50,7 @@ export type ParsedLogLine = SourceMeta & {
   errorPath?: string
   errorServerName?: string
   errorTimestamp?: string
+  body?: string
   message?: string
   summary: string
   diagnostics?: string[]

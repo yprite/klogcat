@@ -15,6 +15,7 @@ describe('parseLogLine', () => {
     expect(row.parseStatus).toBe('parsed')
     expect(row.status).toBe('500'); expect(row.elapsed).toBe(11908); expect(row.method).toBe('POST'); expect(row.url).toContain('migration'); expect(row.trId).toBe('acc-trace-1')
     expect(row.rcode).toBe('5000999'); expect(row.rmsg).toBe('Internal Server Error'); expect(row.exceptionName).toBe('OpenTabMigrationFailedException'); expect(row.apiName).toBe('triggerOpenTabMigration')
+    expect(row.body).toContain('"rcode":"5000999"')
     expect(row.host).toBe('h'); expect(row.service).toBe('svc'); expect(row.module).toBe('dapi'); expect(row.serviceId).toBe('sid'); expect(row.epochTime).toBe(1767225600000); expect(row.length).toBe(14)
     expect(row.summary).toContain('POST'); expect(row.summary).toContain('500')
     expect(row.receivedAt).toBe(123)
@@ -23,6 +24,7 @@ describe('parseLogLine', () => {
   it('parses ERR and preserves trace fields', () => {
     const row = parseLogLine(lines(errFixture)[0], 'error', meta('error'), 1)
     expect(row.parseStatus).toBe('parsed'); expect(row.logger).toContain('ErrorLoggingAspect'); expect(row.thread).toContain('http')
+    expect(row.body).toContain('errorDetails')
     expect(row.errorReason).toContain('OpenTabMigrationFailedException'); expect(row.errorMethod).toBe('POST'); expect(row.errorPath).toContain('migration')
     expect(row.traceId).toBe('body-trace-1'); expect(row.trId).toBe('err-trace-1'); expect(row.errorServerName).toBe('dapi'); expect(row.errorTimestamp).toContain('2026')
   })

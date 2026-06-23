@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, forceScrollToBottom, LogViewer, nextVisibleColumnsForToggle } from '../components/LogViewer'
+import { columnWidthsForRows, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
 
-const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"hello"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), status: '500', method: 'POST', url: '/x', elapsed: 42, summary: 'POST /x 500 42ms', trId: 't' }
+const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"hello"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), status: '500', method: 'POST', url: '/x', elapsed: 42, body: '{"rcode":"5000999"}', summary: 'POST /x 500 42ms', trId: 't' }
 const okRow: ParsedLogLine = { ...row, id: 3, status: '200', method: 'GET', url: '/ok', summary: 'GET /ok 200 5ms', raw: '{"status":200}' }
 const errRow: ParsedLogLine = { id: 2, streamId: 's', sourceId: 'src', sourceType: 'error', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"oops"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), errorMethod: 'GET', errorPath: '/fail', errorReason: 'boom', summary: 'boom GET /fail', traceId: 'trace' }
 const appRow: ParsedLogLine = { id: 10, streamId: 's', sourceId: 'src', sourceType: 'app', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"old app"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), summary: 'old app' }
 
 describe('LogRow', () => {
   it('includes every visible key from the ACC and ERR sample logs as columns', () => {
-    expect(accessLogColumns).toEqual(['timestamp','jsonLogType','host','service','module','serviceId','trId','epochTime','pSpanId','spanId','method','url','length','srcIp','elapsed','status','userId','appId','rcode','rmsg','exceptionName','apiName'])
-    expect(errorLogColumns).toEqual(['timestamp','jsonLogType','host','logger','service','module','submodule','trId','epochTime','thread','errorServerName','errorPath','errorMethod','errorTimestamp','traceId','errorReason'])
+    expect(accessLogColumns).toEqual(['timestamp','jsonLogType','host','service','module','serviceId','trId','epochTime','pSpanId','spanId','method','url','length','srcIp','elapsed','status','userId','appId','body','rcode','rmsg','exceptionName','apiName'])
+    expect(errorLogColumns).toEqual(['timestamp','jsonLogType','host','logger','service','module','submodule','trId','epochTime','thread','body','errorServerName','errorPath','errorMethod','errorTimestamp','traceId','errorReason'])
   })
 
   it('uses sample-key labels for renamed or flattened fields', () => {
@@ -22,6 +22,13 @@ describe('LogRow', () => {
     expect(labelForColumn('jsonLogType')).toBe('logType')
     expect(labelForColumn('apiName')).toBe('api_name')
     expect(labelForColumn('errorReason')).toBe('errorDetails.errors.reason')
+  })
+
+  it('renders the JSON body as a normal column when selected', () => {
+    render(<LogRow row={row} grepQuery="" visibleColumns={['body']} />)
+
+    expect(screen.getByText('body')).toBeInTheDocument()
+    expect(screen.getByText('{"rcode":"5000999"}')).toBeInTheDocument()
   })
 
   it('renders access logs as key columns instead of one collapsed sentence', () => {
@@ -96,6 +103,20 @@ describe('LogViewer', () => {
   it('restores a re-enabled column at its filter header position instead of appending it', () => {
     expect(nextVisibleColumnsForToggle(['url', 'status'], ['method', 'url', 'elapsed', 'status'], 'method', true)).toEqual(['method', 'url', 'status'])
     expect(nextVisibleColumnsForToggle(['method', 'url', 'status'], ['method', 'url', 'elapsed', 'status'], 'url', false)).toEqual(['method', 'status'])
+  })
+
+  it('moves columns left and right in user-controlled order', async () => {
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    expect(moveColumnInOrder(['method', 'url', 'status'], 'status', 'left')).toEqual(['method', 'status', 'url'])
+    fireEvent.click(screen.getByLabelText('Move status left'))
+
+    await waitFor(() => {
+      const controls = Array.from(screen.getByRole('row', { name: /Excel-style column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+      const keys = controls.map((control) => control.getAttribute('data-column-key'))
+      expect(keys.indexOf('status')).toBeLessThan(keys.indexOf('elapsed'))
+    })
   })
 
   it('uses a flex-only scroll container so page scrolling stays outside the app shell', () => {
