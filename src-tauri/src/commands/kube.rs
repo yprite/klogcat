@@ -119,7 +119,10 @@ pub async fn list_namespaces(
                 .with_details(o.stderr),
         );
     }
-    parse_namespaces_json(context, &o.stdout)
+    let mut response = parse_namespaces_json(context.clone(), &o.stdout)?;
+    response.namespaces =
+        filter_namespaces_with_pod_access(context.as_deref(), response.namespaces)?;
+    Ok(response)
 }
 #[tauri::command]
 pub async fn list_pods(
@@ -167,6 +170,58 @@ pub fn parse_namespaces_json(
         namespaces,
     })
 }
+
+fn can_list_pods_in_namespace(
+    context: Option<&str>,
+    namespace: &str,
+) -> Result<bool, CommandError> {
+    let mut args = context_args(context);
+    args.extend([
+        "auth".into(),
+        "can-i".into(),
+        "list".into(),
+        "pods".into(),
+        "-n".into(),
+        namespace.into(),
+    ]);
+    let o = run_kubectl(&args)?;
+    Ok(o.stdout.trim().eq_ignore_ascii_case("yes"))
+}
+
+fn filter_namespaces_by_access<F>(
+    namespaces: Vec<NamespaceInfo>,
+    mut can_access: F,
+) -> Vec<NamespaceInfo>
+where
+    F: FnMut(&str) -> bool,
+{
+    namespaces
+        .into_iter()
+        .filter(|namespace| can_access(&namespace.name))
+        .collect()
+}
+
+fn filter_namespaces_with_pod_access(
+    context: Option<&str>,
+    namespaces: Vec<NamespaceInfo>,
+) -> Result<Vec<NamespaceInfo>, CommandError> {
+    let mut error: Option<CommandError> = None;
+    let filtered = filter_namespaces_by_access(namespaces, |namespace| {
+        match can_list_pods_in_namespace(context, namespace) {
+            Ok(can_access) => can_access,
+            Err(e) => {
+                error = Some(e);
+                false
+            }
+        }
+    });
+    if let Some(e) = error {
+        Err(e)
+    } else {
+        Ok(filtered)
+    }
+}
+
 pub fn parse_pods_json(
     context: Option<String>,
     namespace: &str,
@@ -223,5 +278,33 @@ mod tests {
         let r=parse_pods_json(Some("ctx".into()), "ns", r#"{"items":[{"metadata":{"name":"p"},"status":{"phase":"Running"},"spec":{"containers":[{"name":"app"}]}}]}"#).unwrap();
         assert_eq!(r.context, Some("ctx".into()));
         assert_eq!(r.pods[0].containers, vec!["app"]);
+    }
+
+    #[test]
+    fn namespace_access_filter_keeps_only_allowed_namespaces() {
+        let namespaces = vec![
+            NamespaceInfo {
+                name: "default".into(),
+            },
+            NamespaceInfo {
+                name: "kube-system".into(),
+            },
+            NamespaceInfo {
+                name: "team-a".into(),
+            },
+        ];
+        let filtered =
+            filter_namespaces_by_access(namespaces, |namespace| namespace != "kube-system");
+        assert_eq!(
+            filtered,
+            vec![
+                NamespaceInfo {
+                    name: "default".into()
+                },
+                NamespaceInfo {
+                    name: "team-a".into()
+                },
+            ]
+        );
     }
 }
