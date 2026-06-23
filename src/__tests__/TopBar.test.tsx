@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { TopBar } from '../components/TopBar'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
 
@@ -67,5 +67,44 @@ describe('TopBar target picker', () => {
     fireEvent.click(within(dialog).getByLabelText('cluster-a / prod / gateway-1'))
 
     expect(onPodChange).toHaveBeenCalledWith([`${scopeKey('ctx', 'default')}\u0000api-1`, `${scopeKey('cluster-a', 'prod')}\u0000gateway-1`])
+  })
+
+  it('locks target controls while an async selection change is pending', async () => {
+    let resolveSelection!: () => void
+    const onPodChange = vi.fn((pods: string[]) => new Promise<void>((resolve) => {
+      resolveSelection = () => {
+        useKubeStore.getState().selectPods(pods)
+        resolve()
+      }
+    }))
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={onPodChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+    fireEvent.click(within(dialog).getByLabelText('cluster-a / prod / gateway-1'))
+
+    expect(within(dialog).getByLabelText('ctx / default / worker-1')).toBeDisabled()
+    fireEvent.click(within(dialog).getByLabelText('ctx / default / worker-1'))
+    expect(onPodChange).toHaveBeenCalledTimes(1)
+
+    await act(async () => { resolveSelection() })
+    await waitFor(() => expect(within(dialog).getByLabelText('ctx / default / worker-1')).not.toBeDisabled())
+    fireEvent.click(within(dialog).getByLabelText('ctx / default / worker-1'))
+
+    expect(onPodChange).toHaveBeenLastCalledWith([
+      `${scopeKey('ctx', 'default')}\u0000api-1`,
+      `${scopeKey('cluster-a', 'prod')}\u0000gateway-1`,
+      `${scopeKey('ctx', 'default')}\u0000worker-1`,
+    ])
+  })
+
+  it('keeps the target tree and selected-targets panes scrollable inside the picker', () => {
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByLabelText('Target tree')).toHaveClass('overflow-y-auto')
+    expect(within(dialog).getByLabelText('Selected targets')).toHaveClass('overflow-y-auto')
   })
 })

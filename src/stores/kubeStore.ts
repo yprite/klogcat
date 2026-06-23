@@ -58,9 +58,28 @@ export const useKubeStore = create<KubeState>((set, get) => ({
   },
   async selectContext(context) { await get().selectContexts(context ? [context] : []) },
   async selectContexts(contexts) {
+    const previous = get()
     const selectedContext = first(contexts)
-    set({ selectedContexts: contexts, selectedContext, selectedNamespace: undefined, selectedNamespaces: {}, selectedPod: undefined, selectedPods: {}, namespaces: [], namespacesByContext: {}, pods: [], podsByScope: {} })
-    set({ loadingNamespaces: true })
+    const contextSet = new Set(contexts)
+    const selectedNamespaces: Record<string, string[]> = {}
+    for (const [context, namespaces] of Object.entries(previous.selectedNamespaces)) {
+      if (contextSet.has(context)) selectedNamespaces[context] = namespaces
+    }
+    const selectedNamespace = selectedContext ? first(selectedNamespaces[selectedContext] ?? []) : undefined
+    const selectedPods: Record<string, string[]> = {}
+    const podsByScope: Record<string, PodInfo[]> = {}
+    for (const [key, pods] of Object.entries(previous.selectedPods)) {
+      const { context, namespace } = parseScopeKey(key)
+      if (contextSet.has(context) && (selectedNamespaces[context] ?? []).includes(namespace)) selectedPods[key] = pods
+    }
+    for (const [key, pods] of Object.entries(previous.podsByScope)) {
+      const { context, namespace } = parseScopeKey(key)
+      if (contextSet.has(context) && (selectedNamespaces[context] ?? []).includes(namespace)) podsByScope[key] = pods
+    }
+    const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
+    const selectedPod = selectedScope ? first(selectedPods[selectedScope] ?? []) : undefined
+    const pods = selectedScope ? podsByScope[selectedScope] ?? [] : []
+    set({ selectedContexts: contexts, selectedContext, selectedNamespace, selectedNamespaces, selectedPod, selectedPods, namespaces: [], pods, podsByScope, loadingNamespaces: true })
     try {
       const entries = await Promise.all(contexts.map(async (ctx) => [ctx, (await listNamespaces(ctx)).namespaces] as const))
       const namespacesByContext = Object.fromEntries(entries)
