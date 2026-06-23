@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle } from '../components/LogViewer'
+import { columnWidthsForRows, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -116,6 +116,27 @@ describe('LogViewer', () => {
       const controls = Array.from(screen.getByRole('row', { name: /Excel-style column filters/i }).querySelectorAll('[data-testid="column-control"]'))
       const keys = controls.map((control) => control.getAttribute('data-column-key'))
       expect(keys.indexOf('status')).toBeLessThan(keys.indexOf('elapsed'))
+    })
+  })
+
+  it('reorders columns by dragging a header and dropping it on another header', async () => {
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    expect(reorderColumnByDrop(['method', 'url', 'status', 'body'], 'body', 'method')).toEqual(['body', 'method', 'url', 'status'])
+    const bodyColumn = document.querySelector('[data-column-key="body"]') as HTMLElement
+    const methodColumn = document.querySelector('[data-column-key="method"]') as HTMLElement
+    expect(bodyColumn).toBeTruthy()
+    expect(methodColumn).toBeTruthy()
+    fireEvent.dragStart(bodyColumn)
+    fireEvent.dragEnter(methodColumn)
+    fireEvent.dragOver(methodColumn)
+    fireEvent.drop(methodColumn)
+
+    await waitFor(() => {
+      const controls = Array.from(screen.getByRole('row', { name: /Excel-style column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+      const keys = controls.map((control) => control.getAttribute('data-column-key'))
+      expect(keys.indexOf('body')).toBeLessThan(keys.indexOf('method'))
     })
   })
 

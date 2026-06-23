@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
@@ -25,6 +25,19 @@ export function moveColumnInOrder(columns: LogColumnKey[], key: LogColumnKey, di
   const [column] = next.splice(index, 1)
   next.splice(nextIndex, 0, column)
   return next
+}
+
+export function reorderColumnByDrop(columns: LogColumnKey[], draggedKey: LogColumnKey | null, targetKey: LogColumnKey) {
+  if (!draggedKey || draggedKey === targetKey) return columns
+  if (!columns.includes(draggedKey) || !columns.includes(targetKey)) return columns
+  const withoutDragged = columns.filter((column) => column !== draggedKey)
+  const targetIndex = withoutDragged.indexOf(targetKey)
+  return [...withoutDragged.slice(0, targetIndex), draggedKey, ...withoutDragged.slice(targetIndex)]
+}
+
+function visibleColumnsFromOrder(order: LogColumnKey[], visibleColumns: LogColumnKey[]) {
+  const visible = new Set(visibleColumns)
+  return order.filter((column) => visible.has(column))
 }
 
 export function forceScrollToBottom(element: HTMLElement | null) {
@@ -55,6 +68,8 @@ export function LogViewer() {
   const [columnOrder, setColumnOrder] = useState<LogColumnKey[]>([])
   const [visibleColumns, setVisibleColumns] = useState<LogColumnKey[]>([])
   const [columnFilters, setColumnFilters] = useState<Partial<Record<LogColumnKey, string>>>({})
+  const [draggedColumn, setDraggedColumn] = useState<LogColumnKey | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<LogColumnKey | null>(null)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   useEffect(() => {
     setColumnOrder((current) => {
@@ -111,8 +126,34 @@ export function LogViewer() {
   const toggleColumn = (key: LogColumnKey, checked: boolean) => setVisibleColumns((current) => nextVisibleColumnsForToggle(current, columnOrder, key, checked))
   const setColumnFilter = (key: LogColumnKey, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }))
   const moveColumn = (key: LogColumnKey, direction: 'left' | 'right') => {
-    setColumnOrder((current) => moveColumnInOrder(current, key, direction))
-    setVisibleColumns((current) => moveColumnInOrder(current, key, direction))
+    setColumnOrder((current) => {
+      const nextOrder = moveColumnInOrder(current, key, direction)
+      setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
+      return nextOrder
+    })
+  }
+  const dropColumnOn = (targetKey: LogColumnKey) => {
+    setColumnOrder((current) => {
+      const nextOrder = reorderColumnByDrop(current, draggedColumn, targetKey)
+      setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
+      return nextOrder
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const startColumnDrag = (key: LogColumnKey, event: DragEvent<HTMLElement>) => {
+    setDraggedColumn(key)
+    const dataTransfer = event.dataTransfer as DataTransfer | undefined
+    if (dataTransfer) {
+      dataTransfer.effectAllowed = 'move'
+      dataTransfer.setData('text/plain', key)
+    }
+  }
+  const allowColumnDrop = (key: LogColumnKey, event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    const dataTransfer = event.dataTransfer as DataTransfer | undefined
+    if (dataTransfer) dataTransfer.dropEffect = 'move'
+    setDragOverColumn(key)
   }
   const headerHeight = availableColumns.length ? 72 : 0
   return <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
@@ -124,7 +165,7 @@ export function LogViewer() {
         {columnOrder.map((key, index) => {
           const label = labelForColumn(key)
           const checked = visibleColumns.includes(key)
-          return <span key={key} data-testid="column-control" data-column-key={key} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block border-l border-slate-700 pl-2 pr-2 align-top ${checked ? '' : 'opacity-50'}`}>
+          return <span key={key} data-testid="column-control" data-column-key={key} draggable aria-grabbed={draggedColumn === key} onDragStart={(event) => startColumnDrag(key, event)} onDragEnter={(event) => allowColumnDrop(key, event)} onDragOver={(event) => allowColumnDrop(key, event)} onDrop={() => dropColumnOn(key)} onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null) }} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block cursor-grab border-l border-slate-700 pl-2 pr-2 align-top active:cursor-grabbing ${checked ? '' : 'opacity-50'} ${draggedColumn === key ? 'bg-slate-800 ring-1 ring-yellow-300' : ''} ${dragOverColumn === key && draggedColumn !== key ? 'border-yellow-300 bg-slate-800/70' : ''}`}>
             <span className="mb-0.5 flex gap-1">
               <button type="button" aria-label={`Move ${label} left`} disabled={index === 0} onClick={() => moveColumn(key, 'left')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">←</button>
               <button type="button" aria-label={`Move ${label} right`} disabled={index === columnOrder.length - 1} onClick={() => moveColumn(key, 'right')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">→</button>
