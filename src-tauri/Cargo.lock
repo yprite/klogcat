@@ -1842,6 +1842,7 @@ dependencies = [
 name = "klogcat"
 version = "0.0.4"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "tauri",

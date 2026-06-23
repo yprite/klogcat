@@ -22,6 +22,7 @@ export type LogStoreState = {
   grepQuery: string
   grepMode: GrepMode
   latestStderr?: string
+  stderrByStream: Record<string, string[]>
   errorMessage?: string
   actionDebugMessages: string[]
   totalDroppedCount: number
@@ -29,12 +30,14 @@ export type LogStoreState = {
   reconnectEnabled: boolean
   recordActionDebug(message: string): void
   prepareStarting(meta: ActiveStreamMeta): void
+  replaceStreamForReconnect(oldStreamId: string, nextMeta: ActiveStreamMeta): void
   markRunning(streamId: string): void
   markStopping(streamId: string): void
   markStopped(streamId: string): void
   markStartRejected(streamId: string, error: unknown): void
   markError(streamId: string | undefined, message: string): void
   appendLine(event: LogLineEvent): void
+  appendLines(events: LogLineEvent[]): void
   recordStderr(streamId: string, line: string): void
   setGrepQuery(query: string): void
   setGrepMode(mode: GrepMode): void
@@ -50,15 +53,48 @@ export type LogStoreState = {
 const filterRows = (rows: ParsedLogLine[], query: string, mode: GrepMode) => rows.filter((r) => mode === 'regex' ? matchesGrep(r.raw, query, mode) : matchesLogQuery(r, query))
 const stacktraceContinuationPattern = /^(\s+at\s|Caused by:|Suppressed:|\s*\.\.\. \d+ more|\s*at\s)/
 const exceptionPattern = /(?:Exception|Error|Throwable)(?::|$)/
+const STACKTRACE_GROUP_ROW_HORIZON = 200
+const STACKTRACE_GROUP_TIME_HORIZON_MS = 10_000
+const STDERR_HISTORY_LIMIT = 20
 export function isStacktraceLine(raw: string) { return stacktraceContinuationPattern.test(raw) }
 export function marksStacktraceStart(raw: string) { return exceptionPattern.test(raw) }
+
 function appendOrGroupStacktrace(rows: ParsedLogLine[], row: ParsedLogLine, limit: number) {
   if (!isStacktraceLine(row.raw)) return appendWithLimit(rows, { ...row, isStacktrace: marksStacktraceStart(row.raw) }, limit)
-  const last = rows.at(-1)
-  if (!last || last.streamId !== row.streamId || last.sourceId !== row.sourceId) return appendWithLimit(rows, { ...row, isStacktrace: true, stacktraceLines: [row.raw] }, limit)
-  const grouped: ParsedLogLine = { ...last, raw: `${last.raw}\n${row.raw}`, summary: `${last.summary}\n${row.raw}`, isStacktrace: true, stacktraceLines: [...(last.stacktraceLines ?? []), row.raw] }
-  return { items: [...rows.slice(0, -1), grouped], dropped: 0 }
+
+  const startIndex = Math.max(0, rows.length - STACKTRACE_GROUP_ROW_HORIZON)
+  for (let i = rows.length - 1; i >= startIndex; i -= 1) {
+    const candidate = rows[i]
+    if (row.receivedAt - candidate.receivedAt > STACKTRACE_GROUP_TIME_HORIZON_MS) break
+    if (candidate.streamId === row.streamId && candidate.sourceId === row.sourceId && (candidate.isStacktrace || marksStacktraceStart(candidate.raw))) {
+      const grouped: ParsedLogLine = {
+        ...candidate,
+        raw: `${candidate.raw}\n${row.raw}`,
+        summary: `${candidate.summary}\n${row.raw}`,
+        isStacktrace: true,
+        stacktraceLines: [...(candidate.stacktraceLines ?? []), row.raw],
+      }
+      return { items: [...rows.slice(0, i), grouped, ...rows.slice(i + 1)], dropped: 0 }
+    }
+  }
+
+  return appendWithLimit(rows, { ...row, isStacktrace: true, stacktraceLines: [row.raw] }, limit)
 }
+
+function appendParsedEvent(
+  state: LogStoreState,
+  rows: ParsedLogLine[],
+  event: LogLineEvent,
+  nextLineId: number,
+): { rows: ParsedLogLine[]; nextLineId: number; dropped: number } {
+  const meta = state.activeStreamMetas[event.streamId]
+  if (!meta) return { rows, nextLineId, dropped: 0 }
+  const parsed = parseLogLine(event.raw, event.sourceType, meta, event.receivedAt)
+  const row: ParsedLogLine = { ...parsed, id: nextLineId }
+  const result = appendOrGroupStacktrace(rows, row, state.bufferLimit)
+  return { rows: result.items, nextLineId: nextLineId + 1, dropped: result.dropped }
+}
+
 const initial = {
   streamStatus: 'idle' as StreamStatus,
   activeStreamId: undefined,
@@ -74,6 +110,7 @@ const initial = {
   grepQuery: '',
   grepMode: 'substring' as GrepMode,
   latestStderr: undefined,
+  stderrByStream: {} as Record<string, string[]>,
   errorMessage: undefined,
   actionDebugMessages: [] as string[],
   totalDroppedCount: 0,
@@ -101,7 +138,15 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     const activeStreamMetas = { ...s.activeStreamMetas, [meta.streamId]: meta }
     set({ activeStreamIds, activeStreamMetas, activeStreamId: activeStreamIds[0], activeStreamMeta: activeStreamMetas[activeStreamIds[0]], streamStatus: 'starting', errorMessage: undefined, latestStderr: undefined })
   },
-  markRunning(streamId) { if (get().activeStreamIds.includes(streamId)) set({ streamStatus: 'running' }) },
+  replaceStreamForReconnect(oldStreamId, nextMeta) {
+    const s = get()
+    const { [oldStreamId]: _removed, ...remainingMetas } = s.activeStreamMetas
+    const withoutOldIds = s.activeStreamIds.filter((id) => id !== oldStreamId && id !== nextMeta.streamId)
+    const activeStreamIds = [...withoutOldIds, nextMeta.streamId]
+    const activeStreamMetas = { ...remainingMetas, [nextMeta.streamId]: nextMeta }
+    set({ activeStreamIds, activeStreamMetas, activeStreamId: activeStreamIds[0], activeStreamMeta: activeStreamMetas[activeStreamIds[0]], streamStatus: 'starting' })
+  },
+  markRunning(streamId) { if (get().activeStreamIds.includes(streamId)) set({ streamStatus: 'running', errorMessage: undefined }) },
   markStopping(streamId) { if (get().activeStreamIds.includes(streamId)) set({ streamStatus: 'stopping' }) },
   markStopped(streamId) {
     const s = get()
@@ -122,17 +167,33 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     const next = removeStream(s, streamId)
     set({ ...next, streamStatus: next.activeStreamIds.length ? 'running' : 'error', errorMessage: message })
   },
-  appendLine(event) {
+  appendLine(event) { get().appendLines([event]) },
+  appendLines(events) {
     const state = get()
-    const meta = state.activeStreamMetas[event.streamId]
-    if (!meta) return
-    const parsed = parseLogLine(event.raw, event.sourceType, meta, event.receivedAt)
-    const row: ParsedLogLine = { ...parsed, id: state.nextLineId }
-    const result = appendOrGroupStacktrace(state.rows, row, state.bufferLimit)
-    const visibleRows = state.viewerPaused ? state.visibleRows : filterRows(result.items, state.grepQuery, state.grepMode)
-    set({ rows: result.items, visibleRows, nextLineId: state.nextLineId + 1, totalDroppedCount: state.totalDroppedCount + result.dropped, droppedWhilePaused: state.droppedWhilePaused + (state.viewerPaused ? result.dropped : 0) })
+    let rows = state.rows
+    let nextLineId = state.nextLineId
+    let dropped = 0
+    for (const event of events) {
+      const result = appendParsedEvent(state, rows, event, nextLineId)
+      rows = result.rows
+      nextLineId = result.nextLineId
+      dropped += result.dropped
+    }
+    const visibleRows = state.viewerPaused ? state.visibleRows : filterRows(rows, state.grepQuery, state.grepMode)
+    set({
+      rows,
+      visibleRows,
+      nextLineId,
+      totalDroppedCount: state.totalDroppedCount + dropped,
+      droppedWhilePaused: state.droppedWhilePaused + (state.viewerPaused ? dropped : 0),
+    })
   },
-  recordStderr(streamId, line) { if (get().activeStreamIds.includes(streamId)) set({ latestStderr: line }) },
+  recordStderr(streamId, line) {
+    const s = get()
+    if (!s.activeStreamIds.includes(streamId)) return
+    const previous = s.stderrByStream[streamId] ?? []
+    set({ latestStderr: line, stderrByStream: { ...s.stderrByStream, [streamId]: [...previous, line].slice(-STDERR_HISTORY_LIMIT) } })
+  },
   setGrepQuery(query) { const s = get(); set({ grepQuery: query, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, query, s.grepMode) }) },
   setGrepMode(mode) { const s = get(); set({ grepMode: mode, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, s.grepQuery, mode) }) },
   setAutoScrollEnabled(enabled) { set({ autoScrollEnabled: enabled }) },
@@ -144,7 +205,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   pause() { set({ viewerPaused: true }) },
   resume() { const s = get(); set({ viewerPaused: false, visibleRows: filterRows(s.rows, s.grepQuery, s.grepMode), droppedWhilePaused: 0 }) },
   clear() { set({ rows: [], visibleRows: [], totalDroppedCount: 0, droppedWhilePaused: 0 }) },
-  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, latestStderr: undefined, errorMessage: undefined }) },
+  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, latestStderr: undefined, stderrByStream: {}, errorMessage: undefined }) },
 }))
 
 export function resetLogStoreForTests() { useLogStore.setState({ ...initial }) }

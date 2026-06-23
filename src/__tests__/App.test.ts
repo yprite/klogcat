@@ -58,7 +58,9 @@ describe('App log exit handling', () => {
     useLogStore.getState().setReconnectEnabled(true)
     handleLogExit({ streamId: 's1', requestedStop: false, exitCode: 2 })
 
-    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ streamId: 's1', context: 'ctx', initialTailLines: 123 }))
+    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ context: 'ctx', initialTailLines: 123 }))
+    expect(vi.mocked(startLogStream).mock.calls[0][0].streamId).toMatch(/^s1-retry-[0-9a-f-]+$/)
+    expect(useLogStore.getState().activeStreamIds).toEqual([vi.mocked(startLogStream).mock.calls[0][0].streamId])
     expect(useLogStore.getState().actionDebugMessages.at(-1)).toMatch(/Reconnect scheduled/)
   })
 })

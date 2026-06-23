@@ -67,6 +67,7 @@ export type LogLineEvent = {
   raw: string
   receivedAt: number
 }
+export type LogLinesEvent = { lines: LogLineEvent[]; emittedAt: number }
 export type LogStreamStartedEvent = { streamId: string; receivedAt: number }
 export type LogStreamStderrEvent = { streamId: string; line: string; receivedAt: number }
 export type LogStreamExitEvent = { streamId: string; exitCode?: number; signal?: string; requestedStop: boolean }
