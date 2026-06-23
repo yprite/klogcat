@@ -11,7 +11,8 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
   const primarySourceType = selectedSourceTypes[0] ?? 'app'
   const kube = useKubeStore(); const { settings } = useSettingsStore(); const log = useLogStore()
   const [containerOverride, setContainerOverride] = useState('')
-  const busy = ['starting','stopping'].includes(log.streamStatus)
+  const startBusy = log.streamStatus === 'starting' || log.streamStatus === 'stopping'
+  const stopBusy = log.streamStatus === 'stopping'
   const alreadyRunning = log.activeStreamIds.length > 0 || log.streamStatus === 'running'
   const source = settings?.logSources[primarySourceType]
   const targets = kube.getSelectedPodTargets()
@@ -22,9 +23,10 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
   const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running' || !containerFor(t.pod.containers))
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
-  const startBlockedReason = busy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
+  const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
   const start = async () => {
     log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`)
+    if (startBusy) { log.markError(undefined, `Busy: ${log.streamStatus}`); return }
     if (alreadyRunning) { log.markError(log.activeStreamId, 'Stream is already running'); return }
     if (disabledReason || !settings) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
     for (const target of targets) {
@@ -33,7 +35,14 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
         const filePath = buildScloudLogPath(target.namespace, target.pod.name, selectedSourceType)
         const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${selectedSourceType}/${filePath}`
         log.prepareStarting({ streamId, sourceId, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType })
-        try { await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines }); log.markRunning(streamId) } catch (e) { log.markStartRejected(streamId, e) }
+        try {
+          await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
+          if (!useLogStore.getState().activeStreamIds.includes(streamId)) {
+            try { await stopLogStream(streamId) } catch { /* best-effort cleanup for cancelled start */ }
+            return
+          }
+          log.markRunning(streamId)
+        } catch (e) { log.markStartRejected(streamId, e) }
       }
     }
   }
@@ -45,9 +54,9 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
   }
   return <div className="flex flex-wrap gap-2 items-center p-2 bg-slate-900 border-b border-slate-800">
     <label>Container <select className="text-black" value={effectiveContainer} onChange={e=>{ setContainerOverride(e.target.value); log.recordActionDebug(`Container selected: ${e.target.value}`) }}><option value="">Auto per pod</option>{podContainers.map(c=><option key={c} value={c}>{c}</option>)}{source && !podContainers.includes(source.container) && <option value={source.container}>{source.container} (configured)</option>}</select></label>
-    <button disabled={busy || alreadyRunning} title={startBlockedReason} onClick={start}>Start</button><button disabled={busy} onClick={stop}>Stop</button>
+    <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={start}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button>
     <button onClick={() => { log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`); log.viewerPaused ? log.resume() : log.pause() }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
     <label><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
-    <span>Targets: {targets.length}</span><span>Status: {log.streamStatus}</span><span>Start: {busy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}
+    <span>Targets: {targets.length}</span><span>Status: {log.streamStatus}</span><span>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}
   </div>
 }

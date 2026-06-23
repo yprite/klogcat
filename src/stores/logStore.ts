@@ -102,7 +102,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     if (!streamId) { set({ streamStatus: 'error', errorMessage: message }); return }
     if (!s.activeStreamIds.includes(streamId)) return
     const next = removeStream(s, streamId)
-    set({ ...next, streamStatus: 'error', errorMessage: message })
+    set({ ...next, streamStatus: next.activeStreamIds.length ? 'running' : 'error', errorMessage: message })
   },
   appendLine(event) {
     const state = get()

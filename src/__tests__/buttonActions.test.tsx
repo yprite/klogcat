@@ -149,6 +149,31 @@ describe('button actions', () => {
     expect(startLogStream).toHaveBeenNthCalledWith(3, expect.objectContaining({ sourceType: 'error', filePath: '/scloud/foo/logs/api-7d9/foo_ERR.log' }))
   })
 
+  it('stops launching remaining selected log types when Stop is clicked during batch start', async () => {
+    const { startLogStream, stopLogStream } = await import('../commands/tauriLogs')
+    let resolveFirst!: () => void
+    vi.mocked(startLogStream).mockImplementationOnce(() => new Promise<void>((resolve) => { resolveFirst = resolve }))
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
+    })
+    render(<LogToolbar sourceTypes={['app', 'access', 'error']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await waitFor(() => expect(stopLogStream).toHaveBeenCalledTimes(1))
+
+    resolveFirst()
+    await waitFor(() => expect(useLogStore.getState().streamStatus).toBe('stopped'))
+    expect(startLogStream).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the fixed scloud namespace and pod log path for each source type', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
     useKubeStore.setState({
