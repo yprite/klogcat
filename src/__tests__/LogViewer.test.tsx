@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, exportRowsAsJsonl, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
+import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, columnsForSource, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -88,18 +88,21 @@ describe('LogRow', () => {
 describe('LogViewer', () => {
   beforeEach(() => resetLogStoreForTests())
 
-  it('uses an Excel-style header to filter rows and toggle column visibility', async () => {
-    useLogStore.setState({ rows: [row, okRow], visibleRows: [row, okRow] })
+  it('uses visible-column filters and a column manager to show only chosen columns', async () => {
+    act(() => {
+      useLogStore.setState({ rows: [row, okRow], visibleRows: [row, okRow] })
+    })
     render(<LogViewer />)
 
-    expect(screen.queryByRole('group', { name: /column visibility/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('row', { name: /Excel-style column filters/i })).toBeInTheDocument()
+    expect(screen.getByText('Columns')).toBeInTheDocument()
+    expect(screen.getByText(/shown/)).toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /Visible column filters/i })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Filter status'), { target: { value: '500' } })
 
     await waitFor(() => expect(screen.getByText('Rows: 1/2')).toBeInTheDocument())
-    fireEvent.click(screen.getByLabelText('Show status'))
-    expect(screen.getByLabelText('Show status')).not.toBeChecked()
-    await waitFor(() => expect(screen.queryByText('500')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByLabelText('Hide status'))
+    await waitFor(() => expect(screen.queryByLabelText('Filter status')).not.toBeInTheDocument())
+    expect(screen.queryByTestId('log-column-status')).not.toBeInTheDocument()
   })
 
   it('uses an always-visible scroll container and exposes filter controls in the header', () => {
@@ -108,7 +111,50 @@ describe('LogViewer', () => {
 
     expect(screen.getByTestId('log-scroll')).toHaveClass('overflow-scroll')
     expect(screen.getByLabelText('Filter status')).toBeInTheDocument()
-    expect(screen.getByLabelText('Show errorDetails.errors.reason')).toBeChecked()
+    expect(screen.getByLabelText('Filter errorDetails.errors.reason')).toBeInTheDocument()
+  })
+
+  it('starts from essential columns instead of showing every parsed field', () => {
+    expect(defaultVisibleColumnsFor(accessLogColumns)).toEqual(['trId','method','url','status','elapsed','rcode','rmsg','exceptionName','apiName'])
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    expect(screen.getByText('9/23 shown')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Filter host')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Manage columns' }))
+    expect(screen.getByRole('group', { name: /column visibility/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Show host')).not.toBeChecked()
+  })
+
+  it('preserves an intentional empty column selection when rows update', async () => {
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'None' }))
+    expect(screen.getByText('0/23 shown')).toBeInTheDocument()
+    expect(screen.getByText(/No data columns selected/i)).toBeInTheDocument()
+
+    act(() => {
+      useLogStore.setState({ rows: [row, okRow], visibleRows: [row, okRow] })
+    })
+
+    await waitFor(() => expect(screen.getByText('0/23 shown')).toBeInTheDocument())
+    expect(screen.queryByLabelText('Filter status')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('log-column-status')).not.toBeInTheDocument()
+  })
+
+  it('refreshes default essentials when new source columns appear before customization', async () => {
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    expect(screen.queryByLabelText('Filter errorDetails.errors.reason')).not.toBeInTheDocument()
+
+    act(() => {
+      useLogStore.setState({ rows: [row, errRow], visibleRows: [row, errRow] })
+    })
+
+    await waitFor(() => expect(screen.getByText('13/32 shown')).toBeInTheDocument())
+    expect(screen.getByLabelText('Filter errorDetails.errors.reason')).toBeInTheDocument()
   })
 
   it('restores a re-enabled column at its filter header position instead of appending it', () => {
@@ -124,7 +170,7 @@ describe('LogViewer', () => {
     fireEvent.click(screen.getByLabelText('Move status left'))
 
     await waitFor(() => {
-      const controls = Array.from(screen.getByRole('row', { name: /Excel-style column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+      const controls = Array.from(screen.getByRole('row', { name: /Visible column filters/i }).querySelectorAll('[data-testid="column-control"]'))
       const keys = controls.map((control) => control.getAttribute('data-column-key'))
       expect(keys.indexOf('status')).toBeLessThan(keys.indexOf('elapsed'))
     })
@@ -133,6 +179,7 @@ describe('LogViewer', () => {
   it('reorders columns by dragging a header and dropping it on another header', async () => {
     useLogStore.setState({ rows: [row], visibleRows: [row] })
     render(<LogViewer />)
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
 
     expect(reorderColumnByDrop(['method', 'url', 'status', 'body'], 'body', 'method')).toEqual(['body', 'method', 'url', 'status'])
     const bodyColumn = document.querySelector('[data-column-key="body"]') as HTMLElement
@@ -145,7 +192,7 @@ describe('LogViewer', () => {
     fireEvent.drop(methodColumn)
 
     await waitFor(() => {
-      const controls = Array.from(screen.getByRole('row', { name: /Excel-style column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+      const controls = Array.from(screen.getByRole('row', { name: /Visible column filters/i }).querySelectorAll('[data-testid="column-control"]'))
       const keys = controls.map((control) => control.getAttribute('data-column-key'))
       expect(keys.indexOf('body')).toBeLessThan(keys.indexOf('method'))
     })
