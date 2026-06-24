@@ -34,8 +34,12 @@ function resetStores() {
     podsByScope: {},
     selectedPod: undefined,
     selectedPods: {},
+    loadingContexts: false,
     loadingNamespaces: false,
     loadingPods: false,
+    cacheRefreshing: false,
+    cacheLoaded: true,
+    cacheLastRefreshAt: Date.now(),
     error: undefined,
   })
   useSettingsStore.setState({
@@ -126,6 +130,29 @@ describe('button actions', () => {
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('shows animated progress while streams are starting', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    let resolveStart!: () => void
+    vi.mocked(startLogStream).mockImplementationOnce(() => new Promise<void>((resolve) => { resolveStart = resolve }))
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(screen.getByRole('status', { name: /starting streams/i })).toHaveClass('animate-klogcat-status-glow'))
+    expect(screen.getAllByLabelText(/starting streams progress/i).some((element) => Boolean(element.querySelector('.animate-klogcat-progress')))).toBe(true)
+    await act(async () => { resolveStart() })
+    await waitFor(() => expect(useLogStore.getState().streamStatus).toBe('running'))
   })
 
   it('starts INFO, ACC, and ERR streams when all source types are selected', async () => {

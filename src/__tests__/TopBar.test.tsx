@@ -31,6 +31,9 @@ function resetKube() {
     loadingContexts: false,
     loadingNamespaces: false,
     loadingPods: false,
+    cacheRefreshing: false,
+    cacheLoaded: true,
+    cacheLastRefreshAt: Date.now(),
     error: undefined,
   })
 }
@@ -115,7 +118,16 @@ describe('TopBar target picker', () => {
     fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
     const dialog = screen.getByRole('dialog', { name: /select log targets/i })
 
-    expect(within(dialog).getByRole('status', { name: /loading targets/i })).toBeInTheDocument()
+    expect(within(dialog).getByRole('status', { name: /loading targets/i })).toHaveClass('animate-klogcat-status-glow')
+    expect(within(dialog).getByLabelText(/target discovery progress/i).querySelector('.animate-klogcat-progress')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Loading namespaces for ctx')).toBeInTheDocument()
+  })
+
+  it('animates cache refresh progress in the top bar', () => {
+    useKubeStore.setState({ cacheRefreshing: true })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    expect(screen.getByRole('status', { name: /refreshing target cache/i })).toHaveClass('animate-klogcat-status-glow')
+    expect(screen.getByText(/Targets: 1 selected/)).toBeInTheDocument()
   })
 })

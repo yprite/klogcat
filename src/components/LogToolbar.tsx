@@ -5,6 +5,7 @@ import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildScloudLogPath } from '../utils/logPath'
+import { AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
 
 export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLogType; sourceTypes?: SourceLogType[] }) {
   const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'info']
@@ -24,6 +25,9 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
+  const operationActive = startBusy || kube.loadingPods || kube.cacheRefreshing
+  const operationLabel = log.streamStatus === 'starting' ? 'Starting streams' : log.streamStatus === 'stopping' ? 'Stopping streams' : kube.loadingPods ? 'Refreshing pods' : kube.cacheRefreshing ? 'Refreshing target cache' : 'Ready'
+  const operationDetail = log.streamStatus === 'starting' ? `${log.activeStreamIds.length}/${Math.max(1, targets.length * selectedSourceTypes.length)} streams` : kube.loadingPods ? `${targets.length || 1} target scope` : undefined
   const start = async (allowRestart = false) => {
     log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`)
     if (startBusy) { log.markError(undefined, `Busy: ${log.streamStatus}`); return }
@@ -64,6 +68,8 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
   return <div className="flex flex-wrap gap-2 items-center p-2 bg-slate-900 border-b border-slate-800">
     <label>Container <select className="text-black" value={effectiveContainer} onChange={e=>{ setContainerOverride(e.target.value); log.recordActionDebug(`Container selected: ${e.target.value}`) }}><option value="">Auto per pod</option>{podContainers.map(c=><option key={c} value={c}>{c}</option>)}{source && !podContainers.includes(source.container) && <option value={source.container}>{source.container} (configured)</option>}</select></label>
     <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
+    <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
+    {operationActive && <div className="basis-full sm:basis-64"><ProgressStripe label={`${operationLabel} progress`} /></div>}
     <button onClick={() => { log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`); log.viewerPaused ? log.resume() : log.pause() }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
     <label><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
     <label><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>

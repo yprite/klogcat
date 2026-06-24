@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseScopeKey, scopeKey, useKubeStore } from '../stores/kubeStore'
+import { ActivityDots, ActivityRing, AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
 
 const podValue = (context: string, namespace: string, pod: string) => `${scopeKey(context, namespace)}\u0000${pod}`
 const selectedPodValues = (selectedPods: Record<string, string[]>) => Object.entries(selectedPods).flatMap(([key, pods]) => pods.map((pod) => `${key}\u0000${pod}`))
@@ -42,6 +43,9 @@ function TargetPickerDialog({
   }, [contextValues.join('\u0000')])
   const namespaceValues = Object.entries(kube.selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => scopeKey(context, namespace)))
   const selectedPods = selectedPodValues(kube.selectedPods)
+  const discoveryActive = kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing
+  const podRefreshActive = kube.loadingPods
+  const progressLabel = kube.cacheRefreshing ? 'Refreshing cache' : kube.loadingContexts ? 'Loading contexts' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingPods ? 'Loading pods' : ''
   const visibleTree = useMemo(() => kube.contexts.map((context) => {
     const namespaces = kube.namespacesByContext[context.name] ?? (context.name === kube.selectedContext ? kube.namespaces : [])
     const visibleNamespaces = namespaces.map((namespace) => {
@@ -69,14 +73,25 @@ function TargetPickerDialog({
         <button className="rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800" onClick={onClose}>Close</button>
       </div>
       <div className="shrink-0 border-b border-slate-800 p-3">
+        {(discoveryActive || podRefreshActive) && <div className="mb-3 rounded-lg border border-yellow-400/30 bg-slate-900/90 p-3 shadow-[0_0_24px_rgba(250,204,21,0.08)]">
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs text-yellow-100">
+            <span className="inline-flex items-center gap-2"><ActivityRing label={`${progressLabel || 'Target refresh'} activity`} />{progressLabel || 'Updating targets'}</span>
+            <ActivityDots label="Target progress dots" />
+          </div>
+          <ProgressStripe label="Target discovery progress" />
+        </div>}
         <label className="block text-xs uppercase text-slate-400">Search targets</label>
         <input aria-label="Search targets" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="context / namespace / pod / phase / container" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_18rem] overflow-hidden">
         <div aria-label="Target tree" className="min-h-0 overflow-y-auto p-3">
-          {(kube.loadingContexts || kube.loadingNamespaces) && <div role="status" aria-label="Loading targets" className="mb-3 flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-yellow-300" />
-            Loading targets…
+          {(kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing) && <div role="status" aria-label="Loading targets" className="mb-3 overflow-hidden rounded border border-yellow-400/30 bg-slate-900 px-3 py-2 text-xs text-slate-300 animate-klogcat-status-glow">
+            <div className="mb-2 flex items-center gap-2">
+              <ActivityRing label="Loading targets activity" />
+              <span>{progressLabel || 'Loading targets'}</span>
+              <ActivityDots label="Loading targets progress" />
+            </div>
+            <ProgressStripe label="Loading targets progress bar" />
           </div>}
           {visibleTree.length === 0 && !kube.loadingContexts && !kube.loadingNamespaces && <p className="p-3 text-slate-500">No matching targets</p>}
           {visibleTree.map(({ context, namespaces }) => {
@@ -102,7 +117,10 @@ function TargetPickerDialog({
                       <span className="text-xs font-normal text-slate-500">{pods.length} pods</span>
                     </label>
                     <div className="space-y-1 pb-2 pl-7 pr-2">
-                      {pods.length === 0 && kube.loadingPods && namespaceChecked && <p className="px-2 py-1 text-xs text-slate-400"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-300" />Loading pods…</p>}
+                      {pods.length === 0 && kube.loadingPods && namespaceChecked && <div role="status" aria-label={`Loading pods for ${namespace.name}`} className="mx-2 my-1 rounded border border-yellow-400/20 bg-yellow-400/5 px-2 py-1.5 text-xs text-yellow-100">
+                        <div className="mb-1 flex items-center gap-2"><ActivityRing label="Loading pods activity" /><span>Loading pods</span><ActivityDots label="Loading pods progress" /></div>
+                        <ProgressStripe label={`Loading pods progress for ${namespace.name}`} />
+                      </div>}
                       {pods.length === 0 && (!kube.loadingPods || !namespaceChecked) && <p className="px-2 py-1 text-xs text-slate-500">No loaded pods</p>}
                       {pods.map((pod) => {
                         const value = podValue(context.name, namespace.name, pod.name)
@@ -142,11 +160,12 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   const kube = useKubeStore()
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
   const selectedCount = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
-  const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods
+  const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing
+  const targetStatusLabel = kube.cacheRefreshing ? 'Refreshing target cache' : kube.loadingPods ? 'Loading pods' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingContexts ? 'Loading contexts' : 'Targets ready'
   return <div className="flex flex-wrap gap-3 items-center p-3 border-b border-slate-800 bg-slate-950">
     <strong>klogcat</strong>
-    <span className="inline-flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-3 py-1 text-sm text-slate-200">{targetsLoading && <span aria-label="Loading targets" className="h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-yellow-300" />}Targets: {selectedCount} selected</span>
-    <button className="rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300" onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
+    <AnimatedStatusPill active={targetsLoading} label={targetStatusLabel} detail={`Targets: ${selectedCount} selected`} />
+    <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
     <button onClick={onSettings}>Settings</button>
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}
   </div>
