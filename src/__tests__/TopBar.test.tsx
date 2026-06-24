@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { TopBar } from '../components/TopBar'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
+import { listNamespaces } from '../commands/tauriKube'
+
+vi.mock('../commands/tauriKube', () => ({
+  getCurrentContext: vi.fn(async () => 'ctx'),
+  listContexts: vi.fn(async () => ({ contexts: [{ name: 'ctx' }, { name: 'cluster-a' }] })),
+  listNamespaces: vi.fn(async (context: string) => ({ context, namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] })),
+  listPods: vi.fn(async (namespace: string, context: string) => ({ context, namespace, pods: [{ name: `${namespace}-pod`, namespace, phase: 'Running', containers: ['app'] }] })),
+}))
 
 function resetKube() {
   useKubeStore.setState({
@@ -111,7 +119,27 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByLabelText('Selected targets')).toHaveClass('overflow-y-auto')
   })
 
-  it('shows an immediate loading state while lazy namespaces are loading', () => {
+  it('hides clusters that cannot load namespaces', async () => {
+    vi.mocked(listNamespaces).mockImplementation(async (context?: string) => {
+      if (context === 'blocked') throw { code: 'list_namespaces_failed', message: 'failed to list namespaces' }
+      return { context, namespaces: [{ name: 'default' }] }
+    })
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }, { name: 'blocked' }],
+      selectedContext: 'ctx',
+      selectedContexts: ['ctx'],
+      namespacesByContext: { ctx: [{ name: 'default' }] },
+    })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    await waitFor(() => expect(within(dialog).queryByText('blocked')).not.toBeInTheDocument())
+    expect(within(dialog).getByText('ctx')).toBeInTheDocument()
+  })
+
+  it('shows an immediate loading state while lazy namespaces are loading', async () => {
     useKubeStore.setState({ selectedContext: undefined, selectedContexts: [], namespacesByContext: {}, namespaces: [], loadingNamespaces: true })
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
 
@@ -121,6 +149,7 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByRole('status', { name: /loading targets/i })).toHaveClass('animate-klogcat-status-glow')
     expect(within(dialog).getByLabelText(/target discovery progress/i).querySelector('.animate-klogcat-progress')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Loading namespaces for ctx')).toBeInTheDocument()
+    await waitFor(() => expect(useKubeStore.getState().loadingNamespaces).toBe(false))
   })
 
   it('animates cache refresh progress in the top bar', () => {

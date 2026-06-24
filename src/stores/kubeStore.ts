@@ -65,6 +65,37 @@ function persistKubeCache(state: Pick<KubeState, 'currentContext' | 'contexts' |
   writeKubeCache({ ...currentCacheSnapshot(state), savedAt })
 }
 
+type KubeSelectionPatch = Partial<Pick<KubeState, 'contexts' | 'currentContext' | 'selectedContext' | 'selectedContexts' | 'namespaces' | 'namespacesByContext' | 'selectedNamespace' | 'selectedNamespaces' | 'pods' | 'podsByScope' | 'selectedPod' | 'selectedPods'>>
+
+function restrictStateToContexts(state: KubeState, contexts: ContextInfo[], currentContext?: string): KubeSelectionPatch {
+  const allowed = new Set(contexts.map((context) => context.name))
+  const selectedContexts = state.selectedContexts.filter((context) => allowed.has(context))
+  const selectedContext = state.selectedContext && allowed.has(state.selectedContext)
+    ? state.selectedContext
+    : selectedContexts[0] ?? (currentContext && allowed.has(currentContext) ? currentContext : first(contexts)?.name)
+  const nextSelectedContexts = selectedContexts.length ? selectedContexts : selectedContext ? [selectedContext] : []
+  const namespacesByContext = Object.fromEntries(Object.entries(state.namespacesByContext).filter(([context]) => allowed.has(context)))
+  const selectedNamespaces = Object.fromEntries(Object.entries(state.selectedNamespaces).filter(([context]) => allowed.has(context)))
+  const podsByScope = Object.fromEntries(Object.entries(state.podsByScope).filter(([key]) => allowed.has(parseScopeKey(key).context)))
+  const selectedPods = Object.fromEntries(Object.entries(state.selectedPods).filter(([key]) => allowed.has(parseScopeKey(key).context)))
+  const selectedNamespace = selectedContext ? first(selectedNamespaces[selectedContext] ?? []) : undefined
+  const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
+  return {
+    contexts,
+    currentContext: currentContext && allowed.has(currentContext) ? currentContext : selectedContext,
+    selectedContext,
+    selectedContexts: nextSelectedContexts,
+    namespacesByContext,
+    namespaces: selectedContext ? namespacesByContext[selectedContext] ?? [] : [],
+    selectedNamespace,
+    selectedNamespaces,
+    podsByScope,
+    pods: selectedScope ? podsByScope[selectedScope] ?? [] : [],
+    selectedPod: selectedScope ? first(selectedPods[selectedScope] ?? []) : undefined,
+    selectedPods,
+  }
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
   let next = 0
@@ -114,9 +145,18 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       const [currentContext, contextsRes] = await Promise.all([getCurrentContext().catch(() => undefined), listContexts()])
       const contexts = contextsRes.contexts
       set((s) => ({ currentContext: currentContext ?? s.currentContext, contexts, selectedContext: s.selectedContext ?? currentContext ?? first(contexts)?.name, selectedContexts: s.selectedContexts.length ? s.selectedContexts : currentContext ? [currentContext] : first(contexts) ? [first(contexts)!.name] : [], loadingContexts: false, loadingNamespaces: true }))
-      const namespaceEntries = await mapWithConcurrency(contexts, KUBE_REFRESH_CONCURRENCY, async (context) => [context.name, (await listNamespaces(context.name)).namespaces] as const)
+      const namespaceResults = await mapWithConcurrency(contexts, KUBE_REFRESH_CONCURRENCY, async (context) => {
+        try {
+          return { ok: true as const, context: context.name, namespaces: (await listNamespaces(context.name)).namespaces }
+        } catch (error) {
+          recordKubeDebug(`refreshAllTargets hide inaccessible context=${context.name} error=${JSON.stringify(error)}`)
+          return { ok: false as const, context: context.name }
+        }
+      })
+      const namespaceEntries = namespaceResults.flatMap((result) => result.ok ? [[result.context, result.namespaces] as const] : [])
+      const accessibleContexts = contexts.filter((context) => namespaceEntries.some(([name]) => name === context.name))
       const namespacesByContext = Object.fromEntries(namespaceEntries)
-      set((s) => ({ namespacesByContext, namespaces: s.selectedContext ? namespacesByContext[s.selectedContext] ?? [] : [], loadingNamespaces: false, loadingPods: true }))
+      set((s) => ({ ...restrictStateToContexts({ ...s, namespacesByContext } as KubeState, accessibleContexts, currentContext), namespacesByContext, namespaces: (s.selectedContext && namespacesByContext[s.selectedContext]) ? namespacesByContext[s.selectedContext] : (first(accessibleContexts) ? namespacesByContext[first(accessibleContexts)!.name] ?? [] : []), loadingNamespaces: false, loadingPods: true }))
       const pairs = namespaceEntries.flatMap(([context, namespaces]) => namespaces.map((namespace) => ({ context, namespace: namespace.name })))
       const podEntries = await mapWithConcurrency(pairs, KUBE_REFRESH_CONCURRENCY, async ({ context, namespace }) => [scopeKey(context, namespace), (await listPods(namespace, context)).pods] as const)
       const podsByScope = Object.fromEntries(podEntries)
@@ -126,7 +166,7 @@ export const useKubeStore = create<KubeState>((set, get) => ({
         return { podsByScope, pods: selectedScope ? podsByScope[selectedScope] ?? [] : [], loadingPods: false, cacheRefreshing: false, cacheLastRefreshAt: savedAt, error: undefined }
       })
       persistKubeCache(get(), savedAt)
-      recordKubeDebug(`refreshAllTargets ok contexts=${contexts.length} namespaces=${pairs.length} podScopes=${podEntries.length}`)
+      recordKubeDebug(`refreshAllTargets ok contexts=${accessibleContexts.length} namespaces=${pairs.length} podScopes=${podEntries.length}`)
     } catch (e) {
       recordKubeDebug(`refreshAllTargets failed ${JSON.stringify(e)}`)
       set({ error: e as CommandError, loadingContexts: false, loadingNamespaces: false, loadingPods: false, cacheRefreshing: false })
@@ -210,11 +250,21 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     set({ loadingNamespaces: true })
     try {
       recordKubeDebug(`ensureNamespaces start contexts=${missingContexts.join(',') || '(none)'}`)
-      const entries = await Promise.all(missingContexts.map(async (ctx) => [ctx, (await listNamespaces(ctx)).namespaces] as const))
+      const results = await Promise.all(missingContexts.map(async (ctx) => {
+        try {
+          return { ok: true as const, ctx, namespaces: (await listNamespaces(ctx)).namespaces }
+        } catch (error) {
+          recordKubeDebug(`ensureNamespaces hide inaccessible context=${ctx} error=${JSON.stringify(error)}`)
+          return { ok: false as const, ctx }
+        }
+      }))
+      const entries = results.flatMap((result) => result.ok ? [[result.ctx, result.namespaces] as const] : [])
+      const inaccessible = new Set(results.filter((result) => !result.ok).map((result) => result.ctx))
       recordKubeDebug(`ensureNamespaces ok ${entries.map(([ctx, namespaces]) => `${ctx}:${namespaces.length}`).join(', ') || '(none)'}`)
       set((s) => {
+        const contexts = s.contexts.filter((context) => !inaccessible.has(context.name))
         const namespacesByContext = { ...s.namespacesByContext, ...Object.fromEntries(entries) }
-        return { namespacesByContext, namespaces: s.selectedContext ? namespacesByContext[s.selectedContext] ?? [] : [], loadingNamespaces: false, error: undefined }
+        return { ...restrictStateToContexts({ ...s, namespacesByContext } as KubeState, contexts, s.currentContext), namespacesByContext, loadingNamespaces: false, error: undefined }
       })
       persistKubeCache(get())
     } catch (e) {
@@ -234,7 +284,11 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       persistKubeCache(get())
     } catch (e) {
       recordKubeDebug(`loadNamespaces failed context=${selectedContext} ${JSON.stringify(e)}`)
-      set({ error: e as CommandError, loadingNamespaces: false })
+      set((s) => {
+        const contexts = s.contexts.filter((context) => context.name !== selectedContext)
+        return { ...restrictStateToContexts(s, contexts, s.currentContext), loadingNamespaces: false, error: e as CommandError }
+      })
+      persistKubeCache(get())
     }
   },
   async selectNamespace(namespace) {

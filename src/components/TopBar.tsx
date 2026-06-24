@@ -37,10 +37,12 @@ function TargetPickerDialog({
     }
   }
   const contextValues = kube.selectedContexts.length ? kube.selectedContexts : kube.selectedContext ? [kube.selectedContext] : []
+  const contextsToProbe = kube.contexts.map((context) => context.name)
   useEffect(() => {
-    if (contextValues.length === 0) return
-    void useKubeStore.getState().ensureNamespacesForContexts(contextValues)
-  }, [contextValues.join('\u0000')])
+    const targets = contextsToProbe.length ? contextsToProbe : contextValues
+    if (targets.length === 0) return
+    void useKubeStore.getState().ensureNamespacesForContexts(targets)
+  }, [contextsToProbe.join('\u0000'), contextValues.join('\u0000')])
   const namespaceValues = Object.entries(kube.selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => scopeKey(context, namespace)))
   const selectedPods = selectedPodValues(kube.selectedPods)
   const discoveryActive = kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing

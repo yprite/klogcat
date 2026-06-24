@@ -100,13 +100,46 @@ describe('kubeStore context selection', () => {
 
   it('loads namespaces only for missing selected contexts', async () => {
     vi.mocked(listNamespaces).mockClear()
-    useKubeStore.setState({ namespacesByContext: { ctx: [{ name: 'default' }] } })
+    useKubeStore.setState({ contexts: [{ name: 'ctx' }, { name: 'cluster-a' }], namespacesByContext: { ctx: [{ name: 'default' }] } })
 
     await useKubeStore.getState().ensureNamespacesForContexts(['ctx', 'cluster-a'])
 
     expect(listNamespaces).toHaveBeenCalledTimes(1)
     expect(listNamespaces).toHaveBeenCalledWith('cluster-a')
     expect(useKubeStore.getState().namespacesByContext).toEqual({ ctx: [{ name: 'default' }], 'cluster-a': [{ name: 'prod' }] })
+  })
+
+  it('hides a context when namespace discovery cannot access that cluster', async () => {
+    vi.mocked(listNamespaces).mockImplementationOnce(async () => { throw { code: 'list_namespaces_failed', message: 'failed to list namespaces' } })
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }, { name: 'blocked' }],
+      selectedContext: 'blocked',
+      selectedContexts: ['ctx', 'blocked'],
+      namespacesByContext: { ctx: [{ name: 'default' }] },
+    })
+
+    await useKubeStore.getState().ensureNamespacesForContexts(['blocked'])
+
+    const state = useKubeStore.getState()
+    expect(state.contexts).toEqual([{ name: 'ctx' }])
+    expect(state.selectedContexts).toEqual(['ctx'])
+    expect(state.selectedContext).toBe('ctx')
+    expect(state.namespacesByContext.blocked).toBeUndefined()
+  })
+
+  it('excludes inaccessible contexts during full target refresh', async () => {
+    vi.mocked(listContexts).mockResolvedValueOnce({ contexts: [{ name: 'ctx' }, { name: 'blocked' }, { name: 'cluster-a' }] })
+    vi.mocked(listNamespaces).mockImplementation(async (context?: string) => {
+      if (context === 'blocked') throw { code: 'list_namespaces_failed', message: 'failed to list namespaces' }
+      return { namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] }
+    })
+    useKubeStore.setState({ cacheLastRefreshAt: Date.now() - 25 * 60 * 60 * 1000 })
+
+    await useKubeStore.getState().refreshAllTargets(false)
+
+    expect(useKubeStore.getState().contexts).toEqual([{ name: 'ctx' }, { name: 'cluster-a' }])
+    expect(useKubeStore.getState().namespacesByContext.blocked).toBeUndefined()
+    expect(listPods).not.toHaveBeenCalledWith(expect.anything(), 'blocked')
   })
 
   it('uses cached pods when selecting a cached namespace', async () => {
