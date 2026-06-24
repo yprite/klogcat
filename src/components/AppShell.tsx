@@ -27,11 +27,14 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
   useEffect(() => { (async () => {
     await settings.loadSettings()
-    await kube.loadCurrentContext()
-    await kube.loadContexts()
+    const kubeStore = useKubeStore.getState()
+    const loadedCache = kubeStore.loadCachedTargets()
+    const refreshPromise = useKubeStore.getState().refreshAllTargets(false)
+    void refreshPromise
     const s = useSettingsStore.getState().settings
     if (s?.defaultNamespace) {
-      await useKubeStore.getState().loadNamespaces()
+      if (!loadedCache && !useKubeStore.getState().selectedContext) await refreshPromise
+      if (!useKubeStore.getState().namespaces.some(ns => ns.name === s.defaultNamespace)) await useKubeStore.getState().loadNamespaces()
       const namespaces = useKubeStore.getState().namespaces
       if (namespaces.some(ns => ns.name === s.defaultNamespace)) {
         await useKubeStore.getState().selectNamespace(s.defaultNamespace)

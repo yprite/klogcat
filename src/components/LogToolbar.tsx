@@ -42,7 +42,10 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
             return
           }
           log.markRunning(streamId)
-        } catch (e) { log.markStartRejected(streamId, e) }
+        } catch (e) {
+          log.markStartRejected(streamId, e)
+          void useKubeStore.getState().refreshPodsForSelections()
+        }
       }
     }
   }

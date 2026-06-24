@@ -1,12 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
-import { listNamespaces } from '../commands/tauriKube'
+import { getCurrentContext, listContexts, listNamespaces, listPods } from '../commands/tauriKube'
+import { writeKubeCache } from '../utils/kubeCache'
+
+const storage = (() => {
+  let data: Record<string, string> = {}
+  return {
+    getItem: (key: string) => data[key] ?? null,
+    setItem: (key: string, value: string) => { data[key] = value },
+    removeItem: (key: string) => { delete data[key] },
+    clear: () => { data = {} },
+    key: (index: number) => Object.keys(data)[index] ?? null,
+    get length() { return Object.keys(data).length },
+  } satisfies Storage
+})()
+Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true })
 
 vi.mock('../commands/tauriKube', () => ({
-  getCurrentContext: vi.fn(),
-  listContexts: vi.fn(),
+  getCurrentContext: vi.fn(async () => 'ctx'),
+  listContexts: vi.fn(async () => ({ contexts: [{ name: 'ctx' }, { name: 'cluster-a' }] })),
   listNamespaces: vi.fn(async (context: string) => ({ namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] })),
-  listPods: vi.fn(),
+  listPods: vi.fn(async (namespace: string, context: string) => ({ context, namespace, pods: [{ name: `${namespace}-pod`, namespace, phase: 'Running', containers: ['app'] }] })),
 }))
 
 function resetKubeStore() {
@@ -26,12 +40,15 @@ function resetKubeStore() {
     loadingContexts: false,
     loadingNamespaces: false,
     loadingPods: false,
+    cacheLoaded: false,
+    cacheRefreshing: false,
+    cacheLastRefreshAt: undefined,
     error: undefined,
   })
 }
 
 describe('kubeStore context selection', () => {
-  beforeEach(() => resetKubeStore())
+  beforeEach(() => { resetKubeStore(); localStorage.clear(); vi.clearAllMocks() })
 
   it('preserves namespace and pod selections for contexts that remain selected', async () => {
     const clusterScope = scopeKey('cluster-a', 'prod')
@@ -90,5 +107,57 @@ describe('kubeStore context selection', () => {
     expect(listNamespaces).toHaveBeenCalledTimes(1)
     expect(listNamespaces).toHaveBeenCalledWith('cluster-a')
     expect(useKubeStore.getState().namespacesByContext).toEqual({ ctx: [{ name: 'default' }], 'cluster-a': [{ name: 'prod' }] })
+  })
+
+  it('uses cached pods when selecting a cached namespace', async () => {
+    const key = scopeKey('ctx', 'default')
+    useKubeStore.setState({ selectedContext: 'ctx', selectedContexts: ['ctx'], podsByScope: { [key]: [{ name: 'cached-pod', namespace: 'default', phase: 'Running', containers: ['app'] }] } })
+
+    await useKubeStore.getState().selectNamespaces([key])
+
+    expect(listPods).not.toHaveBeenCalled()
+    expect(useKubeStore.getState().pods).toEqual([{ name: 'cached-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
+  })
+
+  it('hydrates cached targets before making kubectl calls', () => {
+    writeKubeCache({
+      savedAt: Date.now(),
+      currentContext: 'ctx',
+      contexts: [{ name: 'ctx' }],
+      namespacesByContext: { ctx: [{ name: 'default' }] },
+      podsByScope: { [scopeKey('ctx', 'default')]: [{ name: 'cached-pod', namespace: 'default', phase: 'Running', containers: ['app'] }] },
+    })
+
+    const loaded = useKubeStore.getState().loadCachedTargets()
+
+    expect(loaded).toBe(true)
+    expect(useKubeStore.getState().contexts).toEqual([{ name: 'ctx' }])
+    expect(useKubeStore.getState().namespacesByContext).toEqual({ ctx: [{ name: 'default' }] })
+    expect(listContexts).not.toHaveBeenCalled()
+    expect(listNamespaces).not.toHaveBeenCalled()
+    expect(listPods).not.toHaveBeenCalled()
+  })
+
+  it('skips daily refresh when cache is fresh', async () => {
+    useKubeStore.setState({ cacheLastRefreshAt: Date.now() })
+
+    await useKubeStore.getState().refreshAllTargets(false)
+
+    expect(getCurrentContext).not.toHaveBeenCalled()
+    expect(listContexts).not.toHaveBeenCalled()
+  })
+
+  it('refreshes all contexts, namespaces, and pods when cache is stale', async () => {
+    useKubeStore.setState({ cacheLastRefreshAt: Date.now() - 25 * 60 * 60 * 1000 })
+
+    await useKubeStore.getState().refreshAllTargets(false)
+
+    expect(getCurrentContext).toHaveBeenCalledTimes(1)
+    expect(listContexts).toHaveBeenCalledTimes(1)
+    expect(listNamespaces).toHaveBeenCalledWith('ctx')
+    expect(listNamespaces).toHaveBeenCalledWith('cluster-a')
+    expect(listPods).toHaveBeenCalledWith('default', 'ctx')
+    expect(listPods).toHaveBeenCalledWith('prod', 'cluster-a')
+    expect(useKubeStore.getState().podsByScope[scopeKey('ctx', 'default')][0].name).toBe('default-pod')
   })
 })
