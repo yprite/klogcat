@@ -49,10 +49,10 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPods(pods) }
   return <div className="flex h-screen flex-col overflow-hidden">
     <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} />
-    <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
+    <main className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-2">
       <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
-      {settings.warning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{settings.warning.message}</div>}
-      {defaultNamespaceWarning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{defaultNamespaceWarning}</div>}
+      {settings.warning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{settings.warning.message}</div>}
+      {defaultNamespaceWarning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{defaultNamespaceWarning}</div>}
       <GrepBar />
       <LogToolbar sourceTypes={sourceTypes} onSourceTypesChange={changeSources} />
       <ActionDebugPanel />

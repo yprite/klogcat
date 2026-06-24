@@ -61,7 +61,7 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     await Promise.all(ids.map(async (id) => { log.markStopping(id); try { await stopLogStream(id); log.markStopped(id) } catch (e) { log.markError(id, e instanceof Error ? e.message : String(e)) } }))
     await start(true)
   }
-  return <div className="flex flex-wrap gap-2 items-center p-2 bg-slate-900 border-b border-slate-800">
+  return <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-2 py-1">
     {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
     <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
     <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />

@@ -105,10 +105,10 @@ export function GrepBar() {
     }
   }
 
-  return <div className="flex flex-1 items-end gap-2">
-    <label className="relative flex-1">Query
+  return <div className="flex shrink-0 items-center gap-2">
+    <label className="relative flex flex-1 items-center gap-2"><span className="shrink-0 text-xs font-semibold uppercase text-slate-300">Query</span>
       <input ref={inputRef} aria-invalid={!valid} aria-describedby="query-help" aria-expanded={showSuggestions} aria-controls="query-suggestions" className={`w-full max-w-3xl rounded border border-slate-700 bg-slate-950 px-2 py-1 text-white placeholder:text-slate-500 ${valid ? '' : 'outline outline-2 outline-red-500'}`} value={grepQuery} onFocus={() => { if (!regexMode && grepQuery === '') setSuggestionsOpen(true) }} onBlur={() => window.setTimeout(() => setSuggestionsOpen(false), 100)} onKeyDown={onKeyDown} onChange={e => { setGrepQuery(e.target.value); if (!regexMode) { setSuggestionsOpen(true); setActiveSuggestion(0) } }} placeholder={placeholder} />
-      {showSuggestions && <div id="query-suggestions" role="listbox" className="absolute z-30 mt-1 w-full max-w-3xl overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl">
+      {showSuggestions && <div id="query-suggestions" role="listbox" className="absolute left-12 top-full z-30 mt-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-xl">
         {suggestions.map((suggestion, index) => <button key={suggestion.insert} type="button" role="option" aria-selected={index === activeSuggestion} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveSuggestion(index)} onClick={() => insertSuggestion(suggestion)} className={`grid w-full grid-cols-[10rem_1fr] gap-3 px-3 py-2 text-left text-xs ${index === activeSuggestion ? 'bg-slate-700' : 'hover:bg-slate-800'}`}>
           <span className="font-mono text-yellow-200">{suggestion.label}</span>
           <span className="text-slate-300">{suggestion.description}</span>
