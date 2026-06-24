@@ -6,7 +6,9 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { stopLogStream } from '../commands/tauriLogs'
 import { ActionDebugPanel } from './ActionDebugPanel'
 import { ErrorBanner } from './ErrorBanner'
+import { FailedRequestsView } from './FailedRequestsView'
 import { GrepBar } from './GrepBar'
+import { InvestigationModeSelector, type InvestigationMode } from './InvestigationModeSelector'
 import { LogToolbar } from './LogToolbar'
 import { LogViewer } from './LogViewer'
 import { SettingsModal } from './SettingsModal'
@@ -21,6 +23,7 @@ async function stopAndClearIfActive() {
 
 export function AppShell({ eventError }: { eventError?: string }) {
   const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['info'])
+  const [investigationMode, setInvestigationMode] = useState<InvestigationMode>('raw')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
@@ -53,10 +56,11 @@ export function AppShell({ eventError }: { eventError?: string }) {
       <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
       {settings.warning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{settings.warning.message}</div>}
       {defaultNamespaceWarning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{defaultNamespaceWarning}</div>}
+      <InvestigationModeSelector value={investigationMode} onChange={setInvestigationMode} />
       <GrepBar />
       <LogToolbar sourceTypes={sourceTypes} onSourceTypesChange={changeSources} />
       <ActionDebugPanel />
-      <LogViewer />
+      {investigationMode === 'raw' ? <LogViewer /> : <FailedRequestsView />}
     </main>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
   </div>
