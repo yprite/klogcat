@@ -70,6 +70,31 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getAllByText('Running').length).toBeGreaterThan(0)
   })
 
+  it('collapses and expands each cluster in the target picker', () => {
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByText('default')).toBeInTheDocument()
+    const collapseCtx = within(dialog).getByRole('button', { name: 'Collapse ctx' })
+    expect(collapseCtx).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(collapseCtx)
+
+    expect(within(dialog).queryByText('default')).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('ctx / default / api-1')).not.toBeInTheDocument()
+    const expandCtx = within(dialog).getByRole('button', { name: 'Expand ctx' })
+    expect(expandCtx).toHaveAttribute('aria-expanded', 'false')
+    expect(within(dialog).getByText('cluster-a')).toBeInTheDocument()
+    expect(within(dialog).getByText('prod')).toBeInTheDocument()
+
+    fireEvent.click(expandCtx)
+
+    expect(within(dialog).getByText('default')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('ctx / default / api-1')).toBeChecked()
+  })
+
   it('filters the target tree and emits scoped pod selections', () => {
     const onPodChange = vi.fn()
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={onPodChange} />)

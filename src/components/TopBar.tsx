@@ -27,7 +27,11 @@ function TargetPickerDialog({
   const kube = useKubeStore()
   const [query, setQuery] = useState('')
   const [selectionPending, setSelectionPending] = useState(false)
+  const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
   const normalizedQuery = query.trim().toLowerCase()
+  const toggleContextExpanded = (contextName: string) => {
+    setCollapsedContexts((current) => ({ ...current, [contextName]: !current[contextName] }))
+  }
   const runSelectionChange = (change: () => void | Promise<void>) => {
     if (selectionPending) return
     const result = change()
@@ -98,13 +102,27 @@ function TargetPickerDialog({
           {visibleTree.length === 0 && !kube.loadingContexts && !kube.loadingNamespaces && <p className="p-3 text-slate-500">No matching targets</p>}
           {visibleTree.map(({ context, namespaces }) => {
             const contextChecked = contextValues.includes(context.name)
+            const collapsed = Boolean(collapsedContexts[context.name])
+            const panelId = `target-context-${context.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
             return <div key={context.name} className="mb-3 rounded border border-slate-800 bg-slate-900/40">
-              <label className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 font-semibold text-white">
-                <input type="checkbox" checked={contextChecked} disabled={selectionPending} onChange={() => { void runSelectionChange(() => onContextChange(toggleValue(contextValues, context.name))) }} />
-                <span>{context.name}</span>
-                <span className="text-xs font-normal text-slate-500">{namespaces.length} namespaces</span>
-              </label>
-              <div className="space-y-2 p-2">
+              <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2 font-semibold text-white">
+                <button
+                  type="button"
+                  aria-expanded={!collapsed}
+                  aria-controls={panelId}
+                  aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${context.name}`}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-xs text-slate-200 hover:border-yellow-400 hover:text-yellow-300"
+                  onClick={() => toggleContextExpanded(context.name)}
+                >
+                  <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+                </button>
+                <label className="flex min-w-0 flex-1 items-center gap-2">
+                  <input type="checkbox" checked={contextChecked} disabled={selectionPending} onChange={() => { void runSelectionChange(() => onContextChange(toggleValue(contextValues, context.name))) }} />
+                  <span className="min-w-0 truncate">{context.name}</span>
+                  <span className="shrink-0 text-xs font-normal text-slate-500">{namespaces.length} namespaces</span>
+                </label>
+              </div>
+              {!collapsed && <div id={panelId} className="space-y-2 p-2">
                 {namespaces.length === 0 && kube.loadingNamespaces && <div className="space-y-2 px-1 py-2" aria-label={`Loading namespaces for ${context.name}`}>
                   <div className="h-8 animate-pulse rounded bg-slate-800/70" />
                   <div className="h-8 animate-pulse rounded bg-slate-800/40" />
@@ -135,7 +153,7 @@ function TargetPickerDialog({
                     </div>
                   </div>
                 })}
-              </div>
+              </div>}
             </div>
           })}
         </div>
