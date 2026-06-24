@@ -67,6 +67,8 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByText('ctx')).toBeInTheDocument()
     expect(within(dialog).getByText('default')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('ctx / default / api-1')).toBeChecked()
+    expect(within(dialog).getAllByText('Selected').length).toBeGreaterThan(0)
+    expect(within(dialog).getByText('ctx / default / api-1 ×')).toBeInTheDocument()
     expect(within(dialog).getAllByText('Running').length).toBeGreaterThan(0)
   })
 
@@ -123,6 +125,10 @@ describe('TopBar target picker', () => {
     const dialog = screen.getByRole('dialog', { name: /select log targets/i })
     fireEvent.click(within(dialog).getByLabelText('cluster-a / prod / gateway-1'))
 
+    expect(within(dialog).getByLabelText('cluster-a / prod / gateway-1')).toBeChecked()
+    expect(within(dialog).getByText('2 selected · applying…')).toBeInTheDocument()
+    expect(within(dialog).getByRole('status', { name: /selection shown immediately/i })).toHaveTextContent(/applying target change/i)
+    expect(within(dialog).getByText('cluster-a / prod / gateway-1 ×')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('ctx / default / worker-1')).toBeDisabled()
     fireEvent.click(within(dialog).getByLabelText('ctx / default / worker-1'))
     expect(onPodChange).toHaveBeenCalledTimes(1)
