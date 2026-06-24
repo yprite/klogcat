@@ -1,5 +1,5 @@
 import type { SourceLogType } from '../types/log'
-import { useKubeStore } from '../stores/kubeStore'
+import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
@@ -18,7 +18,7 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const source = settings?.logSources[primarySourceType]
   const targets = kube.getSelectedPodTargets()
   const containerFor = (containers: string[]) => source && containers.includes(source.container) ? source.container : containers[0] ?? source?.container ?? ''
-  const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running' || !containerFor(t.pod.containers))
+  const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running')
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
@@ -32,7 +32,7 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     if (disabledReason || !settings) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
 
     const replaceSelectedPod = (context: string, namespace: string, stalePod: string, fallbackPod: string) => {
-      const key = `${context}\u0000${namespace}`
+      const key = scopeKey(context, namespace)
       const current = useKubeStore.getState().selectedPods[key] ?? []
       const next = current.map((pod) => pod === stalePod ? fallbackPod : pod)
       useKubeStore.setState((state) => ({
@@ -41,9 +41,37 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
       }))
     }
 
+    const resolveLiveTargetsForStart = async () => {
+      await useKubeStore.getState().refreshPodsForSelections()
+      const state = useKubeStore.getState()
+      const resolved: typeof targets = []
+      const selectedEntries = Object.entries(state.selectedPods)
+      if (selectedEntries.length === 0) return useKubeStore.getState().getSelectedPodTargets()
+      for (const [key, selectedNames] of selectedEntries) {
+        const [context, namespace] = key.split('\u0000')
+        const pods = state.podsByScope[key] ?? []
+        for (const selectedName of selectedNames) {
+          const exact = pods.find((pod) => pod.name === selectedName)
+          if (exact) {
+            resolved.push({ context, namespace, pod: exact })
+            continue
+          }
+          const previousPod = targets.find((target) => target.context === context && target.namespace === namespace && target.pod.name === selectedName)?.pod
+          const stalePod = previousPod ?? { name: selectedName, namespace, phase: 'Running' as const, containers: pods[0]?.containers ?? [] }
+          const fallbackPod = findFallbackPod(stalePod, pods, containerFor(stalePod.containers))
+          if (fallbackPod) {
+            replaceSelectedPod(context, namespace, selectedName, fallbackPod.name)
+            log.recordActionDebug(`Pod live resolve: ${context}/${namespace}/${selectedName} -> ${fallbackPod.name}`)
+            resolved.push({ context, namespace, pod: fallbackPod })
+          }
+        }
+      }
+      return resolved
+    }
+
     const resolveFallbackTarget = async (target: typeof targets[number], container: string) => {
       await useKubeStore.getState().refreshPodsForSelections()
-      const key = `${target.context}\u0000${target.namespace}`
+      const key = scopeKey(target.context, target.namespace)
       const refreshedPods = useKubeStore.getState().podsByScope[key] ?? []
       if (refreshedPods.some((pod) => pod.name === target.pod.name)) return undefined
       const fallbackPod = findFallbackPod(target.pod, refreshedPods, container)
@@ -72,7 +100,10 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
       }
     }
 
-    for (const originalTarget of targets) {
+    const liveTargets = await resolveLiveTargetsForStart()
+    if (liveTargets.length === 0) { log.markError(undefined, 'No live pod found for selected target'); return }
+
+    for (const originalTarget of liveTargets) {
       let target = originalTarget
       for (const selectedSourceType of selectedSourceTypes) {
         const result = await launch(target, selectedSourceType)

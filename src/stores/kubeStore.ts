@@ -118,8 +118,6 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     if (!cache) { set({ cacheLoaded: true }); return false }
     const selectedContext = get().selectedContext ?? cache.currentContext ?? first(cache.contexts)?.name
     const selectedContexts = get().selectedContexts.length ? get().selectedContexts : selectedContext ? [selectedContext] : []
-    const selectedNamespace = get().selectedNamespace
-    const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
     set({
       currentContext: cache.currentContext,
       contexts: cache.contexts,
@@ -127,8 +125,8 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       selectedContexts,
       namespacesByContext: cache.namespacesByContext,
       namespaces: selectedContext ? cache.namespacesByContext[selectedContext] ?? [] : [],
-      podsByScope: cache.podsByScope,
-      pods: selectedScope ? cache.podsByScope[selectedScope] ?? [] : [],
+      podsByScope: {},
+      pods: [],
       cacheLoaded: true,
       cacheLastRefreshAt: cache.savedAt,
       error: undefined,
@@ -328,12 +326,11 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     const firstNs = firstContext ? selectedNamespaces[firstContext][0] : undefined
     const pairs = Object.entries(selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => ({ context, namespace })))
     const cachedPodsByScope = get().podsByScope
-    const missingPairs = pairs.filter(({ context, namespace }) => !cachedPodsByScope[scopeKey(context, namespace)])
-    set({ selectedNamespaces, selectedNamespace: firstNs, selectedPod: undefined, selectedPods: {}, pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [], loadingPods: missingPairs.length > 0 })
-    if (missingPairs.length === 0) return
+    set({ selectedNamespaces, selectedNamespace: firstNs, selectedPod: undefined, selectedPods: {}, pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [], loadingPods: pairs.length > 0 })
+    if (pairs.length === 0) return
     try {
-      recordKubeDebug(`selectNamespaces loadPods start targets=${missingPairs.map(({ context, namespace }) => `${context}/${namespace}`).join(',') || '(none)'}`)
-      const entries = await Promise.all(missingPairs.map(async ({ context, namespace }) => [scopeKey(context, namespace), (await listPods(namespace, context)).pods] as const))
+      recordKubeDebug(`selectNamespaces loadPods start targets=${pairs.map(({ context, namespace }) => `${context}/${namespace}`).join(',') || '(none)'}`)
+      const entries = await Promise.all(pairs.map(async ({ context, namespace }) => [scopeKey(context, namespace), (await listPods(namespace, context)).pods] as const))
       const loadedPodsByScope = Object.fromEntries(entries)
       recordKubeDebug(`selectNamespaces loadPods ok ${entries.map(([key, pods]) => `${key.replace('\u0000', '/')}:${pods.length}`).join(', ') || '(none)'}`)
       set((s) => {

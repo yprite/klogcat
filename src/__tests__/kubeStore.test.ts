@@ -170,17 +170,18 @@ describe('kubeStore context selection', () => {
     expect(listPods).not.toHaveBeenCalledWith(expect.anything(), 'empty')
   })
 
-  it('uses cached pods when selecting a cached namespace', async () => {
+  it('loads live pods when selecting a namespace even if stale pods exist in memory', async () => {
     const key = scopeKey('ctx', 'default')
     useKubeStore.setState({ selectedContext: 'ctx', selectedContexts: ['ctx'], podsByScope: { [key]: [{ name: 'cached-pod', namespace: 'default', phase: 'Running', containers: ['app'] }] } })
+    vi.mocked(listPods).mockResolvedValueOnce({ context: 'ctx', namespace: 'default', pods: [{ name: 'live-pod', namespace: 'default', phase: 'Running', containers: ['app'] }] })
 
     await useKubeStore.getState().selectNamespaces([key])
 
-    expect(listPods).not.toHaveBeenCalled()
-    expect(useKubeStore.getState().pods).toEqual([{ name: 'cached-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
+    expect(listPods).toHaveBeenCalledWith('default', 'ctx')
+    expect(useKubeStore.getState().pods).toEqual([{ name: 'live-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
   })
 
-  it('hydrates cached targets before making kubectl calls', () => {
+  it('hydrates cached contexts and namespaces but ignores stale cached pods', () => {
     writeKubeCache({
       savedAt: Date.now(),
       currentContext: 'ctx',
@@ -194,6 +195,7 @@ describe('kubeStore context selection', () => {
     expect(loaded).toBe(true)
     expect(useKubeStore.getState().contexts).toEqual([{ name: 'ctx' }])
     expect(useKubeStore.getState().namespacesByContext).toEqual({ ctx: [{ name: 'default' }] })
+    expect(useKubeStore.getState().podsByScope).toEqual({})
     expect(listContexts).not.toHaveBeenCalled()
     expect(listNamespaces).not.toHaveBeenCalled()
     expect(listPods).not.toHaveBeenCalled()
