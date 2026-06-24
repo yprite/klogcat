@@ -229,16 +229,11 @@ fn filter_namespaces_by_access<F>(
 where
     F: FnMut(&str) -> bool,
 {
-    let filtered: Vec<_> = namespaces
+    namespaces
         .iter()
         .filter(|namespace| can_access(&namespace.name))
         .cloned()
-        .collect();
-    if filtered.is_empty() && !namespaces.is_empty() {
-        namespaces
-    } else {
-        filtered
-    }
+        .collect()
 }
 
 fn filter_namespaces_with_pod_access(
@@ -251,7 +246,6 @@ fn filter_namespaces_with_pod_access(
         });
     }
 
-    let raw_namespaces = namespaces.clone();
     let worker_count = namespaces.len().min(MAX_NAMESPACE_AUTH_WORKERS);
     let queue = Arc::new(Mutex::new(
         namespaces
@@ -284,11 +278,7 @@ fn filter_namespaces_with_pod_access(
         .into_iter()
         .filter_map(|(_, namespace, allowed)| allowed.then_some(namespace))
         .collect::<Vec<_>>();
-    if filtered.is_empty() && !raw_namespaces.is_empty() {
-        raw_namespaces
-    } else {
-        filtered
-    }
+    filtered
 }
 pub fn parse_pods_json(
     context: Option<String>,
@@ -383,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn namespace_access_filter_falls_back_when_all_auth_checks_deny() {
+    fn namespace_access_filter_returns_empty_when_all_auth_checks_deny() {
         let namespaces = vec![
             NamespaceInfo {
                 name: "default".into(),
@@ -392,7 +382,7 @@ mod tests {
                 name: "team-a".into(),
             },
         ];
-        let filtered = filter_namespaces_by_access(namespaces.clone(), |_| false);
-        assert_eq!(filtered, namespaces);
+        let filtered = filter_namespaces_by_access(namespaces, |_| false);
+        assert!(filtered.is_empty());
     }
 }

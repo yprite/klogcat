@@ -47,7 +47,11 @@ function resetKube() {
 }
 
 describe('TopBar target picker', () => {
-  beforeEach(() => resetKube())
+  beforeEach(() => {
+    resetKube()
+    vi.clearAllMocks()
+    vi.mocked(listNamespaces).mockImplementation(async (context?: string) => ({ context, namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] }))
+  })
 
   it('opens a tree target picker instead of exposing three native multi-selects', () => {
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
@@ -119,13 +123,14 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByLabelText('Selected targets')).toHaveClass('overflow-y-auto')
   })
 
-  it('hides clusters that cannot load namespaces', async () => {
+  it('hides clusters that cannot load pod-accessible namespaces', async () => {
     vi.mocked(listNamespaces).mockImplementation(async (context?: string) => {
       if (context === 'blocked') throw { code: 'list_namespaces_failed', message: 'failed to list namespaces' }
+      if (context === 'empty') return { context, namespaces: [] }
       return { context, namespaces: [{ name: 'default' }] }
     })
     useKubeStore.setState({
-      contexts: [{ name: 'ctx' }, { name: 'blocked' }],
+      contexts: [{ name: 'ctx' }, { name: 'blocked' }, { name: 'empty' }],
       selectedContext: 'ctx',
       selectedContexts: ['ctx'],
       namespacesByContext: { ctx: [{ name: 'default' }] },
@@ -136,6 +141,7 @@ describe('TopBar target picker', () => {
     const dialog = screen.getByRole('dialog', { name: /select log targets/i })
 
     await waitFor(() => expect(within(dialog).queryByText('blocked')).not.toBeInTheDocument())
+    expect(within(dialog).queryByText('empty')).not.toBeInTheDocument()
     expect(within(dialog).getByText('ctx')).toBeInTheDocument()
   })
 

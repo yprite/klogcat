@@ -48,7 +48,15 @@ function resetKubeStore() {
 }
 
 describe('kubeStore context selection', () => {
-  beforeEach(() => { resetKubeStore(); localStorage.clear(); vi.clearAllMocks() })
+  beforeEach(() => {
+    resetKubeStore()
+    localStorage.clear()
+    vi.clearAllMocks()
+    vi.mocked(getCurrentContext).mockImplementation(async () => 'ctx')
+    vi.mocked(listContexts).mockImplementation(async () => ({ contexts: [{ name: 'ctx' }, { name: 'cluster-a' }] }))
+    vi.mocked(listNamespaces).mockImplementation(async (context?: string) => ({ namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] }))
+    vi.mocked(listPods).mockImplementation(async (namespace: string, context?: string) => ({ context, namespace, pods: [{ name: `${namespace}-pod`, namespace, phase: 'Running', containers: ['app'] }] }))
+  })
 
   it('preserves namespace and pod selections for contexts that remain selected', async () => {
     const clusterScope = scopeKey('cluster-a', 'prod')
@@ -127,10 +135,28 @@ describe('kubeStore context selection', () => {
     expect(state.namespacesByContext.blocked).toBeUndefined()
   })
 
+  it('hides a context when no namespaces are pod-accessible', async () => {
+    vi.mocked(listNamespaces).mockResolvedValueOnce({ namespaces: [] })
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }, { name: 'empty' }],
+      selectedContext: 'ctx',
+      selectedContexts: ['ctx', 'empty'],
+      namespacesByContext: { ctx: [{ name: 'default' }] },
+    })
+
+    await useKubeStore.getState().ensureNamespacesForContexts(['empty'])
+
+    const state = useKubeStore.getState()
+    expect(state.contexts).toEqual([{ name: 'ctx' }])
+    expect(state.selectedContexts).toEqual(['ctx'])
+    expect(state.namespacesByContext.empty).toBeUndefined()
+  })
+
   it('excludes inaccessible contexts during full target refresh', async () => {
-    vi.mocked(listContexts).mockResolvedValueOnce({ contexts: [{ name: 'ctx' }, { name: 'blocked' }, { name: 'cluster-a' }] })
+    vi.mocked(listContexts).mockResolvedValueOnce({ contexts: [{ name: 'ctx' }, { name: 'blocked' }, { name: 'empty' }, { name: 'cluster-a' }] })
     vi.mocked(listNamespaces).mockImplementation(async (context?: string) => {
       if (context === 'blocked') throw { code: 'list_namespaces_failed', message: 'failed to list namespaces' }
+      if (context === 'empty') return { namespaces: [] }
       return { namespaces: [{ name: context === 'cluster-a' ? 'prod' : 'default' }] }
     })
     useKubeStore.setState({ cacheLastRefreshAt: Date.now() - 25 * 60 * 60 * 1000 })
@@ -139,7 +165,9 @@ describe('kubeStore context selection', () => {
 
     expect(useKubeStore.getState().contexts).toEqual([{ name: 'ctx' }, { name: 'cluster-a' }])
     expect(useKubeStore.getState().namespacesByContext.blocked).toBeUndefined()
+    expect(useKubeStore.getState().namespacesByContext.empty).toBeUndefined()
     expect(listPods).not.toHaveBeenCalledWith(expect.anything(), 'blocked')
+    expect(listPods).not.toHaveBeenCalledWith(expect.anything(), 'empty')
   })
 
   it('uses cached pods when selecting a cached namespace', async () => {

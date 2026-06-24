@@ -153,7 +153,7 @@ export const useKubeStore = create<KubeState>((set, get) => ({
           return { ok: false as const, context: context.name }
         }
       })
-      const namespaceEntries = namespaceResults.flatMap((result) => result.ok ? [[result.context, result.namespaces] as const] : [])
+      const namespaceEntries = namespaceResults.flatMap((result) => result.ok && result.namespaces.length > 0 ? [[result.context, result.namespaces] as const] : [])
       const accessibleContexts = contexts.filter((context) => namespaceEntries.some(([name]) => name === context.name))
       const namespacesByContext = Object.fromEntries(namespaceEntries)
       set((s) => ({ ...restrictStateToContexts({ ...s, namespacesByContext } as KubeState, accessibleContexts, currentContext), namespacesByContext, namespaces: (s.selectedContext && namespacesByContext[s.selectedContext]) ? namespacesByContext[s.selectedContext] : (first(accessibleContexts) ? namespacesByContext[first(accessibleContexts)!.name] ?? [] : []), loadingNamespaces: false, loadingPods: true }))
@@ -258,12 +258,13 @@ export const useKubeStore = create<KubeState>((set, get) => ({
           return { ok: false as const, ctx }
         }
       }))
-      const entries = results.flatMap((result) => result.ok ? [[result.ctx, result.namespaces] as const] : [])
-      const inaccessible = new Set(results.filter((result) => !result.ok).map((result) => result.ctx))
+      const entries = results.flatMap((result) => result.ok && result.namespaces.length > 0 ? [[result.ctx, result.namespaces] as const] : [])
+      const unavailable = new Set(results.filter((result) => !result.ok || result.namespaces.length === 0).map((result) => result.ctx))
       recordKubeDebug(`ensureNamespaces ok ${entries.map(([ctx, namespaces]) => `${ctx}:${namespaces.length}`).join(', ') || '(none)'}`)
       set((s) => {
-        const contexts = s.contexts.filter((context) => !inaccessible.has(context.name))
-        const namespacesByContext = { ...s.namespacesByContext, ...Object.fromEntries(entries) }
+        const contexts = s.contexts.filter((context) => !unavailable.has(context.name))
+        const mergedNamespacesByContext = { ...s.namespacesByContext, ...Object.fromEntries(entries) }
+        const namespacesByContext = Object.fromEntries(Object.entries(mergedNamespacesByContext).filter(([context]) => !unavailable.has(context)))
         return { ...restrictStateToContexts({ ...s, namespacesByContext } as KubeState, contexts, s.currentContext), namespacesByContext, loadingNamespaces: false, error: undefined }
       })
       persistKubeCache(get())
