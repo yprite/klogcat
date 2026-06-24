@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLogStore } from '../stores/logStore'
+import { useKubeStore } from '../stores/kubeStore'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
 import { sourceLabels, sourceTypes } from '../utils/sourceLabels'
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsModal({ open, onClose, onRestart = () => window.location.reload() }: { open: boolean; onClose: () => void; onRestart?: () => void }) {
   const { settings, saveSettings, resetSettings, error, loading } = useSettingsStore()
   const recordActionDebug = useLogStore((s) => s.recordActionDebug)
   const [draft, setDraft] = useState<PersistedSettings>(settings ?? defaultSettings)
@@ -31,6 +32,15 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     const ok = await saveSettings(draft)
     if (ok) onClose()
   }
+  const handleClearTargetCache = () => {
+    recordActionDebug('Clear target cache clicked')
+    useKubeStore.getState().clearCachedTargets()
+    setNotice('Target cache cleared. Restart to reload fresh Kubernetes targets.')
+  }
+  const handleRestart = () => {
+    recordActionDebug('Restart app clicked')
+    onRestart()
+  }
   return <div className="fixed inset-0 bg-black/60 grid place-items-center z-10"><div className="bg-slate-900 border border-slate-700 rounded p-4 w-[720px] max-w-[95vw] space-y-3">
     <div className="flex justify-between"><h2 className="text-lg font-bold">Settings</h2><button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button></div>
     <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
@@ -42,6 +52,14 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
     {notice && <p className="text-green-300">{notice}</p>}
     {error && <p className="text-red-300">{error.message}</p>}
+    <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+      <h3 className="text-sm font-semibold text-white">Target cache</h3>
+      <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button className="rounded border border-yellow-500 px-3 py-1 text-sm text-yellow-100 hover:bg-yellow-500/10" disabled={loading} onClick={handleClearTargetCache}>Clear Target Cache</button>
+        <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>Restart App</button>
+      </div>
+    </section>
     <div className="flex gap-2 justify-end"><button disabled={loading} onClick={handleReset}>Reset</button><button disabled={loading} onClick={handleSave}>Save</button></div>
   </div></div>
 }

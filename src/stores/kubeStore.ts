@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { getCurrentContext, listContexts, listNamespaces, listPods } from '../commands/tauriKube'
 import type { CommandError } from '../commands/types'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
-import { isKubeCacheStale, readKubeCache, writeKubeCache } from '../utils/kubeCache'
+import { clearKubeCache, isKubeCacheStale, readKubeCache, writeKubeCache } from '../utils/kubeCache'
 
 function recordKubeDebug(message: string) {
   console.info(`[klogcat kube] ${message}`)
@@ -37,6 +37,7 @@ type KubeState = {
   cacheLastRefreshAt?: number
   error?: CommandError
   loadCachedTargets(): boolean
+  clearCachedTargets(): void
   shouldRefreshCache(now?: number): boolean
   refreshAllTargets(force?: boolean): Promise<void>
   refreshPodsForSelections(): Promise<void>
@@ -133,6 +134,26 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       error: undefined,
     })
     return true
+  },
+  clearCachedTargets() {
+    clearKubeCache()
+    set({
+      contexts: [],
+      currentContext: undefined,
+      selectedContext: undefined,
+      selectedContexts: [],
+      namespaces: [],
+      namespacesByContext: {},
+      selectedNamespace: undefined,
+      selectedNamespaces: {},
+      pods: [],
+      podsByScope: {},
+      selectedPod: undefined,
+      selectedPods: {},
+      cacheLoaded: true,
+      cacheLastRefreshAt: undefined,
+      error: undefined,
+    })
   },
   shouldRefreshCache(now) { return isKubeCacheStale(get().cacheLastRefreshAt, now) },
   async refreshAllTargets(force = false) {
@@ -365,7 +386,11 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       const pods = state.podsByScope[key] ?? []
       for (const name of names) {
         const pod = pods.find((p) => p.name === name)
-        if (pod) targets.push({ context, namespace, pod })
+        if (pod) {
+          targets.push({ context, namespace, pod })
+        } else {
+          targets.push({ context, namespace, pod: { name, namespace, phase: 'Running', containers: first(pods)?.containers ?? [] } })
+        }
       }
     }
     if (targets.length === 0 && state.selectedContext && state.selectedNamespace && state.selectedPod) {

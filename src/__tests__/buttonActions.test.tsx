@@ -186,6 +186,71 @@ describe('button actions', () => {
     expect(useLogStore.getState().actionDebugMessages.some((message) => message.includes('Pod fallback'))).toBe(true)
   })
 
+  it('still attempts fallback when the selected cached pod is already missing from the loaded pod list', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(startLogStream)
+      .mockRejectedValueOnce({ code: 'stream_spawn_failed', message: 'pods "api-7d9c8f6b8d-x2abc" not found' })
+      .mockResolvedValueOnce(undefined)
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'foo',
+      pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9c8f6b8d-x2abc'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ pod: 'api-7d9c8f6b8d-x2abc' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ pod: 'api-64cc9db7fd-k9f2p' }))
+    expect(useKubeStore.getState().selectedPods['ctx\u0000foo']).toEqual(['api-64cc9db7fd-k9f2p'])
+  })
+
+  it('clears Kubernetes target cache from settings and exposes restart', () => {
+    const restart = vi.fn()
+    const storage = (() => {
+      const values = new Map<string, string>()
+      return {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value) },
+        removeItem: (key: string) => { values.delete(key) },
+        clear: () => { values.clear() },
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        get length() { return values.size },
+      } as Storage
+    })()
+    vi.stubGlobal('localStorage', storage)
+    localStorage.setItem('klogcat:kube-cache:v1', JSON.stringify({ version: 1, savedAt: Date.now(), currentContext: 'ctx', contexts: [{ name: 'ctx' }], namespacesByContext: { ctx: [{ name: 'foo' }] }, podsByScope: { 'ctx\u0000foo': [{ name: 'api-1', namespace: 'foo', phase: 'Running', containers: ['app'] }] } }))
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }],
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: { 'ctx\u0000foo': [{ name: 'api-1', namespace: 'foo', phase: 'Running', containers: ['app'] }] },
+      selectedPods: { 'ctx\u0000foo': ['api-1'] },
+      cacheLastRefreshAt: Date.now(),
+    })
+
+    render(<SettingsModal open onClose={() => {}} onRestart={restart} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /clear target cache/i }))
+    expect(localStorage.getItem('klogcat:kube-cache:v1')).toBeNull()
+    expect(useKubeStore.getState().selectedPods).toEqual({})
+    expect(screen.getByText(/target cache cleared/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /restart app/i }))
+    expect(restart).toHaveBeenCalledTimes(1)
+  })
+
   it('shows animated progress while streams are starting', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
     let resolveStart!: () => void
