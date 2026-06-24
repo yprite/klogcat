@@ -37,6 +37,7 @@ function resetKubeStore() {
     podsByScope: {},
     selectedPod: undefined,
     selectedPods: {},
+    selectedWorkloads: {},
     loadingContexts: false,
     loadingNamespaces: false,
     loadingPods: false,
@@ -179,6 +180,40 @@ describe('kubeStore context selection', () => {
 
     expect(listPods).toHaveBeenCalledWith('default', 'ctx')
     expect(useKubeStore.getState().pods).toEqual([{ name: 'live-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
+  })
+
+  it('keeps exact selected pods when they are still live and uses workload only for stale selections', () => {
+    const key = scopeKey('ctx', 'default')
+    useKubeStore.setState({
+      selectedContext: 'ctx',
+      selectedNamespace: 'default',
+      podsByScope: {
+        [key]: [
+          { name: 'api-7d9c8f6b8d-x2abc', namespace: 'default', phase: 'Running', containers: ['app'] },
+          { name: 'api-7d9c8f6b8d-z9999', namespace: 'default', phase: 'Running', containers: ['app'] },
+          { name: 'worker-6f87d5b7c9-a1111', namespace: 'default', phase: 'Running', containers: ['app'] },
+        ],
+      },
+    })
+
+    useKubeStore.getState().selectPods([`${key}\u0000api-7d9c8f6b8d-z9999`])
+    expect(useKubeStore.getState().selectedWorkloads[key]).toEqual(['api'])
+    expect(useKubeStore.getState().getSelectedPodTargets()).toEqual([
+      { context: 'ctx', namespace: 'default', pod: { name: 'api-7d9c8f6b8d-z9999', namespace: 'default', phase: 'Running', containers: ['app'] } },
+    ])
+
+    useKubeStore.setState({
+      podsByScope: {
+        [key]: [
+          { name: 'api-64cc9db7fd-k9f2p', namespace: 'default', phase: 'Running', containers: ['app'] },
+          { name: 'worker-6f87d5b7c9-a1111', namespace: 'default', phase: 'Running', containers: ['app'] },
+        ],
+      },
+    })
+
+    expect(useKubeStore.getState().getSelectedPodTargets()).toEqual([
+      { context: 'ctx', namespace: 'default', pod: { name: 'api-64cc9db7fd-k9f2p', namespace: 'default', phase: 'Running', containers: ['app'] } },
+    ])
   })
 
   it('hydrates cached contexts and namespaces but ignores stale cached pods', () => {
