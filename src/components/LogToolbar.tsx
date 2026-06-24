@@ -4,6 +4,7 @@ import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildScloudLogPath } from '../utils/logPath'
+import { findFallbackPod } from '../utils/podFallback'
 import { AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
 import { LogTypeSelector } from './LogTypeSelector'
 
@@ -29,23 +30,59 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     if (startBusy) { log.markError(undefined, `Busy: ${log.streamStatus}`); return }
     if (alreadyRunning && !allowRestart) { log.markError(log.activeStreamId, 'Stream is already running'); return }
     if (disabledReason || !settings) { log.markError(undefined, disabledReason || 'invalid_source_config'); return }
-    for (const target of targets) {
+
+    const replaceSelectedPod = (context: string, namespace: string, stalePod: string, fallbackPod: string) => {
+      const key = `${context}\u0000${namespace}`
+      const current = useKubeStore.getState().selectedPods[key] ?? []
+      const next = current.map((pod) => pod === stalePod ? fallbackPod : pod)
+      useKubeStore.setState((state) => ({
+        selectedPods: { ...state.selectedPods, [key]: next },
+        selectedPod: state.selectedPod === stalePod ? fallbackPod : state.selectedPod,
+      }))
+    }
+
+    const resolveFallbackTarget = async (target: typeof targets[number], container: string) => {
+      await useKubeStore.getState().refreshPodsForSelections()
+      const key = `${target.context}\u0000${target.namespace}`
+      const refreshedPods = useKubeStore.getState().podsByScope[key] ?? []
+      if (refreshedPods.some((pod) => pod.name === target.pod.name)) return undefined
+      const fallbackPod = findFallbackPod(target.pod, refreshedPods, container)
+      if (!fallbackPod) return undefined
+      replaceSelectedPod(target.context, target.namespace, target.pod.name, fallbackPod.name)
+      log.recordActionDebug(`Pod fallback: ${target.context}/${target.namespace}/${target.pod.name} -> ${fallbackPod.name}`)
+      return { ...target, pod: fallbackPod }
+    }
+
+    const launch = async (target: typeof targets[number], selectedSourceType: SourceLogType) => {
       const container = containerFor(target.pod.containers)
-      for (const selectedSourceType of selectedSourceTypes) {
-        const filePath = buildScloudLogPath(target.namespace, target.pod.name, selectedSourceType)
-        const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${selectedSourceType}/${filePath}`
-        log.prepareStarting({ streamId, sourceId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
-        try {
-          await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
-          if (!useLogStore.getState().activeStreamIds.includes(streamId)) {
-            try { await stopLogStream(streamId) } catch { /* best-effort cleanup for cancelled start */ }
-            return
-          }
-          log.markRunning(streamId)
-        } catch (e) {
-          log.markStartRejected(streamId, e)
-          void useKubeStore.getState().refreshPodsForSelections()
+      const filePath = buildScloudLogPath(target.namespace, target.pod.name, selectedSourceType)
+      const streamId = crypto.randomUUID(); const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${selectedSourceType}/${filePath}`
+      log.prepareStarting({ streamId, sourceId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
+      try {
+        await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
+        if (!useLogStore.getState().activeStreamIds.includes(streamId)) {
+          try { await stopLogStream(streamId) } catch { /* best-effort cleanup for cancelled start */ }
+          return { status: 'cancelled' as const, container }
         }
+        log.markRunning(streamId)
+        return { status: 'started' as const, container }
+      } catch (error) {
+        log.markStartRejected(streamId, error)
+        return { status: 'failed' as const, container }
+      }
+    }
+
+    for (const originalTarget of targets) {
+      let target = originalTarget
+      for (const selectedSourceType of selectedSourceTypes) {
+        const result = await launch(target, selectedSourceType)
+        if (result.status === 'cancelled') return
+        if (result.status === 'started') continue
+        const fallbackTarget = await resolveFallbackTarget(target, result.container)
+        if (!fallbackTarget) continue
+        target = fallbackTarget
+        const retry = await launch(target, selectedSourceType)
+        if (retry.status === 'cancelled') return
       }
     }
   }

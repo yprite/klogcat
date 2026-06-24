@@ -6,6 +6,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { listPods } from '../commands/tauriKube'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(async () => ({ settings: defaultSettings })),
@@ -17,6 +18,13 @@ vi.mock('../commands/tauriLogs', () => ({
   startLogStream: vi.fn(async () => undefined),
   stopLogStream: vi.fn(async () => undefined),
   stopAllLogStreams: vi.fn(async () => undefined),
+}))
+
+vi.mock('../commands/tauriKube', () => ({
+  getCurrentContext: vi.fn(async () => 'ctx'),
+  listContexts: vi.fn(async () => ({ contexts: [{ name: 'ctx' }] })),
+  listNamespaces: vi.fn(async () => ({ namespaces: [{ name: 'foo' }] })),
+  listPods: vi.fn(async (namespace: string, context?: string) => ({ context, namespace, pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace, phase: 'Running', containers: ['app'] }] })),
 }))
 
 function resetStores() {
@@ -146,6 +154,36 @@ describe('button actions', () => {
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('refreshes pods and retries with a matching fallback pod when a cached pod disappeared', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(startLogStream)
+      .mockRejectedValueOnce({ code: 'stream_spawn_failed', message: 'pods "api-7d9c8f6b8d-x2abc" not found' })
+      .mockResolvedValueOnce(undefined)
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'foo',
+      pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9c8f6b8d-x2abc'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ pod: 'api-7d9c8f6b8d-x2abc' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ pod: 'api-64cc9db7fd-k9f2p', filePath: '/scloud/foo/logs/api-64cc9db7fd-k9f2p/foo.log' }))
+    expect(useKubeStore.getState().selectedPods['ctx\u0000foo']).toEqual(['api-64cc9db7fd-k9f2p'])
+    expect(useLogStore.getState().actionDebugMessages.some((message) => message.includes('Pod fallback'))).toBe(true)
   })
 
   it('shows animated progress while streams are starting', async () => {
