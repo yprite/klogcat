@@ -40,7 +40,7 @@ pub fn default_settings() -> PersistedSettings {
         buffer_limit: 50_000,
         log_sources: BTreeMap::from([
             (
-                "app".into(),
+                "info".into(),
                 LogSourceConfig {
                     container: "app".into(),
                     file_path: "/var/log/app/info.log".into(),
@@ -83,10 +83,10 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
         e.push(err("bufferLimit", "bufferLimit must be 1000..200000"));
     }
     let keys: Vec<_> = s.log_sources.keys().map(String::as_str).collect();
-    if keys != vec!["access", "app", "error"] {
+    if keys != vec!["access", "error", "info"] {
         e.push(err(
             "logSources",
-            "logSources must contain exactly app/access/error keys",
+            "logSources must contain exactly info/access/error keys",
         ));
     }
     for (k, v) in &s.log_sources {
@@ -120,6 +120,20 @@ fn path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, Command
                 .with_details(e.to_string())
         })?
         .join("settings.json"))
+}
+
+fn migrate_legacy_app_log_source(value: &mut serde_json::Value) -> bool {
+    let Some(log_sources) = value.get_mut("logSources").and_then(|v| v.as_object_mut()) else {
+        return false;
+    };
+    if log_sources.contains_key("info") {
+        return false;
+    }
+    let Some(app_config) = log_sources.remove("app") else {
+        return false;
+    };
+    log_sources.insert("info".into(), app_config);
+    true
 }
 pub fn load<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
@@ -162,7 +176,7 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
             })
         }
     };
-    let value: serde_json::Value = match serde_json::from_str(&text) {
+    let mut value: serde_json::Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(e) => {
             return Ok(GetSettingsResponse {
@@ -175,6 +189,7 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
             })
         }
     };
+    migrate_legacy_app_log_source(&mut value);
     let settings: PersistedSettings = serde_json::from_value(value).map_err(|e| {
         CommandError::new("settings_validation_failed", "settings validation failed")
             .with_details(e.to_string())
@@ -245,12 +260,34 @@ mod tests {
     fn uppercase_keys_invalid() {
         let mut s = default_settings();
         s.log_sources = BTreeMap::from([(
-            "APP".into(),
+            "INFO".into(),
             LogSourceConfig {
                 container: "app".into(),
                 file_path: "/x".into(),
             },
         )]);
         assert!(!validate_settings(&s).is_empty());
+    }
+
+    #[test]
+    fn migrates_legacy_app_log_source_key_to_info() {
+        let mut value = serde_json::json!({
+            "schemaVersion": 1,
+            "defaultNamespace": null,
+            "initialTailLines": 200,
+            "bufferLimit": 50000,
+            "logSources": {
+                "app": { "container": "app", "filePath": "/var/log/app/info.log" },
+                "access": { "container": "app", "filePath": "/var/log/app/access.log" },
+                "error": { "container": "app", "filePath": "/var/log/app/error.log" }
+            }
+        });
+
+        assert!(migrate_legacy_app_log_source(&mut value));
+        let settings: PersistedSettings = serde_json::from_value(value).unwrap();
+
+        assert!(settings.log_sources.contains_key("info"));
+        assert!(!settings.log_sources.contains_key("app"));
+        assert!(validate_settings(&settings).is_empty());
     }
 }

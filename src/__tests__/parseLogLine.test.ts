@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import accFixture from '../__fixtures__/acc.valid.jsonl?raw'
-import appFixture from '../__fixtures__/app.valid.jsonl?raw'
+import infoFixture from '../__fixtures__/info.valid.jsonl?raw'
 import errFixture from '../__fixtures__/err.valid.jsonl?raw'
 import invalidFixture from '../__fixtures__/invalid.jsonl?raw'
 import type { SourceMeta } from '../types/log'
@@ -29,10 +29,10 @@ describe('parseLogLine', () => {
     expect(row.traceId).toBe('body-trace-1'); expect(row.trId).toBe('err-trace-1'); expect(row.errorServerName).toBe('dapi'); expect(row.errorTimestamp).toContain('2026')
   })
   it('keeps ERR parsed with empty errors', () => { const row = parseLogLine(lines(errFixture)[1], 'error', meta('error'), 1); expect(row.parseStatus).toBe('parsed'); expect(row.summary).toBe('GET /x') })
-  it('parses APP summaries', () => {
-    expect(parseLogLine(lines(appFixture)[0], 'app', meta('app'), 1).summary).toBe('application started')
-    expect(parseLogLine(lines(appFixture)[1], 'app', meta('app'), 1).summary).toBe('plain body message')
-    expect(parseLogLine(lines(appFixture)[2], 'app', meta('app'), 1).summary).toBe('{"event":"ready","ok":true}')
+  it('parses INFO summaries', () => {
+    expect(parseLogLine(lines(infoFixture)[0], 'info', meta('info'), 1).summary).toBe('application started')
+    expect(parseLogLine(lines(infoFixture)[1], 'info', meta('info'), 1).summary).toBe('plain body message')
+    expect(parseLogLine(lines(infoFixture)[2], 'info', meta('info'), 1).summary).toBe('{"event":"ready","ok":true}')
   })
-  it('falls back to raw for invalid JSON', () => { const row = parseLogLine(lines(invalidFixture)[0], 'app', meta('app'), 1); expect(row.parseStatus).toBe('raw'); expect(row.summary).toBe('not json at all'); expect(row.raw).toBe('not json at all') })
+  it('falls back to raw for invalid JSON', () => { const row = parseLogLine(lines(invalidFixture)[0], 'info', meta('info'), 1); expect(row.parseStatus).toBe('raw'); expect(row.summary).toBe('not json at all'); expect(row.raw).toBe('not json at all') })
 })

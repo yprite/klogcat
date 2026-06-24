@@ -9,7 +9,7 @@ import { accessLogColumns, errorLogColumns, labelForColumn } from '../utils/logC
 const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"hello"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), status: '500', method: 'POST', url: '/x', elapsed: 42, body: '{"rcode":"5000999"}', summary: 'POST /x 500 42ms', trId: 't' }
 const okRow: ParsedLogLine = { ...row, id: 3, status: '200', method: 'GET', url: '/ok', summary: 'GET /ok 200 5ms', raw: '{"status":200}' }
 const errRow: ParsedLogLine = { id: 2, streamId: 's', sourceId: 'src', sourceType: 'error', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"oops"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), errorMethod: 'GET', errorPath: '/fail', errorReason: 'boom', summary: 'boom GET /fail', traceId: 'trace' }
-const appRow: ParsedLogLine = { id: 10, streamId: 's', sourceId: 'src', sourceType: 'app', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"old app"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), summary: 'old app' }
+const appRow: ParsedLogLine = { id: 10, streamId: 's', sourceId: 'src', sourceType: 'info', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"old app"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), summary: 'old app' }
 
 describe('LogRow', () => {
   it('includes every visible key from the ACC and ERR sample logs as columns', () => {

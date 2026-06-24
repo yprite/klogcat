@@ -2,7 +2,7 @@ import type { SourceMeta } from '../types/log'
 import type { ParsedLogLineWithoutId } from './parserHelpers'
 import { base, nonEmptySummary, rec, str } from './parserHelpers'
 
-export function parseAppLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number): ParsedLogLineWithoutId {
+export function parseInfoLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number): ParsedLogLineWithoutId {
   const j = rec(json) ?? {}
   const body = j.body
   let bodySummary: string | undefined

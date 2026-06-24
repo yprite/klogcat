@@ -440,10 +440,10 @@ fn validate(r: &StartLogStreamRequest) -> Result<(), CommandError> {
             "stream request fields must be non-empty",
         ));
     }
-    if !matches!(r.source_type.as_str(), "app" | "access" | "error") {
+    if !matches!(r.source_type.as_str(), "info" | "access" | "error") {
         return Err(CommandError::new(
             "invalid_source_config",
-            "sourceType must be app, access, or error",
+            "sourceType must be info, access, or error",
         ));
     }
     if !is_dns_label(&r.namespace) {
@@ -826,14 +826,20 @@ mod mocked_process {
             namespace: "ns".into(),
             pod: "pod-1".into(),
             container: "c".into(),
-            source_type: "app".into(),
+            source_type: "info".into(),
             file_path: "/x".into(),
             initial_tail_lines: 1,
         }
     }
 
     fn env(stream_id: &str, raw: &str, received_at: u128, seq: u64) -> LogEnvelope {
-        LogEnvelope::new(stream_id.into(), "app".into(), raw.into(), received_at, seq)
+        LogEnvelope::new(
+            stream_id.into(),
+            "info".into(),
+            raw.into(),
+            received_at,
+            seq,
+        )
     }
 
     #[test]

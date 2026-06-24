@@ -50,7 +50,7 @@ describe('button actions', () => {
   beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
   it('keeps Start clickable and reports why it cannot start', () => {
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceType="info" />)
 
     const start = screen.getByRole('button', { name: 'Start' })
     expect(start).toBeEnabled()
@@ -62,7 +62,7 @@ describe('button actions', () => {
   })
 
   it('keeps Stop clickable and reports when no stream is active', () => {
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceType="info" />)
 
     const stop = screen.getByRole('button', { name: 'Stop' })
     expect(stop).toBeEnabled()
@@ -80,7 +80,7 @@ describe('button actions', () => {
       selectedPod: 'pod-1',
       pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['worker'] }],
     })
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceType="info" />)
 
     expect(screen.getByRole('combobox', { name: /container/i })).toHaveValue('worker')
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
@@ -93,14 +93,14 @@ describe('button actions', () => {
       selectedPod: 'pod-1',
       pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['app'] }],
     })
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceType="info" />)
 
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })
 
   it('records visible action debug when Start is clicked', () => {
-    render(<LogToolbar sourceType="app" />)
+    render(<LogToolbar sourceType="info" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
@@ -119,7 +119,7 @@ describe('button actions', () => {
       },
       selectedPods: { 'ctx\u0000default': ['pod-1'], 'cluster-a\u0000prod': ['pod-2'] },
     })
-    render(<LogToolbar sourceTypes={['app']} />)
+    render(<LogToolbar sourceTypes={['info']} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
@@ -128,7 +128,7 @@ describe('button actions', () => {
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
   })
 
-  it('starts APP, ACC, and ERR streams when all source types are selected', async () => {
+  it('starts INFO, ACC, and ERR streams when all source types are selected', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
     useKubeStore.setState({
       currentContext: 'ctx',
@@ -139,12 +139,12 @@ describe('button actions', () => {
       },
       selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
     })
-    render(<LogToolbar sourceTypes={['app', 'access', 'error']} />)
+    render(<LogToolbar sourceTypes={['info', 'access', 'error']} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(3))
-    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ sourceType: 'app', filePath: '/scloud/foo/logs/api-7d9/foo.log' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ sourceType: 'info', filePath: '/scloud/foo/logs/api-7d9/foo.log' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ sourceType: 'access', filePath: '/scloud/foo/logs/api-7d9/foo_ACC.log' }))
     expect(startLogStream).toHaveBeenNthCalledWith(3, expect.objectContaining({ sourceType: 'error', filePath: '/scloud/foo/logs/api-7d9/foo_ERR.log' }))
   })
@@ -162,7 +162,7 @@ describe('button actions', () => {
       },
       selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
     })
-    render(<LogToolbar sourceTypes={['app', 'access', 'error']} />)
+    render(<LogToolbar sourceTypes={['info', 'access', 'error']} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(1))
@@ -185,7 +185,7 @@ describe('button actions', () => {
       },
       selectedPods: { 'ctx\u0000foo': ['api-7d9'] },
     })
-    const { rerender } = render(<LogToolbar sourceType="app" />)
+    const { rerender } = render(<LogToolbar sourceType="info" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(startLogStream).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: '/scloud/foo/logs/api-7d9/foo.log' })))

@@ -8,7 +8,7 @@ import type { GrepMode } from '../utils/grep'
 
 export function LogRow({ row, grepQuery, grepMode = 'substring', visibleColumns, columnWidths, isNew = false, isSelected = false }: { row: ParsedLogLine; grepQuery: string; grepMode?: GrepMode; visibleColumns?: LogColumnKey[]; columnWidths?: LogColumnWidths; isNew?: boolean; isSelected?: boolean }) {
   const time = formatDisplayTime(row)
-  const hasColumnView = row.parseStatus === 'parsed' && row.sourceType !== 'app' && visibleColumns && visibleColumns.length > 0
+  const hasColumnView = row.parseStatus === 'parsed' && row.sourceType !== 'info' && visibleColumns && visibleColumns.length > 0
   let mid = ''
   if (row.parseStatus === 'raw') mid = row.raw
   else if (row.sourceType === 'access') mid = [row.status, row.method, row.url, row.elapsed !== undefined ? `${row.elapsed}ms` : undefined, row.summary, row.trId].filter(Boolean).join(' ')

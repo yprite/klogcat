@@ -7,8 +7,8 @@ import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildScloudLogPath } from '../utils/logPath'
 
 export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLogType; sourceTypes?: SourceLogType[] }) {
-  const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'app']
-  const primarySourceType = selectedSourceTypes[0] ?? 'app'
+  const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'info']
+  const primarySourceType = selectedSourceTypes[0] ?? 'info'
   const kube = useKubeStore(); const { settings } = useSettingsStore(); const log = useLogStore()
   const [containerOverride, setContainerOverride] = useState('')
   const startBusy = log.streamStatus === 'starting' || log.streamStatus === 'stopping'

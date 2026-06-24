@@ -161,7 +161,7 @@ function evalField(row: ParsedLogLine, key: string, value: string, regex: boolea
     const seconds = parseAge(value)
     return seconds === undefined ? false : ageSeconds(row) <= seconds
   }
-  if ((k === 'source' || k === 'type') && ['app','access','error'].includes(value)) return row.sourceType === value as SourceLogType
+  if ((k === 'source' || k === 'type') && ['info','access','error'].includes(value)) return row.sourceType === value as SourceLogType
   return textMatches(rowFieldValue(row, key), value, regex)
 }
 

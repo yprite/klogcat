@@ -14,14 +14,14 @@ vi.mock('../commands/tauriLogs', () => ({
 const meta = (streamId: string): ActiveStreamMeta => ({
   streamId,
   sourceId: 'src',
-  sourceType: 'app',
+  sourceType: 'info',
   namespace: 'ns',
   pod: 'pod',
   container: 'app',
   filePath: '/x',
 })
 
-describe('App log exit handling', () => {
+describe('Info log exit handling', () => {
   beforeEach(() => { resetLogStoreForTests(); vi.mocked(startLogStream).mockClear() })
 
   it('treats requested stops as stopped', () => {

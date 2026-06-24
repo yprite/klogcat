@@ -21,7 +21,7 @@ async function stopAndClearIfActive() {
 }
 
 export function AppShell({ eventError }: { eventError?: string }) {
-  const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['app'])
+  const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['info'])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
