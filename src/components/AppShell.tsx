@@ -25,7 +25,22 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
   const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
-  useEffect(() => { (async () => { await settings.loadSettings(); await kube.loadCurrentContext(); await kube.loadContexts(); await kube.loadNamespaces(); const s = useSettingsStore.getState().settings; const namespaces = useKubeStore.getState().namespaces; if (s?.defaultNamespace) { if (namespaces.some(ns => ns.name === s.defaultNamespace)) { await kube.selectNamespace(s.defaultNamespace); setDefaultNamespaceWarning(undefined) } else { setDefaultNamespaceWarning(`Default namespace "${s.defaultNamespace}" was not found in the selected context`) } } })() }, [])
+  useEffect(() => { (async () => {
+    await settings.loadSettings()
+    await kube.loadCurrentContext()
+    await kube.loadContexts()
+    const s = useSettingsStore.getState().settings
+    if (s?.defaultNamespace) {
+      await useKubeStore.getState().loadNamespaces()
+      const namespaces = useKubeStore.getState().namespaces
+      if (namespaces.some(ns => ns.name === s.defaultNamespace)) {
+        await useKubeStore.getState().selectNamespace(s.defaultNamespace)
+        setDefaultNamespaceWarning(undefined)
+      } else {
+        setDefaultNamespaceWarning(`Default namespace "${s.defaultNamespace}" was not found in the selected context`)
+      }
+    }
+  })() }, [])
   const changeSources = async (next: SourceLogType[]) => { log.recordActionDebug(`Sources clicked: ${next.join(', ') || '(none)'}`); if (next.length === sourceTypes.length && next.every((value, index) => value === sourceTypes[index])) return; await stopAndClearIfActive(); setSourceTypes(next) }
   const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectContexts(contexts) }
   const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespaces(namespaces) }

@@ -2,11 +2,9 @@ import { create } from 'zustand'
 import { getCurrentContext, listContexts, listNamespaces, listPods } from '../commands/tauriKube'
 import type { CommandError } from '../commands/types'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
-import { useLogStore } from './logStore'
 
 function recordKubeDebug(message: string) {
   console.info(`[klogcat kube] ${message}`)
-  useLogStore.getState().recordActionDebug(`Kube: ${message}`)
 }
 
 export const scopeKey = (context: string, namespace: string) => `${context}\u0000${namespace}`
@@ -39,6 +37,7 @@ type KubeState = {
   selectContext(context: string): Promise<void>
   selectContexts(contexts: string[]): Promise<void>
   loadNamespaces(context?: string): Promise<void>
+  ensureNamespacesForContexts(contexts: string[]): Promise<void>
   selectNamespace(namespace: string): Promise<void>
   selectNamespaces(scopeValues: string[]): Promise<void>
   loadPods(namespace: string, context?: string): Promise<void>
@@ -98,15 +97,23 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
     const selectedPod = selectedScope ? first(selectedPods[selectedScope] ?? []) : undefined
     const pods = selectedScope ? podsByScope[selectedScope] ?? [] : []
-    set({ selectedContexts: contexts, selectedContext, selectedNamespace, selectedNamespaces, selectedPod, selectedPods, namespaces: [], pods, podsByScope, loadingNamespaces: true })
+    set({ selectedContexts: contexts, selectedContext, selectedNamespace, selectedNamespaces, selectedPod, selectedPods, namespaces: selectedContext ? previous.namespacesByContext[selectedContext] ?? [] : [], pods, podsByScope, loadingNamespaces: false })
+    void get().ensureNamespacesForContexts(contexts)
+  },
+  async ensureNamespacesForContexts(contexts) {
+    const missingContexts = contexts.filter((context) => !get().namespacesByContext[context])
+    if (missingContexts.length === 0) return
+    set({ loadingNamespaces: true })
     try {
-      recordKubeDebug(`selectContexts loadNamespaces start contexts=${contexts.join(',') || '(none)'}`)
-      const entries = await Promise.all(contexts.map(async (ctx) => [ctx, (await listNamespaces(ctx)).namespaces] as const))
-      const namespacesByContext = Object.fromEntries(entries)
-      recordKubeDebug(`selectContexts loadNamespaces ok ${entries.map(([ctx, namespaces]) => `${ctx}:${namespaces.length}`).join(', ') || '(none)'}`)
-      set({ namespacesByContext, namespaces: selectedContext ? namespacesByContext[selectedContext] ?? [] : [], loadingNamespaces: false, error: undefined })
+      recordKubeDebug(`ensureNamespaces start contexts=${missingContexts.join(',') || '(none)'}`)
+      const entries = await Promise.all(missingContexts.map(async (ctx) => [ctx, (await listNamespaces(ctx)).namespaces] as const))
+      recordKubeDebug(`ensureNamespaces ok ${entries.map(([ctx, namespaces]) => `${ctx}:${namespaces.length}`).join(', ') || '(none)'}`)
+      set((s) => {
+        const namespacesByContext = { ...s.namespacesByContext, ...Object.fromEntries(entries) }
+        return { namespacesByContext, namespaces: s.selectedContext ? namespacesByContext[s.selectedContext] ?? [] : [], loadingNamespaces: false, error: undefined }
+      })
     } catch (e) {
-      recordKubeDebug(`selectContexts loadNamespaces failed ${JSON.stringify(e)}`)
+      recordKubeDebug(`ensureNamespaces failed ${JSON.stringify(e)}`)
       set({ error: e as CommandError, loadingNamespaces: false })
     }
   },

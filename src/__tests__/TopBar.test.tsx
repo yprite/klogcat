@@ -107,4 +107,15 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByLabelText('Target tree')).toHaveClass('overflow-y-auto')
     expect(within(dialog).getByLabelText('Selected targets')).toHaveClass('overflow-y-auto')
   })
+
+  it('shows an immediate loading state while lazy namespaces are loading', () => {
+    useKubeStore.setState({ selectedContext: undefined, selectedContexts: [], namespacesByContext: {}, namespaces: [], loadingNamespaces: true })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByRole('status', { name: /loading targets/i })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Loading namespaces for ctx')).toBeInTheDocument()
+  })
 })

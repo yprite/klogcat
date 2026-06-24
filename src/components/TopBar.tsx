@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { parseScopeKey, scopeKey, useKubeStore } from '../stores/kubeStore'
 
 const podValue = (context: string, namespace: string, pod: string) => `${scopeKey(context, namespace)}\u0000${pod}`
@@ -36,6 +36,10 @@ function TargetPickerDialog({
     }
   }
   const contextValues = kube.selectedContexts.length ? kube.selectedContexts : kube.selectedContext ? [kube.selectedContext] : []
+  useEffect(() => {
+    if (contextValues.length === 0) return
+    void useKubeStore.getState().ensureNamespacesForContexts(contextValues)
+  }, [contextValues.join('\u0000')])
   const namespaceValues = Object.entries(kube.selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => scopeKey(context, namespace)))
   const selectedPods = selectedPodValues(kube.selectedPods)
   const visibleTree = useMemo(() => kube.contexts.map((context) => {
@@ -70,7 +74,11 @@ function TargetPickerDialog({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_18rem] overflow-hidden">
         <div aria-label="Target tree" className="min-h-0 overflow-y-auto p-3">
-          {visibleTree.length === 0 && <p className="p-3 text-slate-500">No matching targets</p>}
+          {(kube.loadingContexts || kube.loadingNamespaces) && <div role="status" aria-label="Loading targets" className="mb-3 flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-yellow-300" />
+            Loading targets…
+          </div>}
+          {visibleTree.length === 0 && !kube.loadingContexts && !kube.loadingNamespaces && <p className="p-3 text-slate-500">No matching targets</p>}
           {visibleTree.map(({ context, namespaces }) => {
             const contextChecked = contextValues.includes(context.name)
             return <div key={context.name} className="mb-3 rounded border border-slate-800 bg-slate-900/40">
@@ -80,6 +88,10 @@ function TargetPickerDialog({
                 <span className="text-xs font-normal text-slate-500">{namespaces.length} namespaces</span>
               </label>
               <div className="space-y-2 p-2">
+                {namespaces.length === 0 && kube.loadingNamespaces && <div className="space-y-2 px-1 py-2" aria-label={`Loading namespaces for ${context.name}`}>
+                  <div className="h-8 animate-pulse rounded bg-slate-800/70" />
+                  <div className="h-8 animate-pulse rounded bg-slate-800/40" />
+                </div>}
                 {namespaces.map(({ namespace, pods }) => {
                   const nsKey = scopeKey(context.name, namespace.name)
                   const namespaceChecked = namespaceValues.includes(nsKey)
@@ -90,7 +102,8 @@ function TargetPickerDialog({
                       <span className="text-xs font-normal text-slate-500">{pods.length} pods</span>
                     </label>
                     <div className="space-y-1 pb-2 pl-7 pr-2">
-                      {pods.length === 0 && <p className="px-2 py-1 text-xs text-slate-500">No loaded pods</p>}
+                      {pods.length === 0 && kube.loadingPods && namespaceChecked && <p className="px-2 py-1 text-xs text-slate-400"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-300" />Loading pods…</p>}
+                      {pods.length === 0 && (!kube.loadingPods || !namespaceChecked) && <p className="px-2 py-1 text-xs text-slate-500">No loaded pods</p>}
                       {pods.map((pod) => {
                         const value = podValue(context.name, namespace.name, pod.name)
                         return <label key={value} className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-200 hover:bg-slate-800">
@@ -129,9 +142,10 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   const kube = useKubeStore()
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
   const selectedCount = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
+  const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods
   return <div className="flex flex-wrap gap-3 items-center p-3 border-b border-slate-800 bg-slate-950">
     <strong>klogcat</strong>
-    <span className="rounded border border-slate-800 bg-slate-900 px-3 py-1 text-sm text-slate-200">Targets: {selectedCount} selected</span>
+    <span className="inline-flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-3 py-1 text-sm text-slate-200">{targetsLoading && <span aria-label="Loading targets" className="h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-yellow-300" />}Targets: {selectedCount} selected</span>
     <button className="rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300" onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
     <button onClick={onSettings}>Settings</button>
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}

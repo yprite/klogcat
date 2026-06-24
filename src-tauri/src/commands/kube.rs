@@ -7,7 +7,6 @@ use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex},
     thread,
-    time::Instant,
 };
 
 const MAX_NAMESPACE_AUTH_WORKERS: usize = 8;
@@ -150,30 +149,8 @@ pub async fn list_namespaces(
         );
     }
     let mut response = parse_namespaces_json(context.clone(), &o.stdout)?;
-    debug_log(format!(
-        "list_namespaces context={} raw_count={} names={}",
-        context.as_deref().unwrap_or("(default)"),
-        response.namespaces.len(),
-        response
-            .namespaces
-            .iter()
-            .map(|namespace| namespace.name.as_str())
-            .collect::<Vec<_>>()
-            .join(",")
-    ));
     response.namespaces =
         filter_namespaces_with_pod_access(context.as_deref(), response.namespaces);
-    debug_log(format!(
-        "list_namespaces context={} accessible_count={} names={}",
-        context.as_deref().unwrap_or("(default)"),
-        response.namespaces.len(),
-        response
-            .namespaces
-            .iter()
-            .map(|namespace| namespace.name.as_str())
-            .collect::<Vec<_>>()
-            .join(",")
-    ));
     Ok(response)
 }
 #[tauri::command]
@@ -239,43 +216,9 @@ fn can_list_pods_in_namespace(context: Option<&str>, namespace: &str) -> bool {
         "-n".into(),
         namespace.into(),
     ]);
-    debug_log(format!(
-        "namespace_auth_start context={} namespace={} argv=kubectl {}",
-        context.unwrap_or("(default)"),
-        namespace,
-        args.join(" ")
-    ));
-    let started_at = Instant::now();
     match run_kubectl(&args) {
-        Ok(output) => {
-            let elapsed_ms = started_at.elapsed().as_millis();
-            let allowed = output.status == 0 && auth_stdout_allows(&output.stdout);
-            debug_log(format!(
-                "namespace_auth_done context={} namespace={} elapsed_ms={} status={} allowed={} stdout_len={} stderr_len={} stdout={} stderr={}",
-                context.unwrap_or("(default)"),
-                namespace,
-                elapsed_ms,
-                output.status,
-                allowed,
-                output.stdout.len(),
-                output.stderr.len(),
-                compact_debug_text(&output.stdout),
-                compact_debug_text(&output.stderr)
-            ));
-            allowed
-        }
-        Err(error) => {
-            let elapsed_ms = started_at.elapsed().as_millis();
-            debug_log(format!(
-                "namespace_auth_done context={} namespace={} elapsed_ms={} command_error={} details={}",
-                context.unwrap_or("(default)"),
-                namespace,
-                elapsed_ms,
-                error.code,
-                compact_debug_text(error.details.as_deref().unwrap_or(""))
-            ));
-            false
-        }
+        Ok(output) => output.status == 0 && auth_stdout_allows(&output.stdout),
+        Err(_) => false,
     }
 }
 
@@ -292,10 +235,6 @@ where
         .cloned()
         .collect();
     if filtered.is_empty() && !namespaces.is_empty() {
-        debug_log(format!(
-            "namespace_auth_fallback reason=all-denied-or-unavailable raw_count={}",
-            namespaces.len()
-        ));
         namespaces
     } else {
         filtered
@@ -314,13 +253,6 @@ fn filter_namespaces_with_pod_access(
 
     let raw_namespaces = namespaces.clone();
     let worker_count = namespaces.len().min(MAX_NAMESPACE_AUTH_WORKERS);
-    debug_log(format!(
-        "namespace_auth_parallel_start context={} namespace_count={} workers={}",
-        context.unwrap_or("(default)"),
-        namespaces.len(),
-        worker_count
-    ));
-    let started_at = Instant::now();
     let queue = Arc::new(Mutex::new(
         namespaces
             .into_iter()
@@ -352,17 +284,7 @@ fn filter_namespaces_with_pod_access(
         .into_iter()
         .filter_map(|(_, namespace, allowed)| allowed.then_some(namespace))
         .collect::<Vec<_>>();
-    debug_log(format!(
-        "namespace_auth_parallel_done context={} elapsed_ms={} accessible_count={}",
-        context.unwrap_or("(default)"),
-        started_at.elapsed().as_millis(),
-        filtered.len()
-    ));
     if filtered.is_empty() && !raw_namespaces.is_empty() {
-        debug_log(format!(
-            "namespace_auth_fallback reason=all-denied-or-unavailable raw_count={}",
-            raw_namespaces.len()
-        ));
         raw_namespaces
     } else {
         filtered

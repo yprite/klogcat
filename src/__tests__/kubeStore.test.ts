@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
+import { listNamespaces } from '../commands/tauriKube'
 
 vi.mock('../commands/tauriKube', () => ({
   getCurrentContext: vi.fn(),
@@ -66,5 +67,28 @@ describe('kubeStore context selection', () => {
     expect(next.selectedContext).toBe('cluster-a')
     expect(next.selectedNamespace).toBe('prod')
     expect(next.selectedPod).toBe('gateway-1')
+  })
+
+  it('keeps context selection responsive while namespaces load lazily', async () => {
+    useKubeStore.setState({ contexts: [{ name: 'ctx' }, { name: 'cluster-a' }], selectedContext: 'ctx', selectedContexts: ['ctx'], namespacesByContext: { ctx: [{ name: 'default' }] } })
+
+    await useKubeStore.getState().selectContexts(['ctx', 'cluster-a'])
+
+    const loading = useKubeStore.getState()
+    expect(loading.selectedContexts).toEqual(['ctx', 'cluster-a'])
+    expect(loading.namespaces).toEqual([{ name: 'default' }])
+    expect(loading.loadingNamespaces).toBe(true)
+    await vi.waitFor(() => expect(useKubeStore.getState().namespacesByContext['cluster-a']).toEqual([{ name: 'prod' }]))
+  })
+
+  it('loads namespaces only for missing selected contexts', async () => {
+    vi.mocked(listNamespaces).mockClear()
+    useKubeStore.setState({ namespacesByContext: { ctx: [{ name: 'default' }] } })
+
+    await useKubeStore.getState().ensureNamespacesForContexts(['ctx', 'cluster-a'])
+
+    expect(listNamespaces).toHaveBeenCalledTimes(1)
+    expect(listNamespaces).toHaveBeenCalledWith('cluster-a')
+    expect(useKubeStore.getState().namespacesByContext).toEqual({ ctx: [{ name: 'default' }], 'cluster-a': [{ name: 'prod' }] })
   })
 })
