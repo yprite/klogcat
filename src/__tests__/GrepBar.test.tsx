@@ -43,8 +43,11 @@ describe('QueryBar', () => {
 })
 
 describe('query suggestion helpers', () => {
-  it('filters suggestions by the active token', () => {
-    expect(suggestionsForQuery('sta', 3).map((suggestion) => suggestion.insert)).toContain('status:')
+  it('keeps the full suggestion menu open while ranking active-token matches first', () => {
+    const suggestions = suggestionsForQuery('sta', 3).map((suggestion) => suggestion.insert)
+    expect(suggestions[0]).toBe('status:')
+    expect(suggestions).toContain('package:')
+    expect(suggestions.length).toBeGreaterThan(8)
   })
 
   it('replaces only the active token when inserting a suggestion', () => {

@@ -36,15 +36,19 @@ function tokenBounds(query: string, cursor: number) {
   return { start, end, token: query.slice(start, end) }
 }
 
+function suggestionMatches(suggestion: QuerySuggestion, normalizedToken: string) {
+  return suggestion.insert.toLowerCase().replace(/^-/, '').startsWith(normalizedToken) ||
+    suggestion.label.toLowerCase().includes(normalizedToken) ||
+    suggestion.description.toLowerCase().includes(normalizedToken)
+}
+
 export function suggestionsForQuery(query: string, cursor = query.length) {
   const { token } = tokenBounds(query, cursor)
   const normalized = token.toLowerCase().replace(/^-/, '')
-  if (!normalized) return querySuggestions.slice(0, 8)
-  return querySuggestions.filter((suggestion) =>
-    suggestion.insert.toLowerCase().replace(/^-/, '').startsWith(normalized) ||
-    suggestion.label.toLowerCase().includes(normalized) ||
-    suggestion.description.toLowerCase().includes(normalized),
-  ).slice(0, 8)
+  if (!normalized) return querySuggestions
+  const matches = querySuggestions.filter((suggestion) => suggestionMatches(suggestion, normalized))
+  const nonMatches = querySuggestions.filter((suggestion) => !suggestionMatches(suggestion, normalized))
+  return [...matches, ...nonMatches]
 }
 
 export function applyQuerySuggestion(query: string, cursor: number, suggestion: string) {
