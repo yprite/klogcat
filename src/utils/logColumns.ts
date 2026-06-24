@@ -5,6 +5,7 @@ export const errorLogColumns = ['timestamp', 'jsonLogType', 'host', 'logger', 's
 export type LogColumnKey = typeof accessLogColumns[number] | typeof errorLogColumns[number]
 
 export function columnsForSource(sourceType: SourceLogType): LogColumnKey[] {
+  if (sourceType === 'info') return [...accessLogColumns]
   if (sourceType === 'access') return [...accessLogColumns]
   if (sourceType === 'error') return [...errorLogColumns]
   return []
