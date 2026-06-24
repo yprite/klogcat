@@ -8,7 +8,6 @@ import { ActionDebugPanel } from './ActionDebugPanel'
 import { ErrorBanner } from './ErrorBanner'
 import { GrepBar } from './GrepBar'
 import { LogToolbar } from './LogToolbar'
-import { LogTypeSelector } from './LogTypeSelector'
 import { LogViewer } from './LogViewer'
 import { SettingsModal } from './SettingsModal'
 import { TopBar } from './TopBar'
@@ -54,8 +53,8 @@ export function AppShell({ eventError }: { eventError?: string }) {
       <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
       {settings.warning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{settings.warning.message}</div>}
       {defaultNamespaceWarning && <div className="bg-yellow-950 border border-yellow-700 p-2 rounded">{defaultNamespaceWarning}</div>}
-      <div className="flex flex-wrap gap-3 items-center"><LogTypeSelector value={sourceTypes} onChange={changeSources} /><GrepBar /></div>
-      <LogToolbar sourceTypes={sourceTypes} />
+      <GrepBar />
+      <LogToolbar sourceTypes={sourceTypes} onSourceTypesChange={changeSources} />
       <ActionDebugPanel />
       <LogViewer />
     </main>

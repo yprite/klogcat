@@ -65,6 +65,21 @@ describe('button actions', () => {
     expect(useLogStore.getState().errorMessage).toMatch(/select namespace and pod/i)
   })
 
+  it('places log source toggles on the same toolbar row as Start and Stop', () => {
+    const onSourceTypesChange = vi.fn()
+    render(<LogToolbar sourceTypes={['info']} onSourceTypesChange={onSourceTypesChange} />)
+
+    const toolbar = screen.getByRole('button', { name: 'Start' }).closest('div')
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ALL' }))
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'INFO' }))
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ACC' }))
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ERR' }))
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'Stop' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'ACC' }))
+    expect(onSourceTypesChange).toHaveBeenCalledWith(['info', 'access'])
+  })
+
   it('keeps Stop clickable and reports when no stream is active', () => {
     render(<LogToolbar sourceType="info" />)
 
@@ -77,7 +92,7 @@ describe('button actions', () => {
     expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
   })
 
-  it('auto-selects the pod container when configured app container is missing', () => {
+  it('auto-selects the pod container internally without showing a container picker', () => {
     useKubeStore.setState({
       selectedContext: 'cluster-a',
       selectedNamespace: 'default',
@@ -86,7 +101,8 @@ describe('button actions', () => {
     })
     render(<LogToolbar sourceType="info" />)
 
-    expect(screen.getByRole('combobox', { name: /container/i })).toHaveValue('worker')
+    expect(screen.queryByRole('combobox', { name: /container/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/container/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { SourceLogType } from '../types/log'
 import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
@@ -6,21 +5,18 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildScloudLogPath } from '../utils/logPath'
 import { AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
+import { LogTypeSelector } from './LogTypeSelector'
 
-export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLogType; sourceTypes?: SourceLogType[] }) {
+export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { sourceType?: SourceLogType; sourceTypes?: SourceLogType[]; onSourceTypesChange?: (value: SourceLogType[]) => void }) {
   const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'info']
   const primarySourceType = selectedSourceTypes[0] ?? 'info'
   const kube = useKubeStore(); const { settings } = useSettingsStore(); const log = useLogStore()
-  const [containerOverride, setContainerOverride] = useState('')
   const startBusy = log.streamStatus === 'starting' || log.streamStatus === 'stopping'
   const stopBusy = log.streamStatus === 'stopping'
   const alreadyRunning = log.activeStreamIds.length > 0 || log.streamStatus === 'running'
   const source = settings?.logSources[primarySourceType]
   const targets = kube.getSelectedPodTargets()
-  const selectedPod = targets[0]?.pod ?? kube.pods.find(p => p.name === kube.selectedPod)
-  const podContainers = Array.from(new Set(targets.flatMap((t) => t.pod.containers).concat(selectedPod?.containers ?? [])))
-  const containerFor = (containers: string[]) => containerOverride || (source && containers.includes(source.container) ? source.container : containers[0] ?? source?.container ?? '')
-  const effectiveContainer = selectedPod ? containerFor(selectedPod.containers) : (containerOverride || source?.container || '')
+  const containerFor = (containers: string[]) => source && containers.includes(source.container) ? source.container : containers[0] ?? source?.container ?? ''
   const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running' || !containerFor(t.pod.containers))
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
@@ -66,7 +62,7 @@ export function LogToolbar({ sourceType, sourceTypes }: { sourceType?: SourceLog
     await start(true)
   }
   return <div className="flex flex-wrap gap-2 items-center p-2 bg-slate-900 border-b border-slate-800">
-    <label>Container <select className="text-black" value={effectiveContainer} onChange={e=>{ setContainerOverride(e.target.value); log.recordActionDebug(`Container selected: ${e.target.value}`) }}><option value="">Auto per pod</option>{podContainers.map(c=><option key={c} value={c}>{c}</option>)}{source && !podContainers.includes(source.container) && <option value={source.container}>{source.container} (configured)</option>}</select></label>
+    {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
     <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
     <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
     {operationActive && <div className="basis-full sm:basis-64"><ProgressStripe label={`${operationLabel} progress`} /></div>}
