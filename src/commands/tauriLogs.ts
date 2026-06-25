@@ -1,6 +1,16 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { SourceLogType } from '../types/log'
+
 export type StartLogStreamRequest = { streamId: string; context?: string; namespace: string; pod: string; container: string; sourceType: SourceLogType; filePath: string; initialTailLines: number }
-export const startLogStream = (request: StartLogStreamRequest) => invoke<void>('start_log_stream', { request })
-export const stopLogStream = (streamId: string) => invoke<void>('stop_log_stream', { streamId })
-export const stopAllLogStreams = () => invoke<void>('stop_all_log_streams')
+
+const tauriUnavailable = () => Promise.reject(new Error('Tauri runtime is unavailable; run the desktop app to start log streams'))
+
+export const startLogStream = (request: StartLogStreamRequest) => isTauri()
+  ? invoke<void>('start_log_stream', { request })
+  : tauriUnavailable()
+export const stopLogStream = (streamId: string) => isTauri()
+  ? invoke<void>('stop_log_stream', { streamId })
+  : Promise.resolve()
+export const stopAllLogStreams = () => isTauri()
+  ? invoke<void>('stop_all_log_streams')
+  : Promise.resolve()
