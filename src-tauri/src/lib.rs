@@ -33,19 +33,6 @@ fn stop_all_log_streams<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn main_window_close_stops_streams_and_exits_app() {
-        assert_eq!(
-            shutdown_request_for_lifecycle_event(AppLifecycleEvent::MainWindowCloseRequested),
-            ShutdownRequest::StopStreamsAndExit
-        );
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -60,6 +47,7 @@ pub fn run() {
             commands::settings::save_settings,
             commands::settings::reset_settings,
             commands::logs::start_log_stream,
+            commands::logs::check_log_path,
             commands::logs::stop_log_stream,
             commands::logs::stop_all_log_streams,
         ])
@@ -88,4 +76,17 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn main_window_close_stops_streams_and_exits_app() {
+        assert_eq!(
+            shutdown_request_for_lifecycle_event(AppLifecycleEvent::MainWindowCloseRequested),
+            ShutdownRequest::StopStreamsAndExit
+        );
+    }
 }

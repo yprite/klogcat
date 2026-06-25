@@ -1,14 +1,12 @@
-import type { ParsedLogLine, SourceLogType } from '../types/log'
+import type { ParsedLogLine, SourceLogType, LogColumnKey } from '../types/log'
+import { columnsForSourceFromPolicy, getLogPolicy, labelForColumnFromPolicy } from './logPolicy'
 
-export const accessLogColumns = ['timestamp', 'jsonLogType', 'host', 'service', 'module', 'serviceId', 'trId', 'epochTime', 'pSpanId', 'spanId', 'method', 'url', 'length', 'srcIp', 'elapsed', 'status', 'userId', 'appId', 'body', 'rcode', 'rmsg', 'exceptionName', 'apiName'] as const
-export const errorLogColumns = ['timestamp', 'jsonLogType', 'host', 'logger', 'service', 'module', 'submodule', 'trId', 'epochTime', 'thread', 'body', 'errorServerName', 'errorPath', 'errorMethod', 'errorTimestamp', 'traceId', 'errorReason'] as const
-export type LogColumnKey = typeof accessLogColumns[number] | typeof errorLogColumns[number]
+export type { LogColumnKey } from '../types/log'
+export const accessLogColumns = [...getLogPolicy().sources.access.columns]
+export const errorLogColumns = [...getLogPolicy().sources.error.columns]
 
 export function columnsForSource(sourceType: SourceLogType): LogColumnKey[] {
-  if (sourceType === 'info') return [...accessLogColumns]
-  if (sourceType === 'access') return [...accessLogColumns]
-  if (sourceType === 'error') return [...errorLogColumns]
-  return []
+  return columnsForSourceFromPolicy(getLogPolicy(), sourceType)
 }
 
 export function columnsForRows(rows: ParsedLogLine[]): LogColumnKey[] {
@@ -24,15 +22,5 @@ export function valueForColumn(row: ParsedLogLine, key: LogColumnKey) {
 }
 
 export function labelForColumn(key: LogColumnKey) {
-  const labels: Partial<Record<LogColumnKey, string>> = {
-    timestamp: 'time',
-    jsonLogType: 'logType',
-    apiName: 'api_name',
-    errorServerName: 'errorDetails.serverName',
-    errorPath: 'errorDetails.path',
-    errorMethod: 'errorDetails.method',
-    errorTimestamp: 'errorDetails.timestamp',
-    errorReason: 'errorDetails.errors.reason',
-  }
-  return labels[key] ?? key
+  return labelForColumnFromPolicy(getLogPolicy(), key)
 }

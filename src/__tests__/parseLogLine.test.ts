@@ -4,6 +4,7 @@ import infoFixture from '../__fixtures__/info.valid.jsonl?raw'
 import errFixture from '../__fixtures__/err.valid.jsonl?raw'
 import invalidFixture from '../__fixtures__/invalid.jsonl?raw'
 import type { SourceMeta } from '../types/log'
+import { defaultLogPolicy } from '../utils/logPolicy'
 import { parseLogLine } from '../utils/parseLogLine'
 
 const meta = (sourceType: SourceMeta['sourceType']): SourceMeta => ({ streamId: 's1', sourceId: 'ns/p/c/src/file', sourceType, namespace: 'ns', pod: 'pod', container: 'app', filePath: '/x' })
@@ -44,4 +45,31 @@ describe('parseLogLine', () => {
     expect(row.summary).toContain('POST'); expect(row.summary).toContain('500')
   })
   it('falls back to raw for invalid JSON', () => { const row = parseLogLine(lines(invalidFixture)[0], 'info', meta('info'), 1); expect(row.parseStatus).toBe('raw'); expect(row.summary).toBe('not json at all'); expect(row.raw).toBe('not json at all') })
+
+  it('uses parser field mapping policy instead of hardcoded access and error JSON paths', () => {
+    const policy = {
+      ...defaultLogPolicy,
+      parser: {
+        ...defaultLogPolicy.parser,
+        access: {
+          ...defaultLogPolicy.parser.access,
+          apiName: 'body.domain_api_name',
+          rcode: 'body.domain_rcode',
+        },
+        error: {
+          ...defaultLogPolicy.parser.error,
+          errorReason: 'body.problem.errors.0.message',
+          traceId: 'body.problem.trace',
+        },
+      },
+    }
+    const acc = parseLogLine(JSON.stringify({ method: 'GET', url: '/x', body: { domain_api_name: 'policyApi', domain_rcode: 'POLICY_RCODE' } }), 'access', meta('access'), 1, policy)
+    expect(acc.apiName).toBe('policyApi')
+    expect(acc.rcode).toBe('POLICY_RCODE')
+
+    const err = parseLogLine(JSON.stringify({ body: { problem: { trace: 'policy-trace', errors: [{ message: 'policy boom' }] } } }), 'error', meta('error'), 1, policy)
+    expect(err.traceId).toBe('policy-trace')
+    expect(err.trId).toBe('policy-trace')
+    expect(err.errorReason).toBe('policy boom')
+  })
 })

@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { getCurrentContext, listContexts, listNamespaces, listPods } from '../commands/tauriKube'
 import type { CommandError } from '../commands/types'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
-import { isKubeCacheStale, readKubeCache, writeKubeCache } from '../utils/kubeCache'
+import { clearKubeCache, isKubeCacheStale, readKubeCache, writeKubeCache } from '../utils/kubeCache'
+import { stablePodPrefix } from '../utils/podFallback'
 
 function recordKubeDebug(message: string) {
   console.info(`[klogcat kube] ${message}`)
@@ -29,6 +30,7 @@ type KubeState = {
   podsByScope: Record<string, PodInfo[]>
   selectedPod?: string
   selectedPods: Record<string, string[]>
+  selectedWorkloads: Record<string, string[]>
   loadingContexts: boolean
   loadingNamespaces: boolean
   loadingPods: boolean
@@ -37,6 +39,7 @@ type KubeState = {
   cacheLastRefreshAt?: number
   error?: CommandError
   loadCachedTargets(): boolean
+  clearCachedTargets(): void
   shouldRefreshCache(now?: number): boolean
   refreshAllTargets(force?: boolean): Promise<void>
   refreshPodsForSelections(): Promise<void>
@@ -65,7 +68,7 @@ function persistKubeCache(state: Pick<KubeState, 'currentContext' | 'contexts' |
   writeKubeCache({ ...currentCacheSnapshot(state), savedAt })
 }
 
-type KubeSelectionPatch = Partial<Pick<KubeState, 'contexts' | 'currentContext' | 'selectedContext' | 'selectedContexts' | 'namespaces' | 'namespacesByContext' | 'selectedNamespace' | 'selectedNamespaces' | 'pods' | 'podsByScope' | 'selectedPod' | 'selectedPods'>>
+type KubeSelectionPatch = Partial<Pick<KubeState, 'contexts' | 'currentContext' | 'selectedContext' | 'selectedContexts' | 'namespaces' | 'namespacesByContext' | 'selectedNamespace' | 'selectedNamespaces' | 'pods' | 'podsByScope' | 'selectedPod' | 'selectedPods' | 'selectedWorkloads'>>
 
 function restrictStateToContexts(state: KubeState, contexts: ContextInfo[], currentContext?: string): KubeSelectionPatch {
   const allowed = new Set(contexts.map((context) => context.name))
@@ -78,6 +81,7 @@ function restrictStateToContexts(state: KubeState, contexts: ContextInfo[], curr
   const selectedNamespaces = Object.fromEntries(Object.entries(state.selectedNamespaces).filter(([context]) => allowed.has(context)))
   const podsByScope = Object.fromEntries(Object.entries(state.podsByScope).filter(([key]) => allowed.has(parseScopeKey(key).context)))
   const selectedPods = Object.fromEntries(Object.entries(state.selectedPods).filter(([key]) => allowed.has(parseScopeKey(key).context)))
+  const selectedWorkloads = Object.fromEntries(Object.entries(state.selectedWorkloads).filter(([key]) => allowed.has(parseScopeKey(key).context)))
   const selectedNamespace = selectedContext ? first(selectedNamespaces[selectedContext] ?? []) : undefined
   const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
   return {
@@ -93,6 +97,7 @@ function restrictStateToContexts(state: KubeState, contexts: ContextInfo[], curr
     pods: selectedScope ? podsByScope[selectedScope] ?? [] : [],
     selectedPod: selectedScope ? first(selectedPods[selectedScope] ?? []) : undefined,
     selectedPods,
+    selectedWorkloads,
   }
 }
 
@@ -111,14 +116,12 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item
 }
 
 export const useKubeStore = create<KubeState>((set, get) => ({
-  contexts: [], currentContext: undefined, selectedContext: undefined, selectedContexts: [], namespaces: [], namespacesByContext: {}, selectedNamespace: undefined, selectedNamespaces: {}, pods: [], podsByScope: {}, selectedPod: undefined, selectedPods: {}, loadingContexts: false, loadingNamespaces: false, loadingPods: false, cacheLoaded: false, cacheRefreshing: false, cacheLastRefreshAt: undefined,
+  contexts: [], currentContext: undefined, selectedContext: undefined, selectedContexts: [], namespaces: [], namespacesByContext: {}, selectedNamespace: undefined, selectedNamespaces: {}, pods: [], podsByScope: {}, selectedPod: undefined, selectedPods: {}, selectedWorkloads: {}, loadingContexts: false, loadingNamespaces: false, loadingPods: false, cacheLoaded: false, cacheRefreshing: false, cacheLastRefreshAt: undefined,
   loadCachedTargets() {
     const cache = readKubeCache()
     if (!cache) { set({ cacheLoaded: true }); return false }
     const selectedContext = get().selectedContext ?? cache.currentContext ?? first(cache.contexts)?.name
     const selectedContexts = get().selectedContexts.length ? get().selectedContexts : selectedContext ? [selectedContext] : []
-    const selectedNamespace = get().selectedNamespace
-    const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
     set({
       currentContext: cache.currentContext,
       contexts: cache.contexts,
@@ -126,13 +129,34 @@ export const useKubeStore = create<KubeState>((set, get) => ({
       selectedContexts,
       namespacesByContext: cache.namespacesByContext,
       namespaces: selectedContext ? cache.namespacesByContext[selectedContext] ?? [] : [],
-      podsByScope: cache.podsByScope,
-      pods: selectedScope ? cache.podsByScope[selectedScope] ?? [] : [],
+      podsByScope: {},
+      pods: [],
       cacheLoaded: true,
       cacheLastRefreshAt: cache.savedAt,
       error: undefined,
     })
     return true
+  },
+  clearCachedTargets() {
+    clearKubeCache()
+    set({
+      contexts: [],
+      currentContext: undefined,
+      selectedContext: undefined,
+      selectedContexts: [],
+      namespaces: [],
+      namespacesByContext: {},
+      selectedNamespace: undefined,
+      selectedNamespaces: {},
+      pods: [],
+      podsByScope: {},
+      selectedPod: undefined,
+      selectedPods: {},
+      selectedWorkloads: {},
+      cacheLoaded: true,
+      cacheLastRefreshAt: undefined,
+      error: undefined,
+    })
   },
   shouldRefreshCache(now) { return isKubeCacheStale(get().cacheLastRefreshAt, now) },
   async refreshAllTargets(force = false) {
@@ -173,7 +197,8 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     }
   },
   async refreshPodsForSelections() {
-    const selections = Object.entries(get().selectedPods).map(([key]) => parseScopeKey(key))
+    const uniqueSelectionKeys = new Set([...Object.keys(get().selectedPods), ...Object.keys(get().selectedWorkloads)])
+    const selections = [...uniqueSelectionKeys].map((key) => parseScopeKey(key))
     const namespaceSelections = Object.entries(get().selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => ({ context, namespace })))
     const pairs = (selections.length ? selections : namespaceSelections).filter(({ context, namespace }) => context && namespace)
     if (pairs.length === 0) return
@@ -229,10 +254,15 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     }
     const selectedNamespace = selectedContext ? first(selectedNamespaces[selectedContext] ?? []) : undefined
     const selectedPods: Record<string, string[]> = {}
+    const selectedWorkloads: Record<string, string[]> = {}
     const podsByScope: Record<string, PodInfo[]> = {}
     for (const [key, pods] of Object.entries(previous.selectedPods)) {
       const { context, namespace } = parseScopeKey(key)
       if (contextSet.has(context) && (selectedNamespaces[context] ?? []).includes(namespace)) selectedPods[key] = pods
+    }
+    for (const [key, workloads] of Object.entries(previous.selectedWorkloads)) {
+      const { context, namespace } = parseScopeKey(key)
+      if (contextSet.has(context) && (selectedNamespaces[context] ?? []).includes(namespace)) selectedWorkloads[key] = workloads
     }
     for (const [key, pods] of Object.entries(previous.podsByScope)) {
       const { context } = parseScopeKey(key)
@@ -241,7 +271,7 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     const selectedScope = selectedContext && selectedNamespace ? scopeKey(selectedContext, selectedNamespace) : undefined
     const selectedPod = selectedScope ? first(selectedPods[selectedScope] ?? []) : undefined
     const pods = selectedScope ? podsByScope[selectedScope] ?? [] : []
-    set({ selectedContexts: contexts, selectedContext, selectedNamespace, selectedNamespaces, selectedPod, selectedPods, namespaces: selectedContext ? previous.namespacesByContext[selectedContext] ?? [] : [], pods, podsByScope, loadingNamespaces: false })
+    set({ selectedContexts: contexts, selectedContext, selectedNamespace, selectedNamespaces, selectedPod, selectedPods, selectedWorkloads, namespaces: selectedContext ? previous.namespacesByContext[selectedContext] ?? [] : [], pods, podsByScope, loadingNamespaces: false })
     void get().ensureNamespacesForContexts(contexts)
   },
   async ensureNamespacesForContexts(contexts) {
@@ -307,12 +337,11 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     const firstNs = firstContext ? selectedNamespaces[firstContext][0] : undefined
     const pairs = Object.entries(selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => ({ context, namespace })))
     const cachedPodsByScope = get().podsByScope
-    const missingPairs = pairs.filter(({ context, namespace }) => !cachedPodsByScope[scopeKey(context, namespace)])
-    set({ selectedNamespaces, selectedNamespace: firstNs, selectedPod: undefined, selectedPods: {}, pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [], loadingPods: missingPairs.length > 0 })
-    if (missingPairs.length === 0) return
+    set({ selectedNamespaces, selectedNamespace: firstNs, selectedPod: undefined, selectedPods: {}, selectedWorkloads: {}, pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [], loadingPods: pairs.length > 0 })
+    if (pairs.length === 0) return
     try {
-      recordKubeDebug(`selectNamespaces loadPods start targets=${missingPairs.map(({ context, namespace }) => `${context}/${namespace}`).join(',') || '(none)'}`)
-      const entries = await Promise.all(missingPairs.map(async ({ context, namespace }) => [scopeKey(context, namespace), (await listPods(namespace, context)).pods] as const))
+      recordKubeDebug(`selectNamespaces loadPods start targets=${pairs.map(({ context, namespace }) => `${context}/${namespace}`).join(',') || '(none)'}`)
+      const entries = await Promise.all(pairs.map(async ({ context, namespace }) => [scopeKey(context, namespace), (await listPods(namespace, context)).pods] as const))
       const loadedPodsByScope = Object.fromEntries(entries)
       recordKubeDebug(`selectNamespaces loadPods ok ${entries.map(([key, pods]) => `${key.replace('\u0000', '/')}:${pods.length}`).join(', ') || '(none)'}`)
       set((s) => {
@@ -348,25 +377,49 @@ export const useKubeStore = create<KubeState>((set, get) => ({
   },
   selectPods(scopePodValues) {
     const selectedPods: Record<string, string[]> = {}
+    const selectedWorkloads: Record<string, string[]> = {}
     for (const value of scopePodValues) {
       const [context, namespace, pod] = value.split('\u0000')
       if (!context || !namespace || !pod) continue
       const key = scopeKey(context, namespace)
       selectedPods[key] = [...(selectedPods[key] ?? []), pod]
+      const livePod = get().podsByScope[key]?.find((item) => item.name === pod)
+      const workload = stablePodPrefix(livePod?.name ?? pod)
+      selectedWorkloads[key] = [...(selectedWorkloads[key] ?? []), workload]
     }
     const firstKey = Object.keys(selectedPods)[0]
-    set({ selectedPods, selectedPod: firstKey ? selectedPods[firstKey][0] : undefined })
+    set({ selectedPods, selectedWorkloads, selectedPod: firstKey ? selectedPods[firstKey][0] : undefined })
   },
   getSelectedPodTargets() {
     const state = get()
     const targets: SelectedPodTarget[] = []
+    const pushWorkloadTarget = (key: string, workload: string, context: string, namespace: string) => {
+      const pods = state.podsByScope[key] ?? []
+      const match = pods
+        .filter((pod) => pod.phase === 'Running' && stablePodPrefix(pod.name) === workload)
+        .sort((a, b) => a.name.localeCompare(b.name))[0]
+      if (match) targets.push({ context, namespace, pod: match })
+      return Boolean(match)
+    }
     for (const [key, names] of Object.entries(state.selectedPods)) {
       const { context, namespace } = parseScopeKey(key)
       const pods = state.podsByScope[key] ?? []
-      for (const name of names) {
+      for (const [index, name] of names.entries()) {
         const pod = pods.find((p) => p.name === name)
-        if (pod) targets.push({ context, namespace, pod })
+        if (pod) {
+          targets.push({ context, namespace, pod })
+          continue
+        }
+        const workload = state.selectedWorkloads[key]?.[index] ?? stablePodPrefix(name)
+        if (pushWorkloadTarget(key, workload, context, namespace)) continue
+        targets.push({ context, namespace, pod: { name, namespace, phase: 'Running', containers: first(pods)?.containers ?? [] } })
       }
+    }
+    const selectedPodScopes = new Set(Object.keys(state.selectedPods))
+    for (const [key, workloads] of Object.entries(state.selectedWorkloads)) {
+      if (selectedPodScopes.has(key)) continue
+      const { context, namespace } = parseScopeKey(key)
+      for (const workload of workloads) pushWorkloadTarget(key, workload, context, namespace)
     }
     if (targets.length === 0 && state.selectedContext && state.selectedNamespace && state.selectedPod) {
       const pod = state.pods.find((p) => p.name === state.selectedPod)

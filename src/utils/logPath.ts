@@ -1,6 +1,6 @@
 import type { SourceLogType } from '../types/log'
+import { buildLogPathFromPolicy, getLogPolicy } from './logPolicy'
 
 export function buildScloudLogPath(namespace: string, pod: string, sourceType: SourceLogType) {
-  const suffix = sourceType === 'info' ? '' : sourceType === 'access' ? '_ACC' : '_ERR'
-  return `/scloud/${namespace}/logs/${pod}/${namespace}${suffix}.log`
+  return buildLogPathFromPolicy(getLogPolicy(), namespace, pod, sourceType)
 }

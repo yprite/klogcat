@@ -1,0 +1,77 @@
+{
+  "unit": {
+    "status": "passed",
+    "frontend": {
+      "layer": "unit",
+      "status": "passed",
+      "filesPassed": 22,
+      "filesTotal": 22,
+      "testsPassed": 144,
+      "testsTotal": 144,
+      "duration": "2.19s (transform 925ms, setup 1.01s, import 1.57s, tests 1.87s, environment 10.08s)"
+    },
+    "rust": {
+      "status": "passed",
+      "suites": 2,
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filteredOut": 0
+    },
+    "testsPassed": 181,
+    "testsTotal": 181
+  },
+  "scenario": {
+    "layer": "scenario",
+    "status": "passed",
+    "filesPassed": 13,
+    "filesTotal": 13,
+    "testsPassed": 23,
+    "testsTotal": 23,
+    "duration": "1.66s (transform 1.19s, setup 567ms, import 1.76s, tests 2.42s, environment 5.87s)"
+  },
+  "e2e": {
+    "layer": "e2e",
+    "status": "passed",
+    "filesPassed": 1,
+    "filesTotal": 1,
+    "testsPassed": 6,
+    "testsTotal": 6,
+    "duration": "773ms (transform 94ms, setup 28ms, import 126ms, tests 223ms, environment 233ms)",
+    "subchecks": {
+      "vitest": {
+        "layer": "e2e",
+        "status": "passed",
+        "filesPassed": 1,
+        "filesTotal": 1,
+        "testsPassed": 3,
+        "testsTotal": 3,
+        "duration": "773ms (transform 94ms, setup 28ms, import 126ms, tests 223ms, environment 233ms)"
+      },
+      "browser": {
+        "status": "passed",
+        "testsPassed": 1,
+        "testsTotal": 1,
+        "artifacts": ".harness/e2e-artifacts/20260625T122630548Z-97109-browser",
+        "error": null
+      },
+      "desktop": {
+        "status": "passed",
+        "testsPassed": 2,
+        "testsTotal": 2,
+        "artifacts": ".harness/e2e-artifacts/20260625T122632081Z-97127-desktop",
+        "error": null
+      }
+    }
+  },
+  "rust": {
+    "status": "passed",
+    "suites": 2,
+    "passed": 37,
+    "failed": 0,
+    "ignored": 0,
+    "measured": 0,
+    "filteredOut": 0
+  }
+}

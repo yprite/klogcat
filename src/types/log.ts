@@ -61,6 +61,14 @@ export type ParsedLogLine = SourceMeta & {
   diagnostics?: string[]
 }
 
+export type LogColumnKey = keyof Pick<ParsedLogLine,
+  'timestamp' | 'jsonLogType' | 'host' | 'service' | 'module' | 'serviceId' | 'trId' | 'traceId' |
+  'epochTime' | 'pSpanId' | 'spanId' | 'method' | 'url' | 'length' | 'srcIp' | 'elapsed' |
+  'status' | 'userId' | 'appId' | 'body' | 'rcode' | 'rmsg' | 'exceptionName' | 'apiName' |
+  'logger' | 'submodule' | 'thread' | 'errorServerName' | 'errorPath' | 'errorMethod' |
+  'errorTimestamp' | 'errorReason'
+>
+
 export type LogLineEvent = {
   streamId: string
   sourceType: SourceLogType

@@ -1,14 +1,27 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
+import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
 import type { ParsedLogLine } from '../types/log'
 
 export type LogColumnWidths = Partial<Record<LogColumnKey, number>>
 
+export const LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY = 'klogcat:log-viewer-columns:v1'
+
+type LogViewerColumnSettings = {
+  version: 1
+  columnOrder: LogColumnKey[]
+  visibleColumns: LogColumnKey[]
+}
+
 const minColumnWidthCh = 12
 const valuePaddingCh = 2
+
+export function defaultVisibleColumnsFor(availableColumns: readonly LogColumnKey[]) {
+  return defaultVisibleColumnsForPolicy(getLogPolicy(), availableColumns)
+}
 
 export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableColumns: LogColumnKey[], key: LogColumnKey, checked: boolean) {
   if (!checked) return current.filter((column) => column !== key)
@@ -38,6 +51,41 @@ export function reorderColumnByDrop(columns: LogColumnKey[], draggedKey: LogColu
 function visibleColumnsFromOrder(order: LogColumnKey[], visibleColumns: LogColumnKey[]) {
   const visible = new Set(visibleColumns)
   return order.filter((column) => visible.has(column))
+}
+
+function isLogColumnSettings(value: unknown): value is LogViewerColumnSettings {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<LogViewerColumnSettings>
+  return candidate.version === 1 && Array.isArray(candidate.columnOrder) && Array.isArray(candidate.visibleColumns)
+}
+
+export function mergeColumnSettingsWithAvailable(settings: LogViewerColumnSettings, availableColumns: readonly LogColumnKey[]) {
+  const available = new Set(availableColumns)
+  const savedOrder = settings.columnOrder.filter((key, index, order): key is LogColumnKey => available.has(key as LogColumnKey) && order.indexOf(key) === index)
+  const addedColumns = availableColumns.filter((key) => !savedOrder.includes(key))
+  const columnOrder = [...savedOrder, ...addedColumns]
+  const orderSet = new Set(columnOrder)
+  const visibleColumns = settings.visibleColumns.filter((key, index, visible): key is LogColumnKey => orderSet.has(key as LogColumnKey) && visible.indexOf(key) === index)
+  return { columnOrder, visibleColumns }
+}
+
+export function readLogViewerColumnSettings(storage: Pick<Storage, 'getItem'> = window.localStorage) {
+  try {
+    const raw = storage.getItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    return isLogColumnSettings(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function writeLogViewerColumnSettings(settings: LogViewerColumnSettings, storage: Pick<Storage, 'setItem'> = window.localStorage) {
+  try {
+    storage.setItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  } catch {
+    // Ignore storage failures so the log viewer remains usable in restricted WebViews.
+  }
 }
 
 export function forceScrollToBottom(element: HTMLElement | null) {
@@ -88,10 +136,19 @@ export function LogViewer() {
   const [columnFilters, setColumnFilters] = useState<Partial<Record<LogColumnKey, string>>>({})
   const [draggedColumn, setDraggedColumn] = useState<LogColumnKey | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<LogColumnKey | null>(null)
+  const [columnManagerOpen, setColumnManagerOpen] = useState(false)
+  const columnsInitializedRef = useRef(false)
+  const userCustomizedColumnsRef = useRef(false)
+  const savedColumnSettingsRef = useRef<LogViewerColumnSettings | null | undefined>(undefined)
+  const skipNextColumnPersistRef = useRef(false)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   useEffect(() => {
+    if (availableColumns.length === 0 && !columnsInitializedRef.current) return
+    if (savedColumnSettingsRef.current === undefined) savedColumnSettingsRef.current = readLogViewerColumnSettings()
+    const savedSettings = savedColumnSettingsRef.current
     setColumnOrder((current) => {
+      if (!columnsInitializedRef.current && savedSettings) return mergeColumnSettingsWithAvailable(savedSettings, availableColumns).columnOrder
       const available = new Set(availableColumns)
       const kept = current.filter((key) => available.has(key))
       const added = availableColumns.filter((key) => !current.includes(key))
@@ -100,16 +157,34 @@ export function LogViewer() {
     setVisibleColumns((current) => {
       const available = new Set(availableColumns)
       const kept = current.filter((key) => available.has(key))
-      const added = availableColumns.filter((key) => !current.includes(key))
-      return [...kept, ...added]
+      if (!columnsInitializedRef.current) {
+        columnsInitializedRef.current = true
+        if (savedSettings) {
+          userCustomizedColumnsRef.current = true
+          skipNextColumnPersistRef.current = true
+          return mergeColumnSettingsWithAvailable(savedSettings, availableColumns).visibleColumns
+        }
+        return defaultVisibleColumnsFor(availableColumns)
+      }
+      if (!userCustomizedColumnsRef.current) return defaultVisibleColumnsFor(availableColumns)
+      return kept
     })
     setColumnFilters((current) => Object.fromEntries(Object.entries(current).filter(([key]) => availableColumns.includes(key as LogColumnKey))) as Partial<Record<LogColumnKey, string>>)
   }, [availableColumns])
+  useEffect(() => {
+    if (!columnsInitializedRef.current || !userCustomizedColumnsRef.current || availableColumns.length === 0) return
+    if (skipNextColumnPersistRef.current) {
+      skipNextColumnPersistRef.current = false
+      return
+    }
+    writeLogViewerColumnSettings({ version: 1, columnOrder, visibleColumns })
+  }, [availableColumns.length, columnOrder, visibleColumns])
   const filteredRows = useMemo(() => {
-    const activeFilters = Object.entries(columnFilters).filter(([, value]) => value.trim() !== '') as Array<[LogColumnKey, string]>
+    const visible = new Set(visibleColumns)
+    const activeFilters = Object.entries(columnFilters).filter(([key, value]) => visible.has(key as LogColumnKey) && value.trim() !== '') as Array<[LogColumnKey, string]>
     if (activeFilters.length === 0) return visibleRows
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
-  }, [columnFilters, visibleRows])
+  }, [columnFilters, visibleColumns, visibleRows])
   const selectedRow = filteredRows.find((row) => row.id === selectedRowId)
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, columnOrder), [columnOrder, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
@@ -143,9 +218,27 @@ export function LogViewer() {
     virtualizer.scrollToIndex(filteredRows.length - 1, { align: 'end' })
     requestAnimationFrame(() => forceScrollToBottom(parentRef.current))
   }, [filteredRows.length, autoScrollEnabled, viewerPaused, virtualizer])
-  const toggleColumn = (key: LogColumnKey, checked: boolean) => setVisibleColumns((current) => nextVisibleColumnsForToggle(current, columnOrder, key, checked))
+  const headerColumns = useMemo(() => visibleColumnsFromOrder(columnOrder, visibleColumns), [columnOrder, visibleColumns])
+  const hiddenColumnCount = Math.max(0, availableColumns.length - headerColumns.length)
+  const showDefaultColumns = () => {
+    userCustomizedColumnsRef.current = true
+    setVisibleColumns(defaultVisibleColumnsFor(columnOrder))
+  }
+  const showAllColumns = () => {
+    userCustomizedColumnsRef.current = true
+    setVisibleColumns([...columnOrder])
+  }
+  const clearColumns = () => {
+    userCustomizedColumnsRef.current = true
+    setVisibleColumns([])
+  }
+  const toggleColumn = (key: LogColumnKey, checked: boolean) => {
+    userCustomizedColumnsRef.current = true
+    setVisibleColumns((current) => nextVisibleColumnsForToggle(current, columnOrder, key, checked))
+  }
   const setColumnFilter = (key: LogColumnKey, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }))
   const moveColumn = (key: LogColumnKey, direction: 'left' | 'right') => {
+    userCustomizedColumnsRef.current = true
     setColumnOrder((current) => {
       const nextOrder = moveColumnInOrder(current, key, direction)
       setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
@@ -153,6 +246,7 @@ export function LogViewer() {
     })
   }
   const dropColumnOn = (targetKey: LogColumnKey) => {
+    userCustomizedColumnsRef.current = true
     setColumnOrder((current) => {
       const nextOrder = reorderColumnByDrop(current, draggedColumn, targetKey)
       setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
@@ -177,27 +271,48 @@ export function LogViewer() {
   }
   const headerHeight = availableColumns.length ? 72 : 0
   return <>
+  {availableColumns.length > 0 && <div className="relative flex shrink-0 flex-wrap items-center gap-2 border border-slate-800 bg-slate-900 px-2 py-1 text-xs">
+    <span className="font-semibold uppercase text-slate-300">Columns</span>
+    <span className="rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-yellow-200">{headerColumns.length}/{availableColumns.length} shown</span>
+    {hiddenColumnCount > 0 && <span className="text-slate-400">{hiddenColumnCount} hidden</span>}
+    <button type="button" onClick={showDefaultColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">Essentials</button>
+    <button type="button" onClick={showAllColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">All</button>
+    <button type="button" onClick={clearColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">None</button>
+    <button type="button" aria-expanded={columnManagerOpen} aria-controls="column-manager" onClick={() => setColumnManagerOpen((open) => !open)} className="rounded border border-yellow-500/70 bg-yellow-300 px-2 py-0.5 font-semibold text-black">Manage columns</button>
+    {columnManagerOpen && <div id="column-manager" role="group" aria-label="Column visibility" className="absolute left-2 top-full z-30 mt-1 grid max-h-80 w-[min(56rem,calc(100vw-2rem))] grid-cols-2 gap-2 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 shadow-2xl md:grid-cols-3 lg:grid-cols-4">
+      {columnOrder.map((key) => {
+        const label = labelForColumn(key)
+        const checked = visibleColumns.includes(key)
+        return <label key={key} className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-[11px] ${checked ? 'border-yellow-500/60 bg-slate-900 text-white' : 'border-slate-800 bg-slate-950 text-slate-500'}`}>
+          <span className="truncate font-mono" title={label}>{label}</span>
+          <input type="checkbox" aria-label={`Show ${label}`} checked={checked} onChange={(e) => toggleColumn(key, e.target.checked)} />
+        </label>
+      })}
+    </div>}
+  </div>}
   <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
-      {availableColumns.length > 0 && <div role="row" aria-label="Excel-style column filters" className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
+      {availableColumns.length > 0 && <div role="row" aria-label="Visible column filters" className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
         <span className="inline-block min-w-28 text-[10px] uppercase text-slate-400">time/source</span>
         <span className="inline-block min-w-24 text-[10px] uppercase text-slate-400">namespace/pod</span>
         <span className="inline-block min-w-24 text-[10px] uppercase text-yellow-300">Rows: {filteredRows.length}/{visibleRows.length}</span>
-        {columnOrder.map((key, index) => {
+        {headerColumns.length === 0 && <span className="inline-block min-w-72 text-[10px] uppercase text-slate-500">No data columns selected — use Manage columns or Essentials</span>}
+        {headerColumns.map((key) => {
           const label = labelForColumn(key)
-          const checked = visibleColumns.includes(key)
-          return <span key={key} data-testid="column-control" data-column-key={key} draggable aria-grabbed={draggedColumn === key} onDragStart={(event) => startColumnDrag(key, event)} onDragEnter={(event) => allowColumnDrop(key, event)} onDragOver={(event) => allowColumnDrop(key, event)} onDrop={() => dropColumnOn(key)} onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null) }} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block cursor-grab border-l border-slate-700 pl-2 pr-2 align-top active:cursor-grabbing ${checked ? '' : 'opacity-50'} ${draggedColumn === key ? 'bg-slate-800 ring-1 ring-yellow-300' : ''} ${dragOverColumn === key && draggedColumn !== key ? 'border-yellow-300 bg-slate-800/70' : ''}`}>
+          const orderIndex = columnOrder.indexOf(key)
+          return <span key={key} data-testid="column-control" data-column-key={key} draggable aria-grabbed={draggedColumn === key} onDragStart={(event) => startColumnDrag(key, event)} onDragEnter={(event) => allowColumnDrop(key, event)} onDragOver={(event) => allowColumnDrop(key, event)} onDrop={() => dropColumnOn(key)} onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null) }} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block cursor-grab border-l border-slate-700 pl-2 pr-2 align-top active:cursor-grabbing ${draggedColumn === key ? 'bg-slate-800 ring-1 ring-yellow-300' : ''} ${dragOverColumn === key && draggedColumn !== key ? 'border-yellow-300 bg-slate-800/70' : ''}`}>
             <span className="mb-0.5 flex gap-1">
-              <button type="button" aria-label={`Move ${label} left`} disabled={index === 0} onClick={() => moveColumn(key, 'left')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">←</button>
-              <button type="button" aria-label={`Move ${label} right`} disabled={index === columnOrder.length - 1} onClick={() => moveColumn(key, 'right')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">→</button>
+              <button type="button" aria-label={`Move ${label} left`} disabled={orderIndex === 0} onClick={() => moveColumn(key, 'left')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">←</button>
+              <button type="button" aria-label={`Move ${label} right`} disabled={orderIndex === columnOrder.length - 1} onClick={() => moveColumn(key, 'right')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">→</button>
+              <button type="button" aria-label={`Hide ${label}`} onClick={() => toggleColumn(key, false)} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 hover:bg-slate-800">×</button>
             </span>
-            <label className="block whitespace-nowrap text-[10px] uppercase text-slate-300"><input className="mr-1 align-middle" type="checkbox" aria-label={`Show ${label}`} checked={checked} onChange={(e)=>toggleColumn(key, e.target.checked)} />{label}</label>
-            <input aria-label={`Filter ${label}`} className="mt-1 w-full min-w-20 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] text-white placeholder:text-slate-600 disabled:text-slate-600" placeholder="filter" value={columnFilters[key] ?? ''} disabled={!checked} onChange={(e)=>setColumnFilter(key, e.target.value)} />
+            <span className="block whitespace-nowrap text-[10px] uppercase text-slate-300">{label}</span>
+            <input aria-label={`Filter ${label}`} className="mt-1 w-full min-w-20 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] text-white placeholder:text-slate-600" placeholder="filter" value={columnFilters[key] ?? ''} onChange={(e)=>setColumnFilter(key, e.target.value)} />
           </span>
         })}
       </div>}
       {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={visibleColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
   <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">

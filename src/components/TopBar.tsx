@@ -29,6 +29,18 @@ function TargetPickerDialog({
   const [selectionPending, setSelectionPending] = useState(false)
   const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
   const normalizedQuery = query.trim().toLowerCase()
+  const storeContextValues = kube.selectedContexts.length ? kube.selectedContexts : kube.selectedContext ? [kube.selectedContext] : []
+  const storeNamespaceValues = Object.entries(kube.selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => scopeKey(context, namespace)))
+  const storeSelectedPods = selectedPodValues(kube.selectedPods)
+  const [draftContextValues, setDraftContextValues] = useState<string[]>(storeContextValues)
+  const [draftNamespaceValues, setDraftNamespaceValues] = useState<string[]>(storeNamespaceValues)
+  const [draftSelectedPods, setDraftSelectedPods] = useState<string[]>(storeSelectedPods)
+  useEffect(() => {
+    if (selectionPending) return
+    setDraftContextValues(storeContextValues)
+    setDraftNamespaceValues(storeNamespaceValues)
+    setDraftSelectedPods(storeSelectedPods)
+  }, [selectionPending, storeContextValues.join('\u0000'), storeNamespaceValues.join('\u0000'), storeSelectedPods.join('\u0000')])
   const toggleContextExpanded = (contextName: string) => {
     setCollapsedContexts((current) => ({ ...current, [contextName]: !current[contextName] }))
   }
@@ -40,15 +52,15 @@ function TargetPickerDialog({
       void result.finally(() => setSelectionPending(false)).catch(() => undefined)
     }
   }
-  const contextValues = kube.selectedContexts.length ? kube.selectedContexts : kube.selectedContext ? [kube.selectedContext] : []
+  const contextValues = draftContextValues
   const contextsToProbe = kube.contexts.map((context) => context.name)
   useEffect(() => {
     const targets = contextsToProbe.length ? contextsToProbe : contextValues
     if (targets.length === 0) return
     void useKubeStore.getState().ensureNamespacesForContexts(targets)
   }, [contextsToProbe.join('\u0000'), contextValues.join('\u0000')])
-  const namespaceValues = Object.entries(kube.selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => scopeKey(context, namespace)))
-  const selectedPods = selectedPodValues(kube.selectedPods)
+  const namespaceValues = draftNamespaceValues
+  const selectedPods = draftSelectedPods
   const discoveryActive = kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing
   const podRefreshActive = kube.loadingPods
   const progressLabel = kube.cacheRefreshing ? 'Refreshing cache' : kube.loadingContexts ? 'Loading contexts' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingPods ? 'Loading pods' : ''
@@ -116,9 +128,10 @@ function TargetPickerDialog({
                 >
                   <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
                 </button>
-                <label className="flex min-w-0 flex-1 items-center gap-2">
-                  <input type="checkbox" checked={contextChecked} disabled={selectionPending} onChange={() => { void runSelectionChange(() => onContextChange(toggleValue(contextValues, context.name))) }} />
+                <label className={`flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 ${contextChecked ? 'bg-yellow-400/10 text-yellow-100 ring-1 ring-yellow-400/30' : ''}`}>
+                  <input type="checkbox" checked={contextChecked} disabled={selectionPending} onChange={() => { const next = toggleValue(contextValues, context.name); setDraftContextValues(next); void runSelectionChange(() => onContextChange(next)) }} />
                   <span className="min-w-0 truncate">{context.name}</span>
+                  {contextChecked && <span className="shrink-0 rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">Selected</span>}
                   <span className="shrink-0 text-xs font-normal text-slate-500">{namespaces.length} namespaces</span>
                 </label>
               </div>
@@ -131,9 +144,10 @@ function TargetPickerDialog({
                   const nsKey = scopeKey(context.name, namespace.name)
                   const namespaceChecked = namespaceValues.includes(nsKey)
                   return <div key={nsKey} className="rounded border border-slate-800 bg-slate-950/70">
-                    <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-100">
-                      <input type="checkbox" checked={namespaceChecked} disabled={selectionPending} onChange={() => { void runSelectionChange(() => onNamespaceChange(toggleValue(namespaceValues, nsKey))) }} />
+                    <label className={`flex items-center gap-2 px-3 py-2 text-sm font-medium ${namespaceChecked ? 'bg-yellow-400/10 text-yellow-100' : 'text-slate-100'}`}>
+                      <input type="checkbox" checked={namespaceChecked} disabled={selectionPending} onChange={() => { const next = toggleValue(namespaceValues, nsKey); setDraftNamespaceValues(next); void runSelectionChange(() => onNamespaceChange(next)) }} />
                       <span>{namespace.name}</span>
+                      {namespaceChecked && <span className="rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">Selected</span>}
                       <span className="text-xs font-normal text-slate-500">{pods.length} pods</span>
                     </label>
                     <div className="space-y-1 pb-2 pl-7 pr-2">
@@ -144,9 +158,11 @@ function TargetPickerDialog({
                       {pods.length === 0 && (!kube.loadingPods || !namespaceChecked) && <p className="px-2 py-1 text-xs text-slate-500">No loaded pods</p>}
                       {pods.map((pod) => {
                         const value = podValue(context.name, namespace.name, pod.name)
-                        return <label key={value} className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-200 hover:bg-slate-800">
-                          <input aria-label={`${context.name} / ${namespace.name} / ${pod.name}`} type="checkbox" checked={selectedPods.includes(value)} disabled={selectionPending} onChange={() => { void runSelectionChange(() => onPodChange(toggleValue(selectedPods, value))) }} />
+                        const podChecked = selectedPods.includes(value)
+                        return <label key={value} className={`flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-800 ${podChecked ? 'border border-yellow-400/40 bg-yellow-400/10 text-yellow-100 shadow-[0_0_0_1px_rgba(250,204,21,0.10)]' : 'text-slate-200'}`}>
+                          <input aria-label={`${context.name} / ${namespace.name} / ${pod.name}`} type="checkbox" checked={podChecked} disabled={selectionPending} onChange={() => { const next = toggleValue(selectedPods, value); setDraftSelectedPods(next); void runSelectionChange(() => onPodChange(next)) }} />
                           <span className="min-w-0 flex-1 truncate">{pod.name}</span>
+                          {podChecked && <span className="rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">Selected</span>}
                           <span className={`rounded border px-1.5 py-0.5 text-[10px] ${phaseClass(pod.phase)}`}>{pod.phase}</span>
                         </label>
                       })}
@@ -159,13 +175,14 @@ function TargetPickerDialog({
         </div>
         <aside aria-label="Selected targets" className="min-h-0 overflow-y-auto border-l border-slate-800 p-3">
           <h3 className="text-sm font-semibold">Selected targets</h3>
-          <p className="mb-2 text-xs text-slate-400">{selectedPods.length} selected</p>
+          <p className="mb-2 text-xs text-slate-400">{selectedPods.length} selected{selectionPending ? ' · applying…' : ''}</p>
+          {selectionPending && <div role="status" aria-label="Selection shown immediately" className="mb-2 rounded border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 text-xs text-yellow-100">Selection shown immediately. Applying target change…</div>}
           <div className="space-y-2">
             {selectedPods.length === 0 && <p className="text-xs text-slate-500">No pods selected</p>}
             {selectedPods.map((value) => {
               const [scope, pod] = value.split('\u0000').length === 3 ? [value.split('\u0000').slice(0, 2).join('\u0000'), value.split('\u0000')[2]] : ['', value]
               const { context, namespace } = parseScopeKey(scope)
-              return <button key={value} disabled={selectionPending} className="block w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-left text-xs text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => { void runSelectionChange(() => onPodChange(selectedPods.filter((item) => item !== value))) }}>
+              return <button key={value} disabled={selectionPending} className="block w-full rounded border border-yellow-400/40 bg-yellow-400/10 px-2 py-1 text-left text-xs text-yellow-100 hover:bg-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-70" onClick={() => { const next = selectedPods.filter((item) => item !== value); setDraftSelectedPods(next); void runSelectionChange(() => onPodChange(next)) }}>
                 {context} / {namespace} / {pod} ×
               </button>
             })}
@@ -182,10 +199,10 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   const selectedCount = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
   const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing
   const targetStatusLabel = kube.cacheRefreshing ? 'Refreshing target cache' : kube.loadingPods ? 'Loading pods' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingContexts ? 'Loading contexts' : 'Targets ready'
-  return <div className="flex flex-wrap gap-3 items-center p-3 border-b border-slate-800 bg-slate-950">
+  return <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-2 py-1.5">
     <strong>klogcat</strong>
     <AnimatedStatusPill active={targetsLoading} label={targetStatusLabel} detail={`Targets: ${selectedCount} selected`} />
-    <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
+    <button className={`rounded border border-yellow-500 bg-yellow-400 px-2 py-0.5 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
     <button onClick={onSettings}>Settings</button>
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}
   </div>

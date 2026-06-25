@@ -1,0 +1,6 @@
+        Info Looking up installed tauri packages to check mismatched versions...
+        Warn The bundle identifier "com.klogcat.app" set in `"tauri.conf.json" identifier` ends with `.app`. This is not recommended because it conflicts with the application bundle extension on macOS.
+     Running beforeBuildCommand `npm run build`
+   Compiling klogcat v0.0.5 (/Users/yprite/repos/klogcat/src-tauri)
+    Finished `release` profile [optimized] target(s) in 11.46s
+       Built application at: /Users/yprite/repos/klogcat/src-tauri/target/release/klogcat

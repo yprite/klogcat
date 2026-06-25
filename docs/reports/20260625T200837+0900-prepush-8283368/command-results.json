@@ -1,0 +1,38 @@
+{
+  "frontend-build": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/frontend-build.out"
+  },
+  "metrics-prepush": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/metrics-prepush.out"
+  },
+  "rust-clippy": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/rust-clippy.out"
+  },
+  "rust-fmt": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/rust-fmt.out"
+  },
+  "rust-test": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/rust-test.out"
+  },
+  "test-e2e": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/test-e2e.out"
+  },
+  "test-scenario": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/test-scenario.out"
+  },
+  "test-unit": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/test-unit.out"
+  },
+  "typecheck": {
+    "status": "passed",
+    "log": "docs/reports/20260625T200837+0900-prepush-8283368/logs/typecheck.out"
+  }
+}

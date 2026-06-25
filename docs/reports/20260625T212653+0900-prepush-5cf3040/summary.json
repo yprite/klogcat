@@ -1,0 +1,211 @@
+{
+  "id": "20260625T212653+0900-prepush-5cf3040",
+  "generatedAt": "2026-06-25T12:26:53.614Z",
+  "hook": "pre-push",
+  "status": "passed",
+  "releaseGate": false,
+  "git": {
+    "branch": "feat/logcat-query-suggestions",
+    "head": "5cf3040ef7e766f601a1545eb34a89f6091b7285",
+    "shortHead": "5cf3040",
+    "status": [
+      "M .gitignore",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/command-results.json",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/frontend-build.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/metrics-prepush.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/rust-clippy.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/rust-fmt.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/rust-test.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/test-e2e.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/test-scenario.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/test-unit.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/logs/typecheck.out",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/quality-metrics.json",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/summary.json",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/summary.md",
+      "A  docs/reports/20260625T204028+0900-prepush-5cf3040/test-results.json",
+      "D  e2e/browserFallback.e2e.test.tsx",
+      "A  e2e/productQuality.e2e.test.tsx",
+      " M package-lock.json",
+      "MM package.json",
+      " M scripts/harness/prepush-report.mjs",
+      " M src-tauri/src/commands/kube.rs",
+      "?? docs/reports/20260625T212653+0900-prepush-5cf3040/",
+      "?? scripts/harness/e2e-artifacts.mjs",
+      "?? scripts/harness/run-browser-e2e.mjs",
+      "?? scripts/harness/run-desktop-e2e.mjs",
+      "?? scripts/harness/run-e2e.mjs"
+    ]
+  },
+  "qualityMetrics": {
+    "fileCount": 91,
+    "functionCount": 337,
+    "maxCyclomaticComplexity": 96,
+    "maxCognitiveComplexity": 419,
+    "maxFunctionLines": 703,
+    "maxFileLines": 943,
+    "maxCoupling": 13,
+    "minMaintainability": 0,
+    "cycleCount": 0,
+    "architectureViolationCount": 0
+  },
+  "testResults": {
+    "unit": {
+      "status": "passed",
+      "frontend": {
+        "layer": "unit",
+        "status": "passed",
+        "filesPassed": 22,
+        "filesTotal": 22,
+        "testsPassed": 144,
+        "testsTotal": 144,
+        "duration": "2.19s (transform 925ms, setup 1.01s, import 1.57s, tests 1.87s, environment 10.08s)"
+      },
+      "rust": {
+        "status": "passed",
+        "suites": 2,
+        "passed": 37,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filteredOut": 0
+      },
+      "testsPassed": 181,
+      "testsTotal": 181
+    },
+    "scenario": {
+      "layer": "scenario",
+      "status": "passed",
+      "filesPassed": 13,
+      "filesTotal": 13,
+      "testsPassed": 23,
+      "testsTotal": 23,
+      "duration": "1.66s (transform 1.19s, setup 567ms, import 1.76s, tests 2.42s, environment 5.87s)"
+    },
+    "e2e": {
+      "layer": "e2e",
+      "status": "passed",
+      "filesPassed": 1,
+      "filesTotal": 1,
+      "testsPassed": 6,
+      "testsTotal": 6,
+      "duration": "773ms (transform 94ms, setup 28ms, import 126ms, tests 223ms, environment 233ms)",
+      "subchecks": {
+        "vitest": {
+          "layer": "e2e",
+          "status": "passed",
+          "filesPassed": 1,
+          "filesTotal": 1,
+          "testsPassed": 3,
+          "testsTotal": 3,
+          "duration": "773ms (transform 94ms, setup 28ms, import 126ms, tests 223ms, environment 233ms)"
+        },
+        "browser": {
+          "status": "passed",
+          "testsPassed": 1,
+          "testsTotal": 1,
+          "artifacts": ".harness/e2e-artifacts/20260625T122630548Z-97109-browser",
+          "error": null
+        },
+        "desktop": {
+          "status": "passed",
+          "testsPassed": 2,
+          "testsTotal": 2,
+          "artifacts": ".harness/e2e-artifacts/20260625T122632081Z-97127-desktop",
+          "error": null
+        }
+      }
+    },
+    "rust": {
+      "status": "passed",
+      "suites": 2,
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filteredOut": 0
+    }
+  },
+  "e2eArtifacts": [
+    "docs/reports/20260625T212653+0900-prepush-5cf3040/e2e-artifacts/20260625T122630548Z-97109-browser",
+    "docs/reports/20260625T212653+0900-prepush-5cf3040/e2e-artifacts/20260625T122632081Z-97127-desktop"
+  ],
+  "buildResults": {
+    "typecheck": {
+      "status": "passed"
+    },
+    "frontendBuild": {
+      "status": "passed",
+      "assets": [
+        {
+          "path": "dist/index.html",
+          "sizeKb": 0.39,
+          "gzipKb": 0.26
+        },
+        {
+          "path": "dist/assets/index-C6pUuFzN.css",
+          "sizeKb": 19.85,
+          "gzipKb": 4.98
+        },
+        {
+          "path": "dist/assets/App-DYsi4aGh.js",
+          "sizeKb": 105.53,
+          "gzipKb": 30.51
+        },
+        {
+          "path": "dist/assets/index-FFHQQtA8.js",
+          "sizeKb": 202.05,
+          "gzipKb": 63.77
+        }
+      ],
+      "duration": "259ms"
+    },
+    "rustClippy": {
+      "status": "passed"
+    },
+    "rustFmt": {
+      "status": "passed"
+    },
+    "tauriBuild": {
+      "status": "skipped"
+    }
+  },
+  "commandResults": {
+    "frontend-build": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/frontend-build.out"
+    },
+    "metrics-prepush": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/metrics-prepush.out"
+    },
+    "rust-clippy": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/rust-clippy.out"
+    },
+    "rust-fmt": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/rust-fmt.out"
+    },
+    "rust-test": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/rust-test.out"
+    },
+    "test-e2e": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/test-e2e.out"
+    },
+    "test-scenario": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/test-scenario.out"
+    },
+    "test-unit": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/test-unit.out"
+    },
+    "typecheck": {
+      "status": "passed",
+      "log": "docs/reports/20260625T212653+0900-prepush-5cf3040/logs/typecheck.out"
+    }
+  }
+}

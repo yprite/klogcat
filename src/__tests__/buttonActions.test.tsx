@@ -6,6 +6,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { listPods } from '../commands/tauriKube'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(async () => ({ settings: defaultSettings })),
@@ -17,6 +18,13 @@ vi.mock('../commands/tauriLogs', () => ({
   startLogStream: vi.fn(async () => undefined),
   stopLogStream: vi.fn(async () => undefined),
   stopAllLogStreams: vi.fn(async () => undefined),
+}))
+
+vi.mock('../commands/tauriKube', () => ({
+  getCurrentContext: vi.fn(async () => 'ctx'),
+  listContexts: vi.fn(async () => ({ contexts: [{ name: 'ctx' }] })),
+  listNamespaces: vi.fn(async () => ({ namespaces: [{ name: 'foo' }] })),
+  listPods: vi.fn(async (namespace: string, context?: string) => ({ context, namespace, pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace, phase: 'Running', containers: ['app'] }] })),
 }))
 
 function resetStores() {
@@ -129,6 +137,11 @@ describe('button actions', () => {
 
   it('starts one stream for every selected running pod', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockImplementation(async (namespace: string, context?: string) => ({
+      context,
+      namespace,
+      pods: [{ name: namespace === 'prod' ? 'pod-2' : 'pod-1', namespace, phase: 'Running', containers: [namespace === 'prod' ? 'worker' : 'app'] }],
+    }))
     useKubeStore.setState({
       currentContext: 'ctx',
       selectedContexts: ['ctx', 'cluster-a'],
@@ -146,6 +159,125 @@ describe('button actions', () => {
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('refreshes pods and retries with a matching fallback pod when a cached pod disappeared', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(startLogStream)
+      .mockRejectedValueOnce({ code: 'stream_spawn_failed', message: 'pods "api-7d9c8f6b8d-x2abc" not found' })
+      .mockResolvedValueOnce(undefined)
+    vi.mocked(listPods)
+      .mockResolvedValueOnce({
+        context: 'ctx',
+        namespace: 'foo',
+        pods: [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      })
+      .mockResolvedValueOnce({
+        context: 'ctx',
+        namespace: 'foo',
+        pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9c8f6b8d-x2abc'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
+    expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ pod: 'api-7d9c8f6b8d-x2abc' }))
+    expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ pod: 'api-64cc9db7fd-k9f2p', filePath: '/scloud/foo/logs/api-64cc9db7fd-k9f2p/foo.log' }))
+    expect(useKubeStore.getState().selectedPods['ctx\u0000foo']).toEqual(['api-64cc9db7fd-k9f2p'])
+    expect(useLogStore.getState().actionDebugMessages.some((message) => message.includes('Pod fallback'))).toBe(true)
+  })
+
+  it('refreshes selected pods before starting and uses the current matching pod without launching a stale pod first', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'foo',
+      pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9c8f6b8d-x2abc'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(1))
+    expect(listPods).toHaveBeenCalledWith('foo', 'ctx')
+    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({ pod: 'api-64cc9db7fd-k9f2p' }))
+    expect(startLogStream).not.toHaveBeenCalledWith(expect.objectContaining({ pod: 'api-7d9c8f6b8d-x2abc' }))
+    expect(useKubeStore.getState().selectedPods['ctx\u0000foo']).toEqual(['api-64cc9db7fd-k9f2p'])
+  })
+
+  it('does not launch a selected stale pod when live refresh finds no replacement', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValueOnce({ namespace: 'foo', pods: [] })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['api-7d9c8f6b8d-x2abc'] },
+    })
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/no live pod/i))
+    expect(startLogStream).not.toHaveBeenCalled()
+  })
+
+  it('clears Kubernetes target cache from settings and exposes restart', () => {
+    const restart = vi.fn()
+    const storage = (() => {
+      const values = new Map<string, string>()
+      return {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value) },
+        removeItem: (key: string) => { values.delete(key) },
+        clear: () => { values.clear() },
+        key: (index: number) => Array.from(values.keys())[index] ?? null,
+        get length() { return values.size },
+      } as Storage
+    })()
+    vi.stubGlobal('localStorage', storage)
+    localStorage.setItem('klogcat:kube-cache:v1', JSON.stringify({ version: 1, savedAt: Date.now(), currentContext: 'ctx', contexts: [{ name: 'ctx' }], namespacesByContext: { ctx: [{ name: 'foo' }] }, podsByScope: { 'ctx\u0000foo': [{ name: 'api-1', namespace: 'foo', phase: 'Running', containers: ['app'] }] } }))
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }],
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: { 'ctx\u0000foo': [{ name: 'api-1', namespace: 'foo', phase: 'Running', containers: ['app'] }] },
+      selectedPods: { 'ctx\u0000foo': ['api-1'] },
+      cacheLastRefreshAt: Date.now(),
+    })
+
+    render(<SettingsModal open onClose={() => {}} onRestart={restart} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /clear target cache/i }))
+    expect(localStorage.getItem('klogcat:kube-cache:v1')).toBeNull()
+    expect(useKubeStore.getState().selectedPods).toEqual({})
+    expect(screen.getByText(/target cache cleared/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /restart app/i }))
+    expect(restart).toHaveBeenCalledTimes(1)
   })
 
   it('shows animated progress while streams are starting', async () => {
@@ -173,6 +305,7 @@ describe('button actions', () => {
 
   it('starts INFO, ACC, and ERR streams when all source types are selected', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValue({ namespace: 'foo', pods: [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }] })
     useKubeStore.setState({
       currentContext: 'ctx',
       selectedContexts: ['ctx'],
@@ -219,6 +352,7 @@ describe('button actions', () => {
 
   it('uses the fixed scloud namespace and pod log path for each source type', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValue({ namespace: 'foo', pods: [{ name: 'api-7d9', namespace: 'foo', phase: 'Running', containers: ['app'] }] })
     useKubeStore.setState({
       currentContext: 'ctx',
       selectedContexts: ['ctx'],
@@ -257,5 +391,27 @@ describe('button actions', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/initial tail lines/i)).toHaveValue(defaultSettings.initialTailLines))
     expect(screen.getByText(/settings reset to defaults/i)).toBeInTheDocument()
+  })
+
+  it('lets Settings select Custom JSON before editing and saving policy details', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open={true} onClose={() => {}} />)
+
+    fireEvent.change(screen.getByRole('combobox', { name: /log policy/i }), { target: { value: 'custom' } })
+    const policyInput = screen.getByLabelText(/custom policy json/i)
+    const policy = JSON.parse(policyInput.textContent ?? '')
+    policy.pathTemplate = '/custom/[namespace]/[podname][suffix].jsonl'
+    policy.sources.info.label = 'APP'
+
+    fireEvent.change(policyInput, { target: { value: JSON.stringify(policy, null, 2) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({
+        pathTemplate: '/custom/[namespace]/[podname][suffix].jsonl',
+        sources: expect.objectContaining({ info: expect.objectContaining({ label: 'APP' }) }),
+      }),
+    })))
   })
 })

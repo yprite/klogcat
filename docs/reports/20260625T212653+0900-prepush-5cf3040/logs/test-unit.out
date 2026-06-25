@@ -1,0 +1,21 @@
+
+> klogcat@0.0.5 test:unit
+> node scripts/harness/run-test-layer.mjs unit
+
+[test-layer] layer=unit status=running files=22
+
+ RUN  v4.1.9 /Users/yprite/repos/klogcat
+
+(node:96969) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:96968) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:96970) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  22 passed (22)
+      Tests  144 passed (144)
+   Start at  21:26:23
+   Duration  2.19s (transform 925ms, setup 1.01s, import 1.57s, tests 1.87s, environment 10.08s)
+
+[test-layer] layer=unit status=passed files=22

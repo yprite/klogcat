@@ -1,5 +1,8 @@
+import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { LogLineEvent, LogLinesEvent, LogStreamErrorEvent, LogStreamExitEvent, LogStreamStartedEvent, LogStreamStderrEvent } from '../types/log'
+
+const noopUnlisten = () => undefined
 
 export async function subscribeLogEvents(handlers: {
   onStarted: (event: LogStreamStartedEvent) => void
@@ -9,6 +12,8 @@ export async function subscribeLogEvents(handlers: {
   onExit: (event: LogStreamExitEvent) => void
   onError: (event: LogStreamErrorEvent) => void
 }) {
+  if (!isTauri()) return noopUnlisten
+
   const unlisteners = await Promise.all([
     listen<LogStreamStartedEvent>('log://started', (e) => handlers.onStarted(e.payload)),
     listen<LogLinesEvent>('log://lines', (e) => handlers.onLines?.(e.payload)),

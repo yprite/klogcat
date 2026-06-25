@@ -3,7 +3,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::VecDeque,
-    io,
+    env, io,
     process::Command,
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -68,15 +68,22 @@ fn compact_debug_text(value: &str) -> String {
     }
 }
 
+fn kubectl_binary() -> String {
+    env::var("KLOGCAT_KUBECTL_BIN").unwrap_or_else(|_| "kubectl".into())
+}
+
 fn run_kubectl(args: &[String]) -> Result<Output, CommandError> {
-    let output = Command::new("kubectl").args(args).output().map_err(|e| {
-        if e.kind() == io::ErrorKind::NotFound {
-            CommandError::new("kubectl_not_found", "kubectl was not found")
-        } else {
-            CommandError::new("current_context_failed", "failed to run kubectl")
-                .with_details(e.to_string())
-        }
-    })?;
+    let output = Command::new(kubectl_binary())
+        .args(args)
+        .output()
+        .map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                CommandError::new("kubectl_not_found", "kubectl was not found")
+            } else {
+                CommandError::new("current_context_failed", "failed to run kubectl")
+                    .with_details(e.to_string())
+            }
+        })?;
     Ok(Output {
         status: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
@@ -274,11 +281,10 @@ fn filter_namespaces_with_pod_access(
 
     let mut results = rx.into_iter().collect::<Vec<_>>();
     results.sort_by_key(|(index, _, _)| *index);
-    let filtered = results
+    results
         .into_iter()
         .filter_map(|(_, namespace, allowed)| allowed.then_some(namespace))
-        .collect::<Vec<_>>();
-    filtered
+        .collect::<Vec<_>>()
 }
 pub fn parse_pods_json(
     context: Option<String>,
@@ -321,6 +327,7 @@ pub fn parse_pods_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
     #[test]
     fn namespaces_skip_missing() {
         let r = parse_namespaces_json(
@@ -384,5 +391,25 @@ mod tests {
         ];
         let filtered = filter_namespaces_by_access(namespaces, |_| false);
         assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn kubectl_not_found_maps_to_recoverable_command_error() {
+        let previous = env::var_os("KLOGCAT_KUBECTL_BIN");
+        env::set_var(
+            "KLOGCAT_KUBECTL_BIN",
+            "/definitely/missing/klogcat-e2e-kubectl",
+        );
+        let result = run_kubectl(&["config".into(), "current-context".into()]);
+        match previous {
+            Some(value) => env::set_var("KLOGCAT_KUBECTL_BIN", value),
+            None => env::remove_var("KLOGCAT_KUBECTL_BIN"),
+        }
+        let error = match result {
+            Ok(_) => panic!("expected kubectl lookup to fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "kubectl_not_found");
+        assert_eq!(error.message, "kubectl was not found");
     }
 }
