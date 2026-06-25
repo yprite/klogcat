@@ -11,7 +11,7 @@
     "test:unit": "node scripts/harness/run-test-layer.mjs unit",
     "test:scenario": "node scripts/harness/run-test-layer.mjs scenario",
     "test:scenario:coverage": "node scripts/harness/run-test-layer.mjs scenario --coverage",
-    "test:e2e": "node scripts/harness/run-test-layer.mjs e2e",
+    "test:e2e": "node scripts/harness/run-e2e.mjs",
     "test:watch": "vitest",
     "tauri": "tauri",
     "metrics:precommit": "scripts/harness/metrics-pre-commit.sh",
@@ -37,6 +37,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",

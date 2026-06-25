@@ -5,6 +5,7 @@ src-tauri/target/
 .harness/reports/
 .harness/tmp/
 .harness/coverage/
+.harness/e2e-artifacts/
 .DS_Store
 .env
 .env.*

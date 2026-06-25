@@ -1,0 +1,50 @@
+   Compiling klogcat v0.0.5 (/Users/yprite/repos/klogcat/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s
+     Running unittests src/lib.rs (target/debug/deps/klogcat_lib-59cff90c821db5f0)
+
+running 37 tests
+test commands::kube::tests::namespace_access_filter_returns_empty_when_all_auth_checks_deny ... ok
+test commands::kube::tests::namespace_access_filter_keeps_only_pod_listable_namespaces ... ok
+test commands::kube::tests::auth_stdout_allows_yes_even_with_warnings ... ok
+test commands::kube::tests::kubectl_not_found_maps_to_recoverable_command_error ... ok
+test process::line_splitter::tests::invalid_utf8_in_one_completed_line_uses_lossy_decode_only_for_that_line ... ok
+test process::line_splitter::tests::crlf_emits_lines_without_trailing_cr ... ok
+test process::line_splitter::tests::multiple_lines_in_one_chunk ... ok
+test commands::kube::tests::namespaces_skip_missing ... ok
+test process::line_splitter::tests::partial_line_across_chunks ... ok
+test commands::kube::tests::pods_extract ... ok
+test process::line_splitter::tests::partial_line_without_trailing_newline_is_flushed_on_process_exit ... ok
+test process::line_splitter::tests::utf8_multibyte_boundary_split ... ok
+test process::log_process::mocked_process::extract_log_time_returns_none_for_raw_line ... ok
+test process::log_process::mocked_process::extract_log_time_supports_json_epoch_time_ms ... ok
+test process::log_process::mocked_process::extract_log_time_supports_iso_prefix ... ok
+test process::log_process::mocked_process::extract_log_time_supports_json_at_timestamp_string ... ok
+test process::log_process::mocked_process::extract_log_time_supports_bracket_space_prefix ... ok
+test process::log_process::mocked_process::extract_log_time_supports_json_epoch_time_seconds ... ok
+test process::log_process::mocked_process::extract_log_time_supports_json_time_string ... ok
+test process::log_process::mocked_process::heap_pops_older_order_time_first ... ok
+test process::log_process::mocked_process::extract_log_time_supports_space_prefix ... ok
+test process::log_process::mocked_process::heap_ties_by_received_at_then_seq ... ok
+test process::log_process::mocked_process::max_batch_size_is_respected ... ok
+test process::log_process::mocked_process::order_time_falls_back_to_received_at ... ok
+test process::log_process::mocked_process::order_time_prefers_log_time ... ok
+test process::log_process::mocked_process::reorder_window_holds_recent_log ... ok
+test process::log_process::mocked_process::stream_ended_drains_only_that_stream ... ok
+test process::log_process::mocked_process::timestampless_line_uses_received_at ... ok
+test process::log_process::mocked_process::validation_rejects_bad_source_type_and_kube_names ... ok
+test process::log_process::mocked_process::validation_rejects_relative_path ... ok
+test process::log_process::mocked_process::wall_clock_age_flushes_quiet_streams ... ok
+test process::log_process::mocked_process::zero_window_flushes_available_logs_in_sorted_order ... ok
+test settings::tests::default_settings_validate ... ok
+test settings::tests::preserves_optional_log_policy_for_frontend_settings ... ok
+test settings::tests::migrates_legacy_app_log_source_key_to_info ... ok
+test tests::main_window_close_stops_streams_and_exits_app ... ok
+test settings::tests::uppercase_keys_invalid ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/klogcat-40c87e2180d6774c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

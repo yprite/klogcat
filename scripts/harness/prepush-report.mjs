@@ -31,6 +31,7 @@ if (metrics) {
 const commandResults = buildCommandResults(commandLogs)
 const testResults = buildTestResults(commandLogs)
 const buildResults = buildBuildResults(commandLogs)
+const e2eArtifacts = copyE2eArtifacts(reportDir)
 const gitInfo = buildGitInfo()
 
 const summary = {
@@ -42,6 +43,7 @@ const summary = {
   git: gitInfo,
   qualityMetrics: metrics?.summary ?? null,
   testResults,
+  e2eArtifacts,
   buildResults,
   commandResults,
 }
@@ -90,7 +92,7 @@ function buildCommandResults(logs) {
 function buildTestResults(logs) {
   const unitFrontend = parseVitestLayerOutput(logs['test-unit']?.output ?? '', 'unit')
   const scenario = parseVitestLayerOutput(logs['test-scenario']?.output ?? '', 'scenario')
-  const e2e = parseVitestLayerOutput(logs['test-e2e']?.output ?? '', 'e2e')
+  const e2e = parseE2eOutput(logs['test-e2e']?.output ?? '')
   const rust = parseRustTestOutput(logs['rust-test']?.output ?? '')
 
   return {
@@ -105,6 +107,22 @@ function buildTestResults(logs) {
     e2e,
     rust,
   }
+}
+
+function copyE2eArtifacts(reportDir) {
+  const source = path.join(repoRoot, '.harness', 'e2e-artifacts')
+  if (!fs.existsSync(source)) return []
+  const targetRoot = path.join(reportDir, 'e2e-artifacts')
+  fs.mkdirSync(targetRoot, { recursive: true })
+  const copied = []
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const sourceDir = path.join(source, entry.name)
+    const targetDir = path.join(targetRoot, entry.name)
+    fs.cpSync(sourceDir, targetDir, { recursive: true })
+    copied.push(relative(targetDir))
+  }
+  return copied.sort()
 }
 
 function buildBuildResults(logs) {
@@ -154,6 +172,56 @@ function parseVitestLayerOutput(output, layer) {
     testsPassed: tests ? Number(tests[1]) : null,
     testsTotal: tests ? Number(tests[2]) : null,
     duration: duration ? duration[1].trim() : null,
+  }
+}
+
+function parseE2eOutput(output) {
+  const vitest = parseVitestLayerOutput(output, 'e2e')
+  const browser = parseHarnessSubcheck(output, 'browser-e2e')
+  const desktop = parseHarnessSubcheck(output, 'desktop-e2e')
+  const extraChecks = [browser, desktop]
+  const statuses = [vitest.status, ...extraChecks.map((check) => check.status)]
+  const status = statuses.every((value) => value === 'passed' || value === 'skipped') ? 'passed' : 'unknown'
+  const extraPassed = extraChecks.reduce((sum, check) => sum + (check.testsPassed ?? 0), 0)
+  const extraTotal = extraChecks.reduce((sum, check) => sum + (check.testsTotal ?? 0), 0)
+  return {
+    ...vitest,
+    status,
+    testsPassed: (vitest.testsPassed ?? 0) + extraPassed,
+    testsTotal: (vitest.testsTotal ?? 0) + extraTotal,
+    subchecks: { vitest, browser, desktop },
+  }
+}
+
+function parseHarnessSubcheck(output, marker) {
+  const failed = output.match(new RegExp(`\\[${marker}\\] status=failed(?: tests=(\\d+))?(?: artifacts=([^\\s]+))?(?: error=(.+))?`))
+  if (failed) {
+    const total = failed[1] ? Number(failed[1]) : 1
+    return {
+      status: 'failed',
+      testsPassed: 0,
+      testsTotal: total,
+      artifacts: failed[2] ?? null,
+      error: failed[3] ?? null,
+    }
+  }
+  const passed = output.match(new RegExp(`\\[${marker}\\] status=passed(?: tests=(\\d+))?(?: artifacts=([^\\s]+))?`))
+  if (passed) {
+    const total = passed[1] ? Number(passed[1]) : 1
+    return {
+      status: 'passed',
+      testsPassed: total,
+      testsTotal: total,
+      artifacts: passed[2] ?? null,
+      error: null,
+    }
+  }
+  return {
+    status: 'not-run',
+    testsPassed: 0,
+    testsTotal: 0,
+    artifacts: null,
+    error: null,
   }
 }
 
@@ -235,7 +303,15 @@ function renderSummaryMarkdown(summary, metrics) {
 | --- | --- | ---: | ---: | --- |
 | Unit | \`${unit.status}\` | ${unit.testsPassed ?? 'n/a'} | ${unit.testsTotal ?? 'n/a'} | frontend + Rust cargo tests |
 | Scenario | \`${scenario.status}\` | ${scenario.testsPassed ?? 'n/a'} | ${scenario.testsTotal ?? 'n/a'} | ${scenario.reason ?? ''} |
-| E2E | \`${e2e.status}\` | ${e2e.testsPassed ?? 'n/a'} | ${e2e.testsTotal ?? 'n/a'} | ${e2e.reason ?? ''} |
+| E2E | \`${e2e.status}\` | ${e2e.testsPassed ?? 'n/a'} | ${e2e.testsTotal ?? 'n/a'} | vitest + browser + desktop |
+
+## E2E subchecks
+
+| Check | Status | Passed | Total | Artifacts |
+| --- | --- | ---: | ---: | --- |
+| Vitest contract | \`${e2e.subchecks?.vitest?.status ?? 'n/a'}\` | ${e2e.subchecks?.vitest?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.vitest?.testsTotal ?? 'n/a'} | n/a |
+| Real browser | \`${e2e.subchecks?.browser?.status ?? 'n/a'}\` | ${e2e.subchecks?.browser?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.browser?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.browser?.artifacts)} |
+| Desktop binary | \`${e2e.subchecks?.desktop?.status ?? 'n/a'}\` | ${e2e.subchecks?.desktop?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.desktop?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.desktop?.artifacts)} |
 
 ## Build and static checks
 
@@ -260,6 +336,12 @@ ${Object.entries(summary.commandResults).map(([name, result]) => {
     return `- \`${name}\`: [${logLink}](${logLink})`
   }).join('\n')}
 `
+}
+
+function artifactCell(artifactPath) {
+  if (!artifactPath) return 'n/a'
+  const base = path.basename(artifactPath)
+  return `[\`${base}\`](e2e-artifacts/${base})`
 }
 
 function readJsonIfExists(file) {
