@@ -52,4 +52,12 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByLabelText(/custom policy json/i)).toBeInTheDocument()
     expect(screen.getByText(/custom policy selected/i)).toBeInTheDocument()
   })
+
+  it('keeps the settings content in a scrollable panel', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    const dialog = screen.getByRole('dialog', { name: /settings/i })
+    expect(dialog).toHaveClass('max-h-[92vh]', 'overflow-hidden')
+    expect(screen.getByTestId('settings-scroll-panel')).toHaveClass('overflow-y-auto')
+  })
 })

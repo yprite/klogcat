@@ -78,55 +78,67 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     recordActionDebug('Restart app clicked')
     onRestart()
   }
-  return <div className="fixed inset-0 bg-black/60 grid place-items-center z-10"><div className="max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded p-4 w-[900px] max-w-[95vw] space-y-3">
-    <div className="flex justify-between"><h2 className="text-lg font-bold">Settings</h2><button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button></div>
-    <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
-    <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
-    {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{previewPolicy.sources[type]?.label ?? sourceLabels[type]}</legend>
-      <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
-      <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(previewPolicy, type)}</span>
-    </fieldset>)}
-    <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
-      <h3 className="text-sm font-semibold text-white">Log policy</h3>
-      <p className="mt-1 text-xs text-slate-400">사용할 로그 정책을 선택해. 일반 사용자는 built-in policy를 고르면 되고, 직접 policy를 만들어야 할 때만 Custom JSON을 선택해.</p>
-      <label className="mt-2 block text-sm" htmlFor="log-policy-select">Log policy</label>
-      <select
-        id="log-policy-select"
-        className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white"
-        value={selectedPolicyId}
-        onChange={(e) => {
-          const nextPolicyId = e.target.value as LogPolicySelectionId
-          setNotice(undefined)
-          setSelectedPolicyId(nextPolicyId)
-          if (nextPolicyId !== 'custom') setPolicyText(JSON.stringify(logPolicyForBuiltinId(nextPolicyId), null, 2))
-        }}
-      >
-        {builtinLogPolicyOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-        <option value="custom">Custom JSON policy</option>
-      </select>
-      <p className="mt-1 text-xs text-slate-400">{selectedPolicyId === 'custom' ? 'Custom policy selected. Validate and save the JSON below.' : builtinLogPolicyOptions.find((option) => option.id === selectedPolicyId)?.description}</p>
-      {selectedPolicyId === 'custom' && <>
-        <label className="mt-2 block text-sm" htmlFor="log-policy-json">Custom policy JSON</label>
-        <textarea
-          id="log-policy-json"
-          className="mt-1 h-64 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100"
-          spellCheck={false}
-          value={policyText}
-          onChange={(e) => { setNotice(undefined); setPolicyText(e.target.value) }}
-        />
-      </>}
-    </section>
-    {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
-    {notice && <p className="text-green-300">{notice}</p>}
-    {error && <p className="text-red-300">{error.message}</p>}
-    <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
-      <h3 className="text-sm font-semibold text-white">Target cache</h3>
-      <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button className="rounded border border-yellow-500 px-3 py-1 text-sm text-yellow-100 hover:bg-yellow-500/10" disabled={loading} onClick={handleClearTargetCache}>Clear Target Cache</button>
-        <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>Restart App</button>
+  return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
+    <div
+      aria-labelledby="settings-title"
+      aria-modal="true"
+      role="dialog"
+      className="flex max-h-[92vh] w-[900px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl"
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
+        <h2 className="text-lg font-bold" id="settings-title">Settings</h2>
+        <button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
       </div>
-    </section>
-    <div className="flex gap-2 justify-end"><button disabled={loading} onClick={handleReset}>Reset</button><button disabled={loading} onClick={handleSave}>Save</button></div>
-  </div></div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" data-testid="settings-scroll-panel">
+        <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
+        <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
+        {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{previewPolicy.sources[type]?.label ?? sourceLabels[type]}</legend>
+          <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
+          <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(previewPolicy, type)}</span>
+        </fieldset>)}
+        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+          <h3 className="text-sm font-semibold text-white">Log policy</h3>
+          <p className="mt-1 text-xs text-slate-400">사용할 로그 정책을 선택해. 일반 사용자는 built-in policy를 고르면 되고, 직접 policy를 만들어야 할 때만 Custom JSON을 선택해.</p>
+          <label className="mt-2 block text-sm" htmlFor="log-policy-select">Log policy</label>
+          <select
+            id="log-policy-select"
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white"
+            value={selectedPolicyId}
+            onChange={(e) => {
+              const nextPolicyId = e.target.value as LogPolicySelectionId
+              setNotice(undefined)
+              setSelectedPolicyId(nextPolicyId)
+              if (nextPolicyId !== 'custom') setPolicyText(JSON.stringify(logPolicyForBuiltinId(nextPolicyId), null, 2))
+            }}
+          >
+            {builtinLogPolicyOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            <option value="custom">Custom JSON policy</option>
+          </select>
+          <p className="mt-1 text-xs text-slate-400">{selectedPolicyId === 'custom' ? 'Custom policy selected. Validate and save the JSON below.' : builtinLogPolicyOptions.find((option) => option.id === selectedPolicyId)?.description}</p>
+          {selectedPolicyId === 'custom' && <>
+            <label className="mt-2 block text-sm" htmlFor="log-policy-json">Custom policy JSON</label>
+            <textarea
+              id="log-policy-json"
+              className="mt-1 h-64 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100"
+              spellCheck={false}
+              value={policyText}
+              onChange={(e) => { setNotice(undefined); setPolicyText(e.target.value) }}
+            />
+          </>}
+        </section>
+        {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
+        {notice && <p className="text-green-300">{notice}</p>}
+        {error && <p className="text-red-300">{error.message}</p>}
+        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+          <h3 className="text-sm font-semibold text-white">Target cache</h3>
+          <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button className="rounded border border-yellow-500 px-3 py-1 text-sm text-yellow-100 hover:bg-yellow-500/10" disabled={loading} onClick={handleClearTargetCache}>Clear Target Cache</button>
+            <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>Restart App</button>
+          </div>
+        </section>
+      </div>
+      <div className="flex shrink-0 justify-end gap-2 border-t border-slate-700 bg-slate-900 p-4"><button disabled={loading} onClick={handleReset}>Reset</button><button disabled={loading} onClick={handleSave}>Save</button></div>
+    </div>
+  </div>
 }
