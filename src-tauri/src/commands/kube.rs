@@ -274,11 +274,10 @@ fn filter_namespaces_with_pod_access(
 
     let mut results = rx.into_iter().collect::<Vec<_>>();
     results.sort_by_key(|(index, _, _)| *index);
-    let filtered = results
+    results
         .into_iter()
         .filter_map(|(_, namespace, allowed)| allowed.then_some(namespace))
-        .collect::<Vec<_>>();
-    filtered
+        .collect::<Vec<_>>()
 }
 pub fn parse_pods_json(
     context: Option<String>,

@@ -20,4 +20,8 @@ describe('settings validation', () => {
     expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { container: '', filePath: '/x' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.container' }))
     expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { container: 'app', filePath: '/x\0y' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.filePath' }))
   })
+  it('accepts a valid log policy and rejects malformed policy overrides', () => {
+    expect(validateSettings({ ...defaultSettings, logPolicy: defaultSettings.logPolicy })).toEqual([])
+    expect(validateSettings({ ...defaultSettings, logPolicy: { version: 1 } })).toContainEqual(expect.objectContaining({ field: 'logPolicy' }))
+  })
 })

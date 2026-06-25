@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "test:unit": "node scripts/harness/run-test-layer.mjs unit",
+    "test:scenario": "node scripts/harness/run-test-layer.mjs scenario",
+    "test:e2e": "node scripts/harness/run-test-layer.mjs e2e",
     "test:watch": "vitest",
     "tauri": "tauri",
+    "metrics:precommit": "scripts/harness/metrics-pre-commit.sh",
+    "metrics:prepush": "scripts/harness/metrics-pre-push.sh",
+    "harness:precommit": "scripts/harness/pre-commit.sh",
+    "harness:prepush": "scripts/harness/pre-push.sh",
     "start": "node ./bin/klogcat.js",
     "klogcat:build": "node ./bin/klogcat.js --build-only",
     "klogcat:dev": "node ./bin/klogcat.js --dev"

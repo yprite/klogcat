@@ -6,16 +6,31 @@ import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
 import { sourceLabelsForActivePolicy, sourceTypesForActivePolicy } from '../utils/sourceLabels'
-import { buildLogPathTemplateFromPolicy, getLogPolicy } from '../utils/logPolicy'
+import { assertValidLogPolicy, buildLogPathTemplateFromPolicy, getLogPolicy, type LogPolicy } from '../utils/logPolicy'
 
 export function SettingsModal({ open, onClose, onRestart = () => window.location.reload() }: { open: boolean; onClose: () => void; onRestart?: () => void }) {
   const { settings, saveSettings, resetSettings, error, loading } = useSettingsStore()
   const recordActionDebug = useLogStore((s) => s.recordActionDebug)
   const [draft, setDraft] = useState<PersistedSettings>(settings ?? defaultSettings)
+  const [policyText, setPolicyText] = useState(() => JSON.stringify((settings ?? defaultSettings).logPolicy ?? getLogPolicy(), null, 2))
   const [notice, setNotice] = useState<string>()
-  useEffect(() => { setDraft(settings ?? defaultSettings); setNotice(undefined) }, [settings, open])
+  useEffect(() => {
+    const next = settings ?? defaultSettings
+    setDraft(next)
+    setPolicyText(JSON.stringify(next.logPolicy ?? getLogPolicy(), null, 2))
+    setNotice(undefined)
+  }, [settings, open])
   if (!open) return null
-  const errors = validateSettings(draft)
+  let policyDraft: LogPolicy | undefined
+  let policyError: string | undefined
+  try {
+    const parsed = JSON.parse(policyText) as unknown
+    assertValidLogPolicy(parsed)
+    policyDraft = parsed
+  } catch (error) {
+    policyError = error instanceof Error ? error.message : String(error)
+  }
+  const errors = [...validateSettings({ ...draft, logPolicy: policyDraft ?? draft.logPolicy }), ...(policyError ? [{ field: 'logPolicy', message: policyError }] : [])]
   const sourceTypes = sourceTypesForActivePolicy()
   const sourceLabels = sourceLabelsForActivePolicy()
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
@@ -26,13 +41,15 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     if (ok) {
       const saved = useSettingsStore.getState().settings ?? defaultSettings
       setDraft(saved)
+      setPolicyText(JSON.stringify(saved.logPolicy ?? getLogPolicy(), null, 2))
       setNotice('Settings reset to defaults')
     }
   }
   const handleSave = async () => {
     recordActionDebug(`Save clicked: validationErrors=${errors.length}`)
     setNotice(undefined)
-    const ok = await saveSettings(draft)
+    const nextDraft = { ...draft, logPolicy: policyDraft }
+    const ok = policyDraft ? await saveSettings(nextDraft) : false
     if (ok) onClose()
   }
   const handleClearTargetCache = () => {
@@ -44,14 +61,26 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     recordActionDebug('Restart app clicked')
     onRestart()
   }
-  return <div className="fixed inset-0 bg-black/60 grid place-items-center z-10"><div className="bg-slate-900 border border-slate-700 rounded p-4 w-[720px] max-w-[95vw] space-y-3">
+  return <div className="fixed inset-0 bg-black/60 grid place-items-center z-10"><div className="max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded p-4 w-[900px] max-w-[95vw] space-y-3">
     <div className="flex justify-between"><h2 className="text-lg font-bold">Settings</h2><button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button></div>
     <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
     <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
     {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{sourceLabels[type]}</legend>
       <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
-      <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(getLogPolicy(), type)}</span>
+      <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(policyDraft ?? getLogPolicy(), type)}</span>
     </fieldset>)}
+    <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+      <h3 className="text-sm font-semibold text-white">Log policy</h3>
+      <p className="mt-1 text-xs text-slate-400">source labels, path template/suffix, columns, query suggestions, parser fields, severity/failure/grouping policy를 JSON으로 설정해.</p>
+      <label className="mt-2 block text-sm" htmlFor="log-policy-json">Log policy JSON</label>
+      <textarea
+        id="log-policy-json"
+        className="mt-1 h-64 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100"
+        spellCheck={false}
+        value={policyText}
+        onChange={(e) => { setNotice(undefined); setPolicyText(e.target.value) }}
+      />
+    </section>
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
     {notice && <p className="text-green-300">{notice}</p>}
     {error && <p className="text-red-300">{error.message}</p>}

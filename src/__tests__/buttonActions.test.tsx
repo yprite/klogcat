@@ -392,4 +392,24 @@ describe('button actions', () => {
     await waitFor(() => expect(screen.getByLabelText(/initial tail lines/i)).toHaveValue(defaultSettings.initialTailLines))
     expect(screen.getByText(/settings reset to defaults/i)).toBeInTheDocument()
   })
+
+  it('lets Settings edit and save the extracted log policy JSON', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open={true} onClose={() => {}} />)
+
+    const policyInput = screen.getByLabelText(/log policy json/i)
+    const policy = JSON.parse(policyInput.textContent ?? '')
+    policy.pathTemplate = '/custom/[namespace]/[podname][suffix].jsonl'
+    policy.sources.info.label = 'APP'
+
+    fireEvent.change(policyInput, { target: { value: JSON.stringify(policy, null, 2) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicy: expect.objectContaining({
+        pathTemplate: '/custom/[namespace]/[podname][suffix].jsonl',
+        sources: expect.objectContaining({ info: expect.objectContaining({ label: 'APP' }) }),
+      }),
+    })))
+  })
 })

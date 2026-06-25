@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "generatedAt": "2026-06-25T05:29:10.105Z",
+  "thresholds": {
+    "cyclomaticComplexity": 10,
+    "cognitiveComplexity": 15,
+    "functionLines": 80,
+    "fileLines": 500,
+    "coupling": 12,
+    "maintainability": 60
+  },
+  "repository": {
+    "fileCount": 74,
+    "functionCount": 259,
+    "maxCyclomaticComplexity": 96,
+    "maxCognitiveComplexity": 419,
+    "maxFunctionLines": 703,
+    "maxFileLines": 943,
+    "maxCoupling": 13,
+    "minMaintainability": 0,
+    "cycleCount": 0,
+    "architectureViolationCount": 0
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "forbiddenImports": [
+    {
+      "fromPrefix": "src/",
+      "fromNotPrefix": ["src/__tests__/"],
+      "toPrefix": "src/__tests__/",
+      "reason": "Production code must not import test code."
+    },
+    {
+      "fromPrefix": "src/",
+      "fromNotPrefix": ["src/__tests__/"],
+      "toPrefix": "src/__fixtures__/",
+      "reason": "Production code must not import fixture data."
+    },
+    {
+      "fromPrefix": "src/utils/",
+      "toPrefix": "src/components/",
+      "reason": "Utility modules must not depend on UI components."
+    },
+    {
+      "fromPrefix": "src/utils/",
+      "toPrefix": "src/stores/",
+      "reason": "Utility modules must not depend on application stores."
+    },
+    {
+      "fromPrefix": "src/stores/",
+      "toPrefix": "src/components/",
+      "reason": "Stores must not depend on UI components."
+    },
+    {
+      "fromPrefix": "src/commands/",
+      "toPrefix": "src/components/",
+      "reason": "Tauri command adapters must not depend on UI components."
+    }
+  ]
+}
