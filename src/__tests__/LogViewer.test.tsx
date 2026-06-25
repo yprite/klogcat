@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
+import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, mergeColumnSettingsWithAvailable, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, columnsForSource, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -10,6 +10,19 @@ const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 
 const okRow: ParsedLogLine = { ...row, id: 3, status: '200', method: 'GET', url: '/ok', summary: 'GET /ok 200 5ms', raw: '{"status":200}' }
 const errRow: ParsedLogLine = { id: 2, streamId: 's', sourceId: 'src', sourceType: 'error', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"oops"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), errorMethod: 'GET', errorPath: '/fail', errorReason: 'boom', summary: 'boom GET /fail', traceId: 'trace' }
 const appRow: ParsedLogLine = { id: 10, streamId: 's', sourceId: 'src', sourceType: 'info', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{"message":"old app"}', parseStatus: 'parsed', receivedAt: Date.UTC(2026,0,1), status: '201', method: 'POST', url: '/info', elapsed: 7, summary: 'POST /info 201 7ms' }
+
+function installLocalStorageMock() {
+  let store: Record<string, string> = {}
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => { store[key] = value },
+      removeItem: (key: string) => { delete store[key] },
+      clear: () => { store = {} },
+    },
+  })
+}
 
 describe('LogRow', () => {
   it('includes every visible key from the ACC and ERR sample logs as columns', () => {
@@ -86,7 +99,11 @@ describe('LogRow', () => {
 })
 
 describe('LogViewer', () => {
-  beforeEach(() => resetLogStoreForTests())
+  beforeEach(() => {
+    installLocalStorageMock()
+    resetLogStoreForTests()
+    window.localStorage.clear()
+  })
 
   it('uses visible-column filters and a column manager to show only chosen columns', async () => {
     act(() => {
@@ -160,6 +177,70 @@ describe('LogViewer', () => {
   it('restores a re-enabled column at its filter header position instead of appending it', () => {
     expect(nextVisibleColumnsForToggle(['url', 'status'], ['method', 'url', 'elapsed', 'status'], 'method', true)).toEqual(['method', 'url', 'status'])
     expect(nextVisibleColumnsForToggle(['method', 'url', 'status'], ['method', 'url', 'elapsed', 'status'], 'url', false)).toEqual(['method', 'status'])
+  })
+
+  it('merges saved column order and visibility with currently available columns', () => {
+    const merged = mergeColumnSettingsWithAvailable({
+      version: 1,
+      columnOrder: ['status', 'method', 'status', 'missing' as never, 'url'],
+      visibleColumns: ['status', 'url', 'status', 'missing' as never],
+    }, ['method', 'url', 'elapsed', 'status'])
+
+    expect(merged.columnOrder).toEqual(['status', 'method', 'url', 'elapsed'])
+    expect(merged.visibleColumns).toEqual(['status', 'url'])
+  })
+
+  it('persists user-selected visible columns and column order to local storage', async () => {
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    fireEvent.click(screen.getByLabelText('Hide status'))
+    fireEvent.click(screen.getByLabelText('Move url left'))
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY) ?? '{}')
+      expect(saved.version).toBe(1)
+      expect(saved.visibleColumns).not.toContain('status')
+      expect(saved.columnOrder.indexOf('url')).toBeLessThan(saved.columnOrder.indexOf('method'))
+    })
+  })
+
+  it('restores saved visible columns and column order from local storage', async () => {
+    window.localStorage.setItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      columnOrder: ['status', 'url', 'method'],
+      visibleColumns: ['status', 'url'],
+    }))
+    useLogStore.setState({ rows: [row], visibleRows: [row] })
+    render(<LogViewer />)
+
+    await waitFor(() => expect(screen.getByText('2/23 shown')).toBeInTheDocument())
+    expect(screen.getByLabelText('Filter status')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filter url')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Filter method')).not.toBeInTheDocument()
+    const controls = Array.from(screen.getByRole('row', { name: /Visible column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+    const keys = controls.map((control) => control.getAttribute('data-column-key'))
+    expect(keys).toEqual(['status', 'url'])
+  })
+
+  it('restores saved columns when rows arrive after the viewer mounts', async () => {
+    window.localStorage.setItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      columnOrder: ['status', 'url', 'method'],
+      visibleColumns: ['status', 'url'],
+    }))
+    render(<LogViewer />)
+
+    act(() => {
+      useLogStore.setState({ rows: [row], visibleRows: [row] })
+    })
+
+    await waitFor(() => expect(screen.getByText('2/23 shown')).toBeInTheDocument())
+    const controls = Array.from(screen.getByRole('row', { name: /Visible column filters/i }).querySelectorAll('[data-testid="column-control"]'))
+    const keys = controls.map((control) => control.getAttribute('data-column-key'))
+    expect(keys).toEqual(['status', 'url'])
+    const saved = JSON.parse(window.localStorage.getItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY) ?? '{}')
+    expect(saved.visibleColumns).toEqual(['status', 'url'])
   })
 
   it('moves columns left and right in user-controlled order', async () => {

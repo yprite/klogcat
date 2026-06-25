@@ -7,6 +7,14 @@ import type { ParsedLogLine } from '../types/log'
 
 export type LogColumnWidths = Partial<Record<LogColumnKey, number>>
 
+export const LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY = 'klogcat:log-viewer-columns:v1'
+
+type LogViewerColumnSettings = {
+  version: 1
+  columnOrder: LogColumnKey[]
+  visibleColumns: LogColumnKey[]
+}
+
 const minColumnWidthCh = 12
 const valuePaddingCh = 2
 
@@ -50,6 +58,41 @@ export function reorderColumnByDrop(columns: LogColumnKey[], draggedKey: LogColu
 function visibleColumnsFromOrder(order: LogColumnKey[], visibleColumns: LogColumnKey[]) {
   const visible = new Set(visibleColumns)
   return order.filter((column) => visible.has(column))
+}
+
+function isLogColumnSettings(value: unknown): value is LogViewerColumnSettings {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<LogViewerColumnSettings>
+  return candidate.version === 1 && Array.isArray(candidate.columnOrder) && Array.isArray(candidate.visibleColumns)
+}
+
+export function mergeColumnSettingsWithAvailable(settings: LogViewerColumnSettings, availableColumns: readonly LogColumnKey[]) {
+  const available = new Set(availableColumns)
+  const savedOrder = settings.columnOrder.filter((key, index, order): key is LogColumnKey => available.has(key as LogColumnKey) && order.indexOf(key) === index)
+  const addedColumns = availableColumns.filter((key) => !savedOrder.includes(key))
+  const columnOrder = [...savedOrder, ...addedColumns]
+  const orderSet = new Set(columnOrder)
+  const visibleColumns = settings.visibleColumns.filter((key, index, visible): key is LogColumnKey => orderSet.has(key as LogColumnKey) && visible.indexOf(key) === index)
+  return { columnOrder, visibleColumns }
+}
+
+export function readLogViewerColumnSettings(storage: Pick<Storage, 'getItem'> = window.localStorage) {
+  try {
+    const raw = storage.getItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    return isLogColumnSettings(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function writeLogViewerColumnSettings(settings: LogViewerColumnSettings, storage: Pick<Storage, 'setItem'> = window.localStorage) {
+  try {
+    storage.setItem(LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  } catch {
+    // Ignore storage failures so the log viewer remains usable in restricted WebViews.
+  }
 }
 
 export function forceScrollToBottom(element: HTMLElement | null) {
@@ -103,10 +146,16 @@ export function LogViewer() {
   const [columnManagerOpen, setColumnManagerOpen] = useState(false)
   const columnsInitializedRef = useRef(false)
   const userCustomizedColumnsRef = useRef(false)
+  const savedColumnSettingsRef = useRef<LogViewerColumnSettings | null | undefined>(undefined)
+  const skipNextColumnPersistRef = useRef(false)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   useEffect(() => {
+    if (availableColumns.length === 0 && !columnsInitializedRef.current) return
+    if (savedColumnSettingsRef.current === undefined) savedColumnSettingsRef.current = readLogViewerColumnSettings()
+    const savedSettings = savedColumnSettingsRef.current
     setColumnOrder((current) => {
+      if (!columnsInitializedRef.current && savedSettings) return mergeColumnSettingsWithAvailable(savedSettings, availableColumns).columnOrder
       const available = new Set(availableColumns)
       const kept = current.filter((key) => available.has(key))
       const added = availableColumns.filter((key) => !current.includes(key))
@@ -117,6 +166,11 @@ export function LogViewer() {
       const kept = current.filter((key) => available.has(key))
       if (!columnsInitializedRef.current) {
         columnsInitializedRef.current = true
+        if (savedSettings) {
+          userCustomizedColumnsRef.current = true
+          skipNextColumnPersistRef.current = true
+          return mergeColumnSettingsWithAvailable(savedSettings, availableColumns).visibleColumns
+        }
         return defaultVisibleColumnsFor(availableColumns)
       }
       if (!userCustomizedColumnsRef.current) return defaultVisibleColumnsFor(availableColumns)
@@ -124,6 +178,14 @@ export function LogViewer() {
     })
     setColumnFilters((current) => Object.fromEntries(Object.entries(current).filter(([key]) => availableColumns.includes(key as LogColumnKey))) as Partial<Record<LogColumnKey, string>>)
   }, [availableColumns])
+  useEffect(() => {
+    if (!columnsInitializedRef.current || !userCustomizedColumnsRef.current || availableColumns.length === 0) return
+    if (skipNextColumnPersistRef.current) {
+      skipNextColumnPersistRef.current = false
+      return
+    }
+    writeLogViewerColumnSettings({ version: 1, columnOrder, visibleColumns })
+  }, [availableColumns.length, columnOrder, visibleColumns])
   const filteredRows = useMemo(() => {
     const visible = new Set(visibleColumns)
     const activeFilters = Object.entries(columnFilters).filter(([key, value]) => visible.has(key as LogColumnKey) && value.trim() !== '') as Array<[LogColumnKey, string]>
@@ -166,7 +228,7 @@ export function LogViewer() {
   const headerColumns = useMemo(() => visibleColumnsFromOrder(columnOrder, visibleColumns), [columnOrder, visibleColumns])
   const hiddenColumnCount = Math.max(0, availableColumns.length - headerColumns.length)
   const showDefaultColumns = () => {
-    userCustomizedColumnsRef.current = false
+    userCustomizedColumnsRef.current = true
     setVisibleColumns(defaultVisibleColumnsFor(columnOrder))
   }
   const showAllColumns = () => {
@@ -183,6 +245,7 @@ export function LogViewer() {
   }
   const setColumnFilter = (key: LogColumnKey, value: string) => setColumnFilters((current) => ({ ...current, [key]: value }))
   const moveColumn = (key: LogColumnKey, direction: 'left' | 'right') => {
+    userCustomizedColumnsRef.current = true
     setColumnOrder((current) => {
       const nextOrder = moveColumnInOrder(current, key, direction)
       setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
@@ -190,6 +253,7 @@ export function LogViewer() {
     })
   }
   const dropColumnOn = (targetKey: LogColumnKey) => {
+    userCustomizedColumnsRef.current = true
     setColumnOrder((current) => {
       const nextOrder = reorderColumnByDrop(current, draggedColumn, targetKey)
       setVisibleColumns((visible) => visibleColumnsFromOrder(nextOrder, visible))
