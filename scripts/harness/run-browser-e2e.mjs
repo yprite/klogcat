@@ -42,7 +42,7 @@ try {
   await page.getByRole('button', { name: 'Save' }).click()
   await page.getByRole('button', { name: 'Change Targets' }).click()
   await page.getByRole('dialog', { name: /select log targets/i }).waitFor()
-  await page.getByText('No matching targets').waitFor()
+  await page.getByText('No selectable pods loaded').waitFor()
   await page.getByRole('button', { name: 'Close' }).click()
   await page.getByRole('tab', { name: 'Failed Requests' }).click()
   await page.getByText('Request-centric investigation layer').waitFor()

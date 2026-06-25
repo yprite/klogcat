@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
+import { useKubeStore } from '../stores/kubeStore'
 import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
@@ -126,7 +127,9 @@ async function copyText(text: string) {
 }
 
 export function LogViewer() {
-  const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused } = useLogStore()
+  const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
+  const kube = useKubeStore()
+  const selectedTargetCount = kube.getSelectedPodTargets().length
   const parentRef = useRef<HTMLDivElement>(null)
   const seenRowIdsRef = useRef<Set<number> | null>(null)
   const highlightTimeoutsRef = useRef<number[]>([])
@@ -185,6 +188,12 @@ export function LogViewer() {
     if (activeFilters.length === 0) return visibleRows
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleColumns, visibleRows])
+  const emptyState = useMemo(() => {
+    if (rows.length === 0 && selectedTargetCount === 0) return { title: 'No log target selected', detail: 'Use Change Targets to choose a running pod, then start a stream.' }
+    if (rows.length === 0) return { title: 'Ready to stream logs', detail: `Targets selected: ${selectedTargetCount}. Press Start to begin tailing logs.` }
+    if (visibleRows.length === 0 || filteredRows.length === 0) return { title: 'No rows match current filters', detail: 'Adjust Query or column filters to bring rows back into view.' }
+    return undefined
+  }, [filteredRows.length, rows.length, selectedTargetCount, visibleRows.length])
   const selectedRow = filteredRows.find((row) => row.id === selectedRowId)
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, columnOrder), [columnOrder, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
@@ -311,7 +320,13 @@ export function LogViewer() {
           </span>
         })}
       </div>}
-      {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
+      {emptyState && <div className="absolute inset-0 flex items-start justify-center p-10">
+        <div className="w-[36rem] max-w-full rounded border border-dashed border-slate-700 bg-slate-900/80 p-5 text-center shadow-lg shadow-black/20">
+          <p className="text-base font-semibold text-slate-100">{emptyState.title}</p>
+          <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
+          <p className="mt-3 text-xs text-slate-500">Stream status: {streamStatus}</p>
+        </div>
+      </div>}
       {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>

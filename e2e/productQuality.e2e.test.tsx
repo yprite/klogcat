@@ -209,14 +209,15 @@ describe('product quality e2e', () => {
     expect(screen.getByRole('tab', { name: 'Failed Requests' })).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByText(/Start: enabled \(Select namespace and pod\)/)).toBeInTheDocument())
-    expect(screen.getByText('Targets: 0')).toBeInTheDocument()
+    expect(screen.getByText('Targets: 0 selected')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(await screen.findByText('Select namespace and pod')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Change Targets' }))
     const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
-    expect(within(targetDialog).getByText('No matching targets')).toBeInTheDocument()
+    expect(within(targetDialog).getByText('No selectable pods loaded')).toBeInTheDocument()
+    expect(within(targetDialog).getByText(/Check kubectl access/)).toBeInTheDocument()
     expect(within(targetDialog).getByText('No pods selected')).toBeInTheDocument()
     fireEvent.click(within(targetDialog).getByRole('button', { name: 'Close' }))
 

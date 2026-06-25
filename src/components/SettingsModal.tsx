@@ -79,7 +79,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const [draft, setDraft] = useState<PersistedSettings>(settings ?? defaultSettings)
   const [selectedPolicyId, setSelectedPolicyId] = useState<LogPolicySelectionId>((settings ?? defaultSettings).logPolicyId ?? 'scloud')
   const [policyText, setPolicyText] = useState(() => JSON.stringify((settings ?? defaultSettings).logPolicy ?? getLogPolicy(), null, 2))
-  const [showPathOverrides, setShowPathOverrides] = useState(true)
+  const [showPathOverrides, setShowPathOverrides] = useState(false)
   const [showRawJson, setShowRawJson] = useState(false)
   const [notice, setNotice] = useState<string>()
   const [testResults, setTestResults] = useState<TestPathResult[]>([])
@@ -90,7 +90,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setDraft(next)
     setSelectedPolicyId(next.logPolicyId ?? 'scloud')
     setPolicyText(JSON.stringify(next.logPolicy ?? getLogPolicy(), null, 2))
-    setShowPathOverrides(true)
+    setShowPathOverrides(false)
     setShowRawJson(false)
     setNotice(undefined)
     setTestResults([])
@@ -130,7 +130,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setNotice(message)
     setSelectedPolicyId('custom')
     setPolicyText(JSON.stringify(policy, null, 2))
-    setShowRawJson(true)
+    setShowRawJson(false)
     setTestResults([])
   }
   const handlePolicySelect = (value: LogPolicySelectionId) => {
@@ -140,7 +140,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     if (value !== 'custom') setPolicyText(JSON.stringify(logPolicyForBuiltinId(value), null, 2))
     else {
       setPolicyText(JSON.stringify(clonePolicy(previewPolicy), null, 2))
-      setShowRawJson(true)
+      setShowRawJson(false)
     }
   }
   const handleReset = async () => {
@@ -196,13 +196,21 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   }
 
   return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
-    <div aria-labelledby="settings-title" aria-modal="true" role="dialog" className="flex max-h-[92vh] w-[960px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
+    <div aria-labelledby="settings-title" aria-modal="true" role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
         <h2 className="text-lg font-bold" id="settings-title">Settings</h2>
         <button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+      <div className="grid min-h-0 flex-1 grid-cols-[12rem_minmax(0,1fr)] overflow-hidden">
+        <nav aria-label="Settings sections" className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sections</p>
+          <a className="mt-3 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-runtime">Runtime</a>
+          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-log-source">Log source</a>
+          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-advanced">Advanced</a>
+          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-maintenance">Maintenance</a>
+        </nav>
+        <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
+        <section id="settings-runtime" className="rounded border border-slate-700 bg-slate-950/60 p-3">
           <h3 className="text-sm font-semibold text-white">Runtime</h3>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <label className="block text-sm">Initial tail lines <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
@@ -210,7 +218,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
           </div>
         </section>
 
-        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+        <section id="settings-log-source" className="rounded border border-slate-700 bg-slate-950/60 p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-white">Log Source Profile</h3>
@@ -256,10 +264,18 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
             <div className="mt-2 flex flex-wrap gap-2">
               <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" disabled={testingPaths} onClick={handleTestPaths}>{testingPaths ? 'Testing paths…' : 'Test paths'}</button>
               <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setCustomPolicy(stripSourcePathOverrides(previewPolicy), 'Log paths reset to SCloud defaults')}>Reset log paths to SCloud defaults</button>
-              <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowPathOverrides(true)}>Advanced path overrides</button>
-              <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowRawJson(true)}>Advanced raw JSON</button>
             </div>
             {testResults.length > 0 && <ul className="mt-2 space-y-1 text-xs">{testResults.map((result) => <li className={result.ok ? 'text-green-300' : 'text-red-300'} key={result.sourceType}>{result.label} {result.message}: <span className="font-mono">{result.path}</span></li>)}</ul>}
+          </div>
+        </section>
+
+        <section id="settings-advanced" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Advanced</h3>
+              <p className="mt-1 text-xs text-slate-400">Path overrides and raw policy JSON are isolated from the normal setup flow.</p>
+            </div>
+            <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowPathOverrides((value) => !value)}>{showPathOverrides ? 'Hide path overrides' : 'Advanced path overrides'}</button>
           </div>
 
           {showPathOverrides && <div className="mt-3 rounded border border-slate-700 p-2">
@@ -272,6 +288,10 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
             </div>
           </div>}
 
+          <div className="mt-3">
+            <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowRawJson((value) => !value)}>{showRawJson ? 'Hide advanced raw JSON' : 'Advanced raw JSON'}</button>
+          </div>
+
           {showRawJson && <div className="mt-3 rounded border border-slate-700 p-2">
             <p className="text-xs text-slate-400">Only edit raw JSON if you need parser fields, query suggestions, severity, grouping, export/import, or a future preset.</p>
             <label className="mt-2 block text-sm" htmlFor="log-policy-json">Custom policy JSON</label>
@@ -282,7 +302,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
         {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map((e, index) => <li key={`${e.field}-${index}`}>{e.field}: {e.message}</li>)}</ul>}
         {notice && <p className="text-green-300">{notice}</p>}
         {error && <p className="text-red-300">{error.message}</p>}
-        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+        <section id="settings-maintenance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
           <h3 className="text-sm font-semibold text-white">Target cache</h3>
           <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -290,8 +310,12 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
             <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>Restart App</button>
           </div>
         </section>
+        </div>
       </div>
-      <div className="flex shrink-0 justify-end gap-2 border-t border-slate-700 bg-slate-900 p-4"><button aria-label="Reset" disabled={loading} onClick={handleReset}>Reset all settings</button><button disabled={loading} onClick={handleSave}>Save</button></div>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-700 bg-slate-900 p-4">
+        <button aria-label="Reset" className="rounded border border-red-500/70 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleReset}>Reset all settings</button>
+        <button className="rounded border border-yellow-400 bg-yellow-300 px-4 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200" disabled={loading} onClick={handleSave}>Save</button>
+      </div>
     </div>
   </div>
 }

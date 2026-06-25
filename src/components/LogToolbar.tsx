@@ -129,18 +129,45 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     await Promise.all(ids.map(async (id) => { log.markStopping(id); try { await stopLogStream(id); log.markStopped(id) } catch (e) { log.markError(id, e instanceof Error ? e.message : String(e)) } }))
     await start(true)
   }
-  return <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-2 py-1">
-    {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
-    <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
-    <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
-    {operationActive && <div className="basis-full sm:basis-64"><ProgressStripe label={`${operationLabel} progress`} /></div>}
-    <button onClick={() => {
-      log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`)
-      if (log.viewerPaused) log.resume()
-      else log.pause()
-    }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
-    <label><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
-    <label><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>
-    <span>Targets: {targets.length}</span><span>Status: {log.streamStatus}</span><span>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}
-  </div>
+  return <section aria-label="Log stream controls" className="grid shrink-0 grid-cols-[minmax(24rem,1.2fr)_minmax(22rem,1fr)_minmax(26rem,1.15fr)] gap-2 border-b border-slate-800 bg-slate-900 px-2 py-2">
+    <div aria-label="Stream controls" className="rounded border border-slate-800 bg-slate-950/60 p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Stream controls</span>
+        <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
+      </div>
+      <div className="flex items-center gap-2">
+        {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
+        <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button>
+        <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={stopBusy} onClick={stop}>Stop</button>
+        <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
+      </div>
+      {operationActive && <div className="mt-2"><ProgressStripe label={`${operationLabel} progress`} /></div>}
+    </div>
+
+    <div aria-label="Viewer controls" className="rounded border border-slate-800 bg-slate-950/60 p-2">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Viewer controls</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => {
+          log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`)
+          if (log.viewerPaused) log.resume()
+          else log.pause()
+        }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button>
+        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
+        <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
+        <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>
+      </div>
+    </div>
+
+    <div aria-label="Runtime status" className="rounded border border-slate-800 bg-slate-950/60 p-2">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Runtime status</div>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Targets</span><strong className="ml-2 text-slate-100">{targets.length}</strong></span>
+        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Status</span><strong className="ml-2 text-slate-100">{log.streamStatus}</strong></span>
+        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Start</span><strong className="ml-2 text-slate-100">{startBusy || alreadyRunning ? 'disabled' : 'enabled'}</strong></span>
+      </div>
+      <p className="mt-2 truncate text-xs text-slate-400" title={startBlockedReason}>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</p>
+      {log.latestStderr && <p className="mt-1 truncate text-xs text-yellow-300" title={log.latestStderr}>stderr: {log.latestStderr}</p>}
+      {log.totalDroppedCount > 0 && <p className="mt-1 text-xs text-yellow-300">Dropped: {log.totalDroppedCount}</p>}
+    </div>
+  </section>
 }

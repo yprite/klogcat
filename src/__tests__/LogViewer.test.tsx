@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
 import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, mergeColumnSettingsWithAvailable, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
+import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
 import { accessLogColumns, columnsForSource, errorLogColumns, labelForColumn } from '../utils/logColumns'
@@ -21,6 +22,41 @@ function installLocalStorageMock() {
       removeItem: (key: string) => { delete store[key] },
       clear: () => { store = {} },
     },
+  })
+}
+
+function resetKubeStoreForViewerTests() {
+  useKubeStore.setState({
+    contexts: [],
+    currentContext: undefined,
+    selectedContext: undefined,
+    selectedContexts: [],
+    namespaces: [],
+    namespacesByContext: {},
+    selectedNamespace: undefined,
+    selectedNamespaces: {},
+    pods: [],
+    podsByScope: {},
+    selectedPod: undefined,
+    selectedPods: {},
+    selectedWorkloads: {},
+    loadingContexts: false,
+    loadingNamespaces: false,
+    loadingPods: false,
+    cacheLoaded: false,
+    cacheRefreshing: false,
+    cacheLastRefreshAt: undefined,
+    error: undefined,
+  })
+}
+
+function seedViewerTarget() {
+  const key = scopeKey('ctx', 'prod')
+  useKubeStore.setState({
+    selectedContexts: ['ctx'],
+    selectedNamespaces: { ctx: ['prod'] },
+    podsByScope: { [key]: [{ name: 'api-1', namespace: 'prod', phase: 'Running', containers: ['app'] }] },
+    selectedPods: { [key]: ['api-1'] },
   })
 }
 
@@ -102,7 +138,33 @@ describe('LogViewer', () => {
   beforeEach(() => {
     installLocalStorageMock()
     resetLogStoreForTests()
+    resetKubeStoreForViewerTests()
     window.localStorage.clear()
+  })
+
+  it('guides the user to choose targets when the log surface is empty', () => {
+    render(<LogViewer />)
+
+    expect(screen.getByText('No log target selected')).toBeInTheDocument()
+    expect(screen.getByText(/Use Change Targets/)).toBeInTheDocument()
+  })
+
+  it('guides the user to start streaming when targets exist but rows are empty', () => {
+    seedViewerTarget()
+    render(<LogViewer />)
+
+    expect(screen.getByText('Ready to stream logs')).toBeInTheDocument()
+    expect(screen.getByText(/Targets selected: 1/)).toBeInTheDocument()
+  })
+
+  it('explains when query or column filters hide all rows', () => {
+    act(() => {
+      useLogStore.setState({ rows: [row], visibleRows: [] })
+    })
+    render(<LogViewer />)
+
+    expect(screen.getByText('No rows match current filters')).toBeInTheDocument()
+    expect(screen.getByText(/Adjust Query or column filters/)).toBeInTheDocument()
   })
 
   it('uses visible-column filters and a column manager to show only chosen columns', async () => {

@@ -131,7 +131,9 @@ describe('settings and toolbar scenario', () => {
 
     fireEvent.change(screen.getByLabelText(/initial tail lines/i), { target: { value: '77' } })
     fireEvent.change(screen.getByLabelText(/buffer limit/i), { target: { value: '3000' } })
+    fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
     fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/custom/[namespace]/[podname]/info.log' } })
+    fireEvent.click(screen.getByRole('button', { name: /advanced raw json/i }))
     const policyInput = await screen.findByLabelText(/custom policy json/i)
     fireEvent.change(policyInput, { target: { value: '{' } })
     expect(screen.getByText(/logPolicy:/)).toBeInTheDocument()

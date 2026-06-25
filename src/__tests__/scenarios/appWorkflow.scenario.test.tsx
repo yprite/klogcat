@@ -126,7 +126,7 @@ describe('main investigation workflow scenario', () => {
     render(<AppShell />)
 
     expect(screen.getByText('klogcat')).toBeInTheDocument()
-    expect(screen.getByText('Targets: 1')).toBeInTheDocument()
+    expect(screen.getByText('Targets: 1 selected')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.change(screen.getByLabelText('Query'), { target: { value: 'trx-1' } })

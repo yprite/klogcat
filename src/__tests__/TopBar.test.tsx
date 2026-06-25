@@ -111,6 +111,42 @@ describe('TopBar target picker', () => {
     expect(onPodChange).toHaveBeenCalledWith([`${scopeKey('ctx', 'default')}\u0000api-1`, `${scopeKey('cluster-a', 'prod')}\u0000gateway-1`])
   })
 
+  it('explains empty target results instead of showing a generic missing state', () => {
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+    fireEvent.change(within(dialog).getByLabelText(/search targets/i), { target: { value: 'missing-pod' } })
+
+    expect(within(dialog).getByText('No targets match the current search')).toBeInTheDocument()
+    expect(within(dialog).getByText(/Clear or broaden the search/)).toBeInTheDocument()
+  })
+
+  it('surfaces target discovery errors in the picker empty state', () => {
+    useKubeStore.setState({
+      contexts: [],
+      currentContext: undefined,
+      selectedContext: undefined,
+      selectedContexts: [],
+      namespaces: [],
+      namespacesByContext: {},
+      selectedNamespace: undefined,
+      selectedNamespaces: {},
+      pods: [],
+      podsByScope: {},
+      selectedPod: undefined,
+      selectedPods: {},
+      error: { code: 'kubectl_failed', message: 'kubectl unavailable' },
+    })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByText('Target discovery failed')).toBeInTheDocument()
+    expect(within(dialog).getByText('kubectl unavailable')).toBeInTheDocument()
+  })
+
   it('locks target controls while an async selection change is pending', async () => {
     let resolveSelection!: () => void
     const onPodChange = vi.fn((pods: string[]) => new Promise<void>((resolve) => {
@@ -152,6 +188,7 @@ describe('TopBar target picker', () => {
 
     expect(within(dialog).getByLabelText('Target tree')).toHaveClass('overflow-y-auto')
     expect(within(dialog).getByLabelText('Selected targets')).toHaveClass('overflow-y-auto')
+    expect(within(dialog).getByLabelText('Selected targets')).toHaveTextContent(/Selected targets/)
   })
 
   it('hides clusters that cannot load pod-accessible namespaces', async () => {

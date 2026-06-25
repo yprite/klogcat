@@ -73,16 +73,18 @@ describe('button actions', () => {
     expect(useLogStore.getState().errorMessage).toMatch(/select namespace and pod/i)
   })
 
-  it('places log source toggles on the same toolbar row as Start and Stop', () => {
+  it('groups log source toggles with stream controls while keeping viewer and status groups separate', () => {
     const onSourceTypesChange = vi.fn()
     render(<LogToolbar sourceTypes={['info']} onSourceTypesChange={onSourceTypesChange} />)
 
-    const toolbar = screen.getByRole('button', { name: 'Start' }).closest('div')
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ALL' }))
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'INFO' }))
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ACC' }))
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'ERR' }))
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'Stop' }))
+    const streamControls = screen.getByLabelText('Stream controls')
+    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ALL' }))
+    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'INFO' }))
+    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ACC' }))
+    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ERR' }))
+    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.getByLabelText('Viewer controls')).toContainElement(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Start: enabled/)
 
     fireEvent.click(screen.getByRole('button', { name: 'ACC' }))
     expect(onSourceTypesChange).toHaveBeenCalledWith(['info', 'access'])
@@ -398,6 +400,7 @@ describe('button actions', () => {
     render(<SettingsModal open={true} onClose={() => {}} />)
 
     fireEvent.change(screen.getByRole('combobox', { name: /log policy/i }), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByRole('button', { name: /advanced raw json/i }))
     const policyInput = screen.getByLabelText(/custom policy json/i)
     const policy = JSON.parse(policyInput.textContent ?? '')
     policy.pathTemplate = '/custom/[namespace]/[podname][suffix].jsonl'

@@ -81,8 +81,14 @@ function TargetPickerDialog({
     return { context, namespaces: visibleNamespaces }
   }).filter(({ context, namespaces }) => !normalizedQuery || context.name.toLowerCase().includes(normalizedQuery) || namespaces.length > 0), [kube.contexts, kube.namespaces, kube.namespacesByContext, kube.podsByScope, kube.selectedContext, normalizedQuery])
 
+  const emptyState = kube.error
+    ? { title: 'Target discovery failed', detail: kube.error.message }
+    : normalizedQuery
+      ? { title: 'No targets match the current search', detail: 'Clear or broaden the search to show available clusters, namespaces, and pods.' }
+      : { title: 'No selectable pods loaded', detail: 'Check kubectl access, refresh targets, or select a namespace that has running pods.' }
+
   return <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4">
-    <section role="dialog" aria-modal="true" aria-labelledby="target-picker-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 shadow-xl">
+    <section role="dialog" aria-modal="true" aria-labelledby="target-picker-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 shadow-xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-800 p-4">
         <div>
           <h2 id="target-picker-title" className="text-lg font-semibold">Select Log Targets</h2>
@@ -101,7 +107,7 @@ function TargetPickerDialog({
         <label className="block text-xs uppercase text-slate-400">Search targets</label>
         <input aria-label="Search targets" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="context / namespace / pod / phase / container" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_18rem] overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22rem] overflow-hidden">
         <div aria-label="Target tree" className="min-h-0 overflow-y-auto p-3">
           {(kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing) && <div role="status" aria-label="Loading targets" className="mb-3 overflow-hidden rounded border border-yellow-400/30 bg-slate-900 px-3 py-2 text-xs text-slate-300 animate-klogcat-status-glow">
             <div className="mb-2 flex items-center gap-2">
@@ -111,7 +117,10 @@ function TargetPickerDialog({
             </div>
             <ProgressStripe label="Loading targets progress bar" />
           </div>}
-          {visibleTree.length === 0 && !kube.loadingContexts && !kube.loadingNamespaces && <p className="p-3 text-slate-500">No matching targets</p>}
+          {visibleTree.length === 0 && !kube.loadingContexts && !kube.loadingNamespaces && <div className="rounded border border-dashed border-slate-700 bg-slate-900/60 p-4">
+            <p className="text-sm font-semibold text-slate-100">{emptyState.title}</p>
+            <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
+          </div>}
           {visibleTree.map(({ context, namespaces }) => {
             const contextChecked = contextValues.includes(context.name)
             const collapsed = Boolean(collapsedContexts[context.name])
@@ -173,12 +182,17 @@ function TargetPickerDialog({
             </div>
           })}
         </div>
-        <aside aria-label="Selected targets" className="min-h-0 overflow-y-auto border-l border-slate-800 p-3">
-          <h3 className="text-sm font-semibold">Selected targets</h3>
-          <p className="mb-2 text-xs text-slate-400">{selectedPods.length} selected{selectionPending ? ' · applying…' : ''}</p>
+        <aside aria-label="Selected targets" className="min-h-0 overflow-y-auto border-l border-slate-800 bg-slate-900/40 p-3">
+          <div className="mb-3 rounded border border-slate-800 bg-slate-950 p-3">
+            <h3 className="text-sm font-semibold">Selected targets</h3>
+            <p className="mt-1 text-xs text-slate-400">{selectedPods.length} selected{selectionPending ? ' · applying…' : ''}</p>
+          </div>
           {selectionPending && <div role="status" aria-label="Selection shown immediately" className="mb-2 rounded border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 text-xs text-yellow-100">Selection shown immediately. Applying target change…</div>}
           <div className="space-y-2">
-            {selectedPods.length === 0 && <p className="text-xs text-slate-500">No pods selected</p>}
+            {selectedPods.length === 0 && <div className="rounded border border-dashed border-slate-700 bg-slate-950 p-3 text-xs text-slate-400">
+              <p className="font-semibold text-slate-200">No pods selected</p>
+              <p className="mt-1">Choose one or more running pods from the target tree.</p>
+            </div>}
             {selectedPods.map((value) => {
               const [scope, pod] = value.split('\u0000').length === 3 ? [value.split('\u0000').slice(0, 2).join('\u0000'), value.split('\u0000')[2]] : ['', value]
               const { context, namespace } = parseScopeKey(scope)
@@ -202,8 +216,8 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   return <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-2 py-1.5">
     <strong>klogcat</strong>
     <AnimatedStatusPill active={targetsLoading} label={targetStatusLabel} detail={`Targets: ${selectedCount} selected`} />
-    <button className={`rounded border border-yellow-500 bg-yellow-400 px-2 py-0.5 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
-    <button onClick={onSettings}>Settings</button>
+    <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>Change Targets</button>
+    <button className="rounded border border-slate-700 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={onSettings}>Settings</button>
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}
   </div>
 }

@@ -11,12 +11,13 @@ describe('QueryBar', () => {
 
     const toggle = screen.getByRole('button', { name: 'Regex' })
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByPlaceholderText(/Press \^Space to see query suggestions/)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Filter logs by text/)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /log query/i })).toBeInTheDocument()
 
     fireEvent.click(toggle)
     expect(useLogStore.getState().grepMode).toBe('regex')
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByPlaceholderText('raw-line regex')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Raw line regex')).toBeInTheDocument()
   })
 
   it('marks invalid regex while regex mode is active', () => {
