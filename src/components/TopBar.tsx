@@ -198,7 +198,12 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
   const selectedCount = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
   const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing
-  const targetStatusLabel = kube.cacheRefreshing ? 'Refreshing target cache' : kube.loadingPods ? 'Loading pods' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingContexts ? 'Loading contexts' : 'Targets ready'
+  const targetStatusLabel = kube.cacheRefreshing ? 'Refreshing target cache' : kube.loadingPods ? 'Loading pods' : kube.loadingNamespaces ? 'Loading namespaces' : kube.loadingContexts ? 'Loading contexts' : selectedCount > 0 ? 'Targets selected' : 'Select a target'
+  useEffect(() => {
+    const openTargetPicker = () => setTargetPickerOpen(true)
+    window.addEventListener('klogcat:open-target-picker', openTargetPicker)
+    return () => window.removeEventListener('klogcat:open-target-picker', openTargetPicker)
+  }, [])
   return <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-2 py-1.5">
     <strong>klogcat</strong>
     <AnimatedStatusPill active={targetsLoading} label={targetStatusLabel} detail={`Targets: ${selectedCount} selected`} />

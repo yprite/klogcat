@@ -61,16 +61,13 @@ function resetStores() {
 describe('button actions', () => {
   beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
-  it('keeps Start clickable and reports why it cannot start', () => {
+  it('disables Start until a live target is selected and explains why', () => {
     render(<LogToolbar sourceType="info" />)
 
     const start = screen.getByRole('button', { name: 'Start' })
-    expect(start).toBeEnabled()
-
-    fireEvent.click(start)
-
-    expect(useLogStore.getState().streamStatus).toBe('error')
-    expect(useLogStore.getState().errorMessage).toMatch(/select namespace and pod/i)
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/select namespace and pod/i))
+    expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument()
   })
 
   it('places log source toggles on the same toolbar row as Start and Stop', () => {
@@ -88,16 +85,12 @@ describe('button actions', () => {
     expect(onSourceTypesChange).toHaveBeenCalledWith(['info', 'access'])
   })
 
-  it('keeps Stop clickable and reports when no stream is active', () => {
+  it('disables Stop when no stream is active', () => {
     render(<LogToolbar sourceType="info" />)
 
     const stop = screen.getByRole('button', { name: 'Stop' })
-    expect(stop).toBeEnabled()
-
-    fireEvent.click(stop)
-
-    expect(useLogStore.getState().streamStatus).toBe('error')
-    expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
+    expect(stop).toBeDisabled()
+    expect(stop).toHaveAttribute('title', expect.stringMatching(/no active stream/i))
   })
 
   it('auto-selects the pod container internally without showing a container picker', () => {
@@ -128,6 +121,11 @@ describe('button actions', () => {
   })
 
   it('records visible action debug when Start is clicked', () => {
+    useKubeStore.setState({
+      selectedNamespace: 'default',
+      selectedPod: 'pod-1',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['app'] }],
+    })
     render(<LogToolbar sourceType="info" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))

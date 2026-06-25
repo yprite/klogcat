@@ -208,11 +208,11 @@ describe('product quality e2e', () => {
     expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Failed Requests' })).toBeInTheDocument()
 
-    await waitFor(() => expect(screen.getByText(/Start: enabled \(Select namespace and pod\)/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument())
     expect(screen.getByText('Targets: 0')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    expect(await screen.findByText('Select namespace and pod')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute('title', expect.stringMatching(/Select namespace and pod/))
 
     fireEvent.click(screen.getByRole('button', { name: 'Change Targets' }))
     const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
@@ -274,7 +274,7 @@ describe('product quality e2e', () => {
     })
 
     await waitFor(() => expect(useLogStore.getState().visibleRows).toHaveLength(2))
-    expect(await screen.findByText('Rows: 2/2')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('Rows: 2/2').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByRole('tab', { name: 'Failed Requests' }))
     const failedView = await screen.findByTestId('failed-requests-view')
     expect(within(failedView).getByText('Request-centric investigation layer')).toBeInTheDocument()

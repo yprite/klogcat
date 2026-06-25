@@ -143,6 +143,7 @@ export function LogViewer() {
   const skipNextColumnPersistRef = useRef(false)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
+  const openTargetPicker = () => window.dispatchEvent(new Event('klogcat:open-target-picker'))
   useEffect(() => {
     if (availableColumns.length === 0 && !columnsInitializedRef.current) return
     if (savedColumnSettingsRef.current === undefined) savedColumnSettingsRef.current = readLogViewerColumnSettings()
@@ -311,13 +312,20 @@ export function LogViewer() {
           </span>
         })}
       </div>}
-      {availableColumns.length === 0 && <p className="p-2 text-slate-500">ACC/ERR 컬럼 없음</p>}
+      {availableColumns.length === 0 && <div className="flex min-h-[18rem] items-center justify-center p-6 text-center font-sans">
+        <div className="max-w-md rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-6 shadow-inner">
+          <p className="text-sm font-semibold text-slate-100">No log target selected</p>
+          <p className="mt-2 text-xs text-slate-400">Choose a running pod first. Start, pause, export, and column tools become active after logs arrive.</p>
+          <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">Choose Target</button>
+        </div>
+      </div>}
       {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
   <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
-    <button type="button" onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
-    <button type="button" onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
+    <span className="text-slate-400">Rows: {filteredRows.length}/{visibleRows.length}</span>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
     <span className="text-slate-400">Selected: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : 'none'}</span>
   </div>
   {selectedRow && <aside aria-label="Log row detail" className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
 import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, mergeColumnSettingsWithAvailable, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
@@ -116,7 +116,7 @@ describe('LogViewer', () => {
     expect(screen.getByRole('row', { name: /Visible column filters/i })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Filter status'), { target: { value: '500' } })
 
-    await waitFor(() => expect(screen.getByText('Rows: 1/2')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Rows: 1/2').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByLabelText('Hide status'))
     await waitFor(() => expect(screen.queryByLabelText('Filter status')).not.toBeInTheDocument())
     expect(screen.queryByTestId('log-column-status')).not.toBeInTheDocument()
@@ -286,6 +286,19 @@ describe('LogViewer', () => {
     expect(screen.getByTestId('log-scroll')).toHaveClass('flex-1')
     expect(screen.getByTestId('log-scroll')).toHaveClass('min-h-0')
     expect(screen.getByTestId('log-scroll')).not.toHaveClass('h-[70vh]')
+  })
+
+  it('shows an actionable empty state and disables export actions before logs arrive', () => {
+    const listener = vi.fn()
+    window.addEventListener('klogcat:open-target-picker', listener)
+    render(<LogViewer />)
+
+    expect(screen.getByText('No log target selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy filtered' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export filtered JSONL' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Target' }))
+    expect(listener).toHaveBeenCalledTimes(1)
+    window.removeEventListener('klogcat:open-target-picker', listener)
   })
 
   it('forces the log scroll container to the bottom when auto-scroll is on', () => {

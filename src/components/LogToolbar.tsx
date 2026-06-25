@@ -22,8 +22,13 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
+  const canStart = !startBusy && !alreadyRunning && !disabledReason
+  const canStop = alreadyRunning && !stopBusy
+  const canRestart = alreadyRunning && !startBusy && !stopBusy
+  const canPause = log.streamStatus === 'running' || log.viewerPaused
+  const hasRows = log.rows.length > 0
   const operationActive = startBusy || kube.loadingPods || kube.cacheRefreshing
-  const operationLabel = log.streamStatus === 'starting' ? 'Starting streams' : log.streamStatus === 'stopping' ? 'Stopping streams' : kube.loadingPods ? 'Refreshing pods' : kube.cacheRefreshing ? 'Refreshing target cache' : 'Ready'
+  const operationLabel = log.streamStatus === 'starting' ? 'Starting streams' : log.streamStatus === 'stopping' ? 'Stopping streams' : kube.loadingPods ? 'Refreshing pods' : kube.cacheRefreshing ? 'Refreshing target cache' : targets.length === 0 ? 'Waiting for target' : alreadyRunning ? 'Streaming' : 'Idle'
   const operationDetail = log.streamStatus === 'starting' ? `${log.activeStreamIds.length}/${Math.max(1, targets.length * selectedSourceTypes.length)} streams` : kube.loadingPods ? `${targets.length || 1} target scope` : undefined
   const start = async (allowRestart = false) => {
     log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`)
@@ -131,16 +136,16 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   }
   return <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-2 py-1">
     {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
-    <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
+    <button disabled={!canStart} title={startBlockedReason || 'Start selected target streams'} onClick={() => void start()}>Start</button><button disabled={!canStop} title={canStop ? 'Stop active streams' : 'No active stream to stop'} onClick={stop}>Stop</button><button disabled={!canRestart} title={canRestart ? 'Restart active streams' : 'Start a stream before restarting'} onClick={() => void restart()}>Restart</button>
     <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
     {operationActive && <div className="basis-full sm:basis-64"><ProgressStripe label={`${operationLabel} progress`} /></div>}
-    <button onClick={() => {
+    <button disabled={!canPause} title={canPause ? 'Pause or resume log rendering' : 'Start a stream before pausing'} onClick={() => {
       log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`)
       if (log.viewerPaused) log.resume()
       else log.pause()
-    }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
+    }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button disabled={!hasRows} title={hasRows ? 'Clear buffered logs' : 'No logs to clear'} onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
     <label><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
     <label><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>
-    <span>Targets: {targets.length}</span><span>Status: {log.streamStatus}</span><span>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}
+    <span>Targets: {targets.length}</span><span>Status: {operationLabel}</span><span>Start: {canStart ? 'enabled' : 'unavailable'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}
   </div>
 }
