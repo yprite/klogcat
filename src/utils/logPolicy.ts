@@ -114,6 +114,17 @@ export type LogPolicy = {
   }
 }
 
+export type BuiltinLogPolicyId = 'scloud'
+export type LogPolicySelectionId = BuiltinLogPolicyId | 'custom'
+
+export const builtinLogPolicyOptions = [
+  {
+    id: 'scloud' as const,
+    label: 'SCloud INFO / ACC / ERR',
+    description: 'Use the built-in SCloud log paths, source labels, query suggestions, parser fields, severity, and grouping policy.',
+  },
+] as const
+
 export const accessLogColumnPolicy = ['timestamp', 'jsonLogType', 'host', 'service', 'module', 'serviceId', 'trId', 'epochTime', 'pSpanId', 'spanId', 'method', 'url', 'length', 'srcIp', 'elapsed', 'status', 'userId', 'appId', 'body', 'rcode', 'rmsg', 'exceptionName', 'apiName'] as const satisfies readonly LogColumnKey[]
 export const errorLogColumnPolicy = ['timestamp', 'jsonLogType', 'host', 'logger', 'service', 'module', 'submodule', 'trId', 'epochTime', 'thread', 'body', 'errorServerName', 'errorPath', 'errorMethod', 'errorTimestamp', 'traceId', 'errorReason'] as const satisfies readonly LogColumnKey[]
 
@@ -229,6 +240,11 @@ export const defaultLogPolicy: LogPolicy = {
       message: 'message',
     },
   },
+}
+
+export function logPolicyForBuiltinId(id: BuiltinLogPolicyId): LogPolicy {
+  if (id === 'scloud') return defaultLogPolicy
+  return defaultLogPolicy
 }
 
 let activeLogPolicy: LogPolicy = defaultLogPolicy

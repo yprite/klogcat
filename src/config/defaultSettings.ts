@@ -6,5 +6,6 @@ export const defaultSettings: PersistedSettings = {
   initialTailLines: 200,
   bufferLimit: 50_000,
   logSources: defaultLogSourcesFromPolicy(getLogPolicy()),
+  logPolicyId: 'scloud',
   logPolicy: getLogPolicy(),
 }

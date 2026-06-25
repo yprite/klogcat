@@ -12,6 +12,8 @@ pub struct PersistedSettings {
     pub buffer_limit: u32,
     pub log_sources: BTreeMap<String, LogSourceConfig>,
     #[serde(default)]
+    pub log_policy_id: Option<String>,
+    #[serde(default)]
     pub log_policy: Option<serde_json::Value>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +65,7 @@ pub fn default_settings() -> PersistedSettings {
                 },
             ),
         ]),
+        log_policy_id: Some("scloud".into()),
         log_policy: None,
     }
 }
@@ -84,6 +87,11 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     }
     if s.buffer_limit < 1000 || s.buffer_limit > 200000 {
         e.push(err("bufferLimit", "bufferLimit must be 1000..200000"));
+    }
+    if let Some(log_policy_id) = &s.log_policy_id {
+        if log_policy_id != "scloud" && log_policy_id != "custom" {
+            e.push(err("logPolicyId", "logPolicyId must be scloud or custom"));
+        }
     }
     let keys: Vec<_> = s.log_sources.keys().map(String::as_str).collect();
     if keys != vec!["access", "error", "info"] {
@@ -306,6 +314,7 @@ mod tests {
                 "access": { "container": "app", "filePath": "/var/log/app/access.log" },
                 "error": { "container": "app", "filePath": "/var/log/app/error.log" }
             },
+            "logPolicyId": "custom",
             "logPolicy": {
                 "version": 1,
                 "pathTemplate": "/custom/[namespace]/[podname][suffix].log"
@@ -314,9 +323,20 @@ mod tests {
 
         let settings: PersistedSettings = serde_json::from_value(value).unwrap();
 
+        assert_eq!(settings.log_policy_id.as_deref(), Some("custom"));
         assert_eq!(
             settings.log_policy.unwrap()["pathTemplate"],
             serde_json::json!("/custom/[namespace]/[podname][suffix].log")
         );
+    }
+
+    #[test]
+    fn rejects_unknown_log_policy_id() {
+        let mut s = default_settings();
+        s.log_policy_id = Some("unknown".into());
+
+        assert!(validate_settings(&s)
+            .iter()
+            .any(|error| error.field == "logPolicyId"));
     }
 }

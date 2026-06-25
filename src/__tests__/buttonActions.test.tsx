@@ -393,11 +393,12 @@ describe('button actions', () => {
     expect(screen.getByText(/settings reset to defaults/i)).toBeInTheDocument()
   })
 
-  it('lets Settings edit and save the extracted log policy JSON', async () => {
+  it('lets Settings select Custom JSON before editing and saving policy details', async () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open={true} onClose={() => {}} />)
 
-    const policyInput = screen.getByLabelText(/log policy json/i)
+    fireEvent.change(screen.getByRole('combobox', { name: /log policy/i }), { target: { value: 'custom' } })
+    const policyInput = screen.getByLabelText(/custom policy json/i)
     const policy = JSON.parse(policyInput.textContent ?? '')
     policy.pathTemplate = '/custom/[namespace]/[podname][suffix].jsonl'
     policy.sources.info.label = 'APP'
@@ -406,6 +407,7 @@ describe('button actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
       logPolicy: expect.objectContaining({
         pathTemplate: '/custom/[namespace]/[podname][suffix].jsonl',
         sources: expect.objectContaining({ info: expect.objectContaining({ label: 'APP' }) }),

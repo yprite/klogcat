@@ -9,11 +9,12 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 export function validateSettings(value: unknown): SettingsValidationError[] {
   const errors: SettingsValidationError[] = []
   if (!isRecord(value)) return [{ field: 'settings', message: 'Settings must be an object' }]
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicy'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
   if (value.schemaVersion !== 1) errors.push({ field: 'schemaVersion', message: 'schemaVersion must be 1' })
   if (!Number.isInteger(value.initialTailLines) || (value.initialTailLines as number) < 0 || (value.initialTailLines as number) > 100000) errors.push({ field: 'initialTailLines', message: 'initialTailLines must be 0..100000' })
   if (!Number.isInteger(value.bufferLimit) || (value.bufferLimit as number) < 1000 || (value.bufferLimit as number) > 200000) errors.push({ field: 'bufferLimit', message: 'bufferLimit must be 1000..200000' })
   if (value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string') errors.push({ field: 'defaultNamespace', message: 'defaultNamespace must be a string when provided' })
+  if (value.logPolicyId !== undefined && value.logPolicyId !== 'scloud' && value.logPolicyId !== 'custom') errors.push({ field: 'logPolicyId', message: 'logPolicyId must be scloud or custom' })
   if (value.logPolicy !== undefined) {
     try { assertValidLogPolicy(value.logPolicy) }
     catch (error) { errors.push({ field: 'logPolicy', message: error instanceof Error ? error.message : String(error) }) }
