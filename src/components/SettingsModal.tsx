@@ -93,7 +93,6 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
         <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
         <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
         {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{previewPolicy.sources[type]?.label ?? sourceLabels[type]}</legend>
-          <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
           <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(previewPolicy, type)}</span>
         </fieldset>)}
         <section className="rounded border border-slate-700 bg-slate-950/60 p-3">

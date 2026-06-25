@@ -53,6 +53,13 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByText(/custom policy selected/i)).toBeInTheDocument()
   })
 
+  it('hides container inputs from the normal settings page', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    expect(screen.queryByLabelText(/container/i)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/fixed path:/i)).toHaveLength(3)
+  })
+
   it('keeps the settings content in a scrollable panel', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
