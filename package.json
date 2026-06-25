@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:unit": "node scripts/harness/run-test-layer.mjs unit",
     "test:scenario": "node scripts/harness/run-test-layer.mjs scenario",
+    "test:scenario:coverage": "node scripts/harness/run-test-layer.mjs scenario --coverage",
     "test:e2e": "node scripts/harness/run-test-layer.mjs e2e",
     "test:watch": "vitest",
     "tauri": "tauri",
@@ -22,24 +23,25 @@
     "klogcat:dev": "node ./bin/klogcat.js --dev"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
     "@tanstack/react-virtual": "^3.14.3",
-    "zustand": "^5.0.14",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.3",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.15",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "tailwindcss": "^3.4.19",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^4.1.9",
     "jsdom": "^29.1.1",
     "vitest": "^4.1.9"
   },

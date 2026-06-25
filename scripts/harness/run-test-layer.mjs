@@ -4,7 +4,9 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const repoRoot = process.cwd()
-const layer = process.argv[2]
+const argv = process.argv.slice(2)
+const layer = argv[0]
+const coverageEnabled = argv.includes('--coverage')
 
 if (!['unit', 'scenario', 'e2e'].includes(layer)) {
   console.error('[test-layer] usage: run-test-layer.mjs <unit|scenario|e2e>')
@@ -24,8 +26,21 @@ if (!fs.existsSync(vitestBin)) {
   process.exit(1)
 }
 
-console.log(`[test-layer] layer=${layer} status=running files=${files.length}`)
-const result = spawnSync(vitestBin, ['run', ...files], {
+console.log(`[test-layer] layer=${layer} status=running files=${files.length}${coverageEnabled ? ' coverage=enabled' : ''}`)
+const coverageArgs = coverageEnabled
+  ? [
+      '--coverage',
+      '--coverage.provider=v8',
+      '--coverage.reporter=text',
+      '--coverage.reporter=json-summary',
+      `--coverage.reportsDirectory=.harness/coverage/${layer}`,
+      '--coverage.include=src/**/*.{ts,tsx}',
+      '--coverage.exclude=src/**/*.test.{ts,tsx}',
+      '--coverage.exclude=src/__tests__/**',
+      '--coverage.exclude=src/vite-env.d.ts',
+    ]
+  : []
+const result = spawnSync(vitestBin, ['run', ...coverageArgs, ...files], {
   cwd: repoRoot,
   stdio: 'inherit',
 })

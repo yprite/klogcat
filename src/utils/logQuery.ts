@@ -47,7 +47,6 @@ function wordToken(value: string): Token {
   return { type: 'word', value }
 }
 
-function isValueStart(token?: Token) { return !!token && token.type !== 'and' && token.type !== 'or' && token.type !== 'rparen' }
 function implicitAnd(prev?: Token, next?: Token) {
   return !!prev && !!next && (prev.type === 'word' || prev.type === 'rparen') && (next.type === 'word' || next.type === 'not' || next.type === 'lparen')
 }

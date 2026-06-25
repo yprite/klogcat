@@ -1,0 +1,5 @@
+
+> klogcat@0.0.5 metrics:prepush
+> scripts/harness/metrics-pre-push.sh
+
+[metrics:prepush] Passed. Report: .harness/reports/metrics-prepush.json
