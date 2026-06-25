@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, labelForColumnFromPolicy, querySuggestionsFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, labelForColumnFromPolicy, querySuggestionsFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 
 describe('logPolicy', () => {
   it('centralizes source definitions and SCloud path rules outside business code', () => {
@@ -24,5 +24,15 @@ describe('logPolicy', () => {
     expect(suggestions.map((suggestion) => suggestion.insert)).toEqual(expect.arrayContaining(['source:', 'trId:', 'url~:', 'message~:', 'is:stacktrace']))
     expect(defaultLogPolicy.query.sourceAliases).toEqual(['source', 'type'])
     expect(defaultLogPolicy.query.correlationFields).toEqual(['trId', 'traceId'])
+  })
+
+  it('centralizes parser field paths for base, access-like, and error logs', () => {
+    expect(defaultLogPolicy.parser.base.timestamp).toBe('time')
+    expect(defaultLogPolicy.parser.base.levelCandidates).toEqual(['level', 'severity', 'logLevel', 'priority'])
+    expect(defaultLogPolicy.parser.access.apiName).toBe('body.api_name')
+    expect(defaultLogPolicy.parser.access.rcode).toBe('body.rcode')
+    expect(defaultLogPolicy.parser.error.traceId).toBe('body.errorDetails.traceId')
+    expect(defaultLogPolicy.parser.error.errorReason).toBe('body.errorDetails.errors.0.reason')
+    expect(fieldPathValueFromPolicy({ body: { errorDetails: { errors: [{ reason: 'boom' }] } } }, defaultLogPolicy.parser.error.errorReason)).toBe('boom')
   })
 })

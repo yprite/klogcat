@@ -1,23 +1,22 @@
 import type { SourceMeta } from '../types/log'
+import { defaultLogPolicy, type LogPolicy } from './logPolicy'
 import type { ParsedLogLineWithoutId } from './parserHelpers'
-import { base, nonEmptySummary, rec, str } from './parserHelpers'
+import { base, nonEmptySummary, rec, strField } from './parserHelpers'
 
-export function parseErrorLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number): ParsedLogLineWithoutId {
+export function parseErrorLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number, policy: LogPolicy = defaultLogPolicy): ParsedLogLineWithoutId {
   const j = rec(json) ?? {}
-  const details = rec(rec(j.body)?.errorDetails) ?? {}
-  const errors = Array.isArray(details.errors) ? details.errors : []
-  const firstError = rec(errors[0])
-  const traceId = str(details.traceId)
-  const errorMethod = str(details.method), errorPath = str(details.path), errorReason = str(firstError?.reason)
+  const p = policy.parser.error
+  const traceId = strField(j, p.traceId)
+  const errorMethod = strField(j, p.errorMethod), errorPath = strField(j, p.errorPath), errorReason = strField(j, p.errorReason)
   return {
-    ...base(j, raw, sourceMeta, receivedAt),
+    ...base(j, raw, sourceMeta, receivedAt, policy),
     traceId,
-    trId: str(j.trId) ?? traceId,
+    trId: strField(j, policy.parser.base.trId) ?? traceId,
     errorReason,
     errorMethod,
     errorPath,
-    errorServerName: str(details.serverName),
-    errorTimestamp: str(details.timestamp),
-    summary: nonEmptySummary([errorReason, errorMethod, errorPath, str(j.logger)], raw),
+    errorServerName: strField(j, p.errorServerName),
+    errorTimestamp: strField(j, p.errorTimestamp),
+    summary: nonEmptySummary([errorReason, errorMethod, errorPath, strField(j, policy.parser.base.logger)], raw),
   }
 }

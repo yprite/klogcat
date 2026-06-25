@@ -1,16 +1,18 @@
 import type { SourceMeta } from '../types/log'
+import { defaultLogPolicy, type LogPolicy } from './logPolicy'
 import type { ParsedLogLineWithoutId } from './parserHelpers'
-import { base, nonEmptySummary, num, rec, str } from './parserHelpers'
+import { base, nonEmptySummary, numField, rec, strField } from './parserHelpers'
 
-export function parseAccessLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number): ParsedLogLineWithoutId {
+export function parseAccessLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number, policy: LogPolicy = defaultLogPolicy): ParsedLogLineWithoutId {
   const j = rec(json) ?? {}
-  const body = rec(j.body) ?? {}
-  const status = str(j.status)
-  const elapsed = num(j.elapsed)
-  const rcode = str(body.rcode), rmsg = str(body.rmsg), exceptionName = str(body.exceptionName), apiName = str(body.api_name)
+  const p = policy.parser.access
+  const status = strField(j, p.status)
+  const elapsed = numField(j, p.elapsed)
+  const rcode = strField(j, p.rcode), rmsg = strField(j, p.rmsg), exceptionName = strField(j, p.exceptionName), apiName = strField(j, p.apiName)
+  const method = strField(j, p.method), url = strField(j, p.url)
   return {
-    ...base(j, raw, sourceMeta, receivedAt),
-    method: str(j.method), url: str(j.url), status, elapsed, length: num(j.length), pSpanId: str(j.pSpanId), spanId: str(j.spanId), srcIp: str(j.srcIp), userId: str(j.userId), appId: str(j.appId), rcode, rmsg, exceptionName, apiName,
-    summary: nonEmptySummary([str(j.method), str(j.url), status, elapsed !== undefined ? `${elapsed}ms` : undefined, rcode ? `rcode=${rcode}` : undefined, exceptionName ? `exception=${exceptionName}` : undefined, apiName ? `api=${apiName}` : undefined, rmsg], raw),
+    ...base(j, raw, sourceMeta, receivedAt, policy),
+    method, url, status, elapsed, length: numField(j, p.length), pSpanId: strField(j, p.pSpanId), spanId: strField(j, p.spanId), srcIp: strField(j, p.srcIp), userId: strField(j, p.userId), appId: strField(j, p.appId), rcode, rmsg, exceptionName, apiName,
+    summary: nonEmptySummary([method, url, status, elapsed !== undefined ? `${elapsed}ms` : undefined, rcode ? `rcode=${rcode}` : undefined, exceptionName ? `exception=${exceptionName}` : undefined, apiName ? `api=${apiName}` : undefined, rmsg], raw),
   }
 }

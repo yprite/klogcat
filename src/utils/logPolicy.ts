@@ -6,6 +6,54 @@ export type QuerySuggestionPolicy = {
   description: string
 }
 
+export type FieldPath = string
+
+export type BaseParserPolicy = {
+  timestamp: FieldPath
+  epochTime: FieldPath
+  jsonLogType: FieldPath
+  levelCandidates: readonly FieldPath[]
+  host: FieldPath
+  service: FieldPath
+  serviceId: FieldPath
+  module: FieldPath
+  submodule: FieldPath
+  trId: FieldPath
+  logger: FieldPath
+  thread: FieldPath
+  body: FieldPath
+}
+
+export type AccessParserPolicy = {
+  method: FieldPath
+  url: FieldPath
+  status: FieldPath
+  elapsed: FieldPath
+  length: FieldPath
+  pSpanId: FieldPath
+  spanId: FieldPath
+  srcIp: FieldPath
+  userId: FieldPath
+  appId: FieldPath
+  rcode: FieldPath
+  rmsg: FieldPath
+  exceptionName: FieldPath
+  apiName: FieldPath
+}
+
+export type ErrorParserPolicy = {
+  traceId: FieldPath
+  errorReason: FieldPath
+  errorMethod: FieldPath
+  errorPath: FieldPath
+  errorServerName: FieldPath
+  errorTimestamp: FieldPath
+}
+
+export type InfoParserPolicy = {
+  message: FieldPath
+}
+
 export type LogSourcePolicy = {
   label: string
   pathSuffix: string
@@ -25,6 +73,12 @@ export type LogPolicy = {
     sourceAliases: readonly string[]
     correlationFields: readonly LogColumnKey[]
     suggestions: readonly QuerySuggestionPolicy[]
+  }
+  parser: {
+    base: BaseParserPolicy
+    access: AccessParserPolicy
+    error: ErrorParserPolicy
+    info: InfoParserPolicy
   }
 }
 
@@ -83,6 +137,61 @@ export const defaultLogPolicy: LogPolicy = {
       { insert: '|', label: '|', description: 'OR between clauses' },
     ],
   },
+  parser: {
+    base: {
+      timestamp: 'time',
+      epochTime: 'epochTime',
+      jsonLogType: 'logType',
+      levelCandidates: ['level', 'severity', 'logLevel', 'priority'],
+      host: 'host',
+      service: 'service',
+      serviceId: 'serviceId',
+      module: 'module',
+      submodule: 'submodule',
+      trId: 'trId',
+      logger: 'logger',
+      thread: 'thread',
+      body: 'body',
+    },
+    access: {
+      method: 'method',
+      url: 'url',
+      status: 'status',
+      elapsed: 'elapsed',
+      length: 'length',
+      pSpanId: 'pSpanId',
+      spanId: 'spanId',
+      srcIp: 'srcIp',
+      userId: 'userId',
+      appId: 'appId',
+      rcode: 'body.rcode',
+      rmsg: 'body.rmsg',
+      exceptionName: 'body.exceptionName',
+      apiName: 'body.api_name',
+    },
+    error: {
+      traceId: 'body.errorDetails.traceId',
+      errorReason: 'body.errorDetails.errors.0.reason',
+      errorMethod: 'body.errorDetails.method',
+      errorPath: 'body.errorDetails.path',
+      errorServerName: 'body.errorDetails.serverName',
+      errorTimestamp: 'body.errorDetails.timestamp',
+    },
+    info: {
+      message: 'message',
+    },
+  },
+}
+
+
+export function fieldPathValueFromPolicy(json: unknown, fieldPath: FieldPath): unknown {
+  if (!fieldPath) return undefined
+  return fieldPath.split('.').reduce<unknown>((value, segment) => {
+    if (value === undefined || value === null) return undefined
+    if (Array.isArray(value) && /^\d+$/.test(segment)) return value[Number(segment)]
+    if (typeof value === 'object' && !Array.isArray(value)) return (value as Record<string, unknown>)[segment]
+    return undefined
+  }, json)
 }
 
 export function sourceTypesFromPolicy(policy: LogPolicy = defaultLogPolicy): SourceLogType[] {
