@@ -47,6 +47,7 @@ pub fn run() {
             commands::settings::save_settings,
             commands::settings::reset_settings,
             commands::logs::start_log_stream,
+            commands::logs::check_log_path,
             commands::logs::stop_log_stream,
             commands::logs::stop_all_log_streams,
         ])
