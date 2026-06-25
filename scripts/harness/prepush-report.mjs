@@ -31,7 +31,7 @@ if (metrics) {
 const commandResults = buildCommandResults(commandLogs)
 const testResults = buildTestResults(commandLogs)
 const buildResults = buildBuildResults(commandLogs)
-const e2eArtifacts = copyE2eArtifacts(reportDir)
+const e2eArtifacts = copyE2eArtifacts(reportDir, testResults.e2e)
 const gitInfo = buildGitInfo()
 
 const summary = {
@@ -109,16 +109,22 @@ function buildTestResults(logs) {
   }
 }
 
-function copyE2eArtifacts(reportDir) {
-  const source = path.join(repoRoot, '.harness', 'e2e-artifacts')
-  if (!fs.existsSync(source)) return []
+function copyE2eArtifacts(reportDir, e2eResult) {
+  const sourceRoot = path.join(repoRoot, '.harness', 'e2e-artifacts')
+  const artifactPaths = [
+    e2eResult?.subchecks?.browser?.artifacts,
+    e2eResult?.subchecks?.desktop?.artifacts,
+  ].filter(Boolean)
+  if (artifactPaths.length === 0 || !fs.existsSync(sourceRoot)) return []
   const targetRoot = path.join(reportDir, 'e2e-artifacts')
   fs.mkdirSync(targetRoot, { recursive: true })
   const copied = []
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue
-    const sourceDir = path.join(source, entry.name)
-    const targetDir = path.join(targetRoot, entry.name)
+  for (const artifactPath of artifactPaths) {
+    const sourceDir = path.resolve(repoRoot, artifactPath)
+    const relativeSource = path.relative(sourceRoot, sourceDir)
+    if (relativeSource.startsWith('..') || path.isAbsolute(relativeSource) || !fs.existsSync(sourceDir)) continue
+    const entryName = path.basename(sourceDir)
+    const targetDir = path.join(targetRoot, entryName)
     fs.cpSync(sourceDir, targetDir, { recursive: true })
     copied.push(relative(targetDir))
   }
