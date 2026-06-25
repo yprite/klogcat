@@ -1,4 +1,4 @@
-import type { SourceLogType, LogColumnKey } from '../types/log'
+import type { SourceLogType, LogColumnKey, ParsedLogLine } from '../types/log'
 
 export type QuerySuggestionPolicy = {
   insert: string
@@ -54,6 +54,19 @@ export type InfoParserPolicy = {
   message: FieldPath
 }
 
+export type SeverityPolicy = {
+  levelRanks: Record<string, number>
+  fallbackLevelBySource: Partial<Record<SourceLogType, string>>
+  exceptionLevel: string
+  errorLevel: string
+}
+
+export type FailurePolicy = {
+  sourceTypes: readonly SourceLogType[]
+  minimumStatus: number
+  exceptionFields: readonly LogColumnKey[]
+}
+
 export type LogSourcePolicy = {
   label: string
   pathSuffix: string
@@ -74,6 +87,8 @@ export type LogPolicy = {
     correlationFields: readonly LogColumnKey[]
     suggestions: readonly QuerySuggestionPolicy[]
   }
+  severity: SeverityPolicy
+  failure: FailurePolicy
   parser: {
     base: BaseParserPolicy
     access: AccessParserPolicy
@@ -137,6 +152,17 @@ export const defaultLogPolicy: LogPolicy = {
       { insert: '|', label: '|', description: 'OR between clauses' },
     ],
   },
+  severity: {
+    levelRanks: { TRACE: 0, VERBOSE: 0, DEBUG: 1, INFO: 2, WARN: 3, WARNING: 3, ERROR: 4, FATAL: 5 },
+    fallbackLevelBySource: { error: 'ERROR' },
+    exceptionLevel: 'ERROR',
+    errorLevel: 'ERROR',
+  },
+  failure: {
+    sourceTypes: ['error'],
+    minimumStatus: 500,
+    exceptionFields: ['exceptionName', 'errorReason'],
+  },
   parser: {
     base: {
       timestamp: 'time',
@@ -192,6 +218,30 @@ export function fieldPathValueFromPolicy(json: unknown, fieldPath: FieldPath): u
     if (typeof value === 'object' && !Array.isArray(value)) return (value as Record<string, unknown>)[segment]
     return undefined
   }, json)
+}
+
+export function rowLevelFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+  const candidates = [
+    row.level,
+    row.jsonLogType,
+    policy.failure.exceptionFields.some((field) => Boolean(row[field])) ? policy.severity.exceptionLevel : undefined,
+    policy.severity.fallbackLevelBySource[row.sourceType],
+  ]
+  return candidates.find((value) => value && policy.severity.levelRanks[value.toUpperCase()] !== undefined)?.toUpperCase()
+}
+
+export function levelMeetsMinimumFromPolicy(level: string | undefined, minimumLevel: string, policy: LogPolicy = defaultLogPolicy) {
+  const actualRank = level ? policy.severity.levelRanks[level.toUpperCase()] : undefined
+  const minimumRank = policy.severity.levelRanks[minimumLevel.toUpperCase()]
+  return actualRank !== undefined && minimumRank !== undefined && actualRank >= minimumRank
+}
+
+export function isFailureRowFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+  const status = Number(row.status)
+  return policy.failure.sourceTypes.includes(row.sourceType)
+    || (Number.isFinite(status) && status >= policy.failure.minimumStatus)
+    || policy.failure.exceptionFields.some((field) => Boolean(row[field]))
+    || levelMeetsMinimumFromPolicy(rowLevelFromPolicy(row, policy), policy.severity.errorLevel, policy)
 }
 
 export function sourceTypesFromPolicy(policy: LogPolicy = defaultLogPolicy): SourceLogType[] {

@@ -1,6 +1,6 @@
 import type { ParsedLogLine, SourceLogType } from '../types/log'
 import { compileGrepRegex } from './grep'
-import { defaultLogPolicy, sourceTypesFromPolicy } from './logPolicy'
+import { defaultLogPolicy, isFailureRowFromPolicy, levelMeetsMinimumFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy, type LogPolicy } from './logPolicy'
 import { valueForColumn, accessLogColumns, errorLogColumns, type LogColumnKey } from './logColumns'
 
 export type QueryValidation = { ok: true } | { ok: false; message: string }
@@ -13,7 +13,6 @@ type Expr =
   | { type: 'and' | 'or'; left: Expr; right: Expr }
 
 const searchableColumnKeys: LogColumnKey[] = Array.from(new Set([...accessLogColumns, ...errorLogColumns]))
-const levelRank: Record<string, number> = { TRACE: 0, VERBOSE: 0, DEBUG: 1, INFO: 2, WARN: 3, WARNING: 3, ERROR: 4, FATAL: 5 }
 
 function tokenize(input: string): Token[] {
   const tokens: Token[] = []
@@ -109,22 +108,17 @@ function textMatches(value: string, query: string, regex: boolean) {
   return re ? re.test(value) : false
 }
 
-function rowLevel(row: ParsedLogLine) {
-  const candidates = [row.level, row.jsonLogType, row.exceptionName ? 'ERROR' : undefined, row.sourceType === 'error' ? 'ERROR' : undefined]
-  return candidates.find((value) => value && levelRank[value.toUpperCase()] !== undefined)?.toUpperCase()
-}
-
-function rowFieldValue(row: ParsedLogLine, key: string): string {
+function rowFieldValue(row: ParsedLogLine, key: string, policy: LogPolicy): string {
   const k = key.toLowerCase()
   if (k === 'line' || k === 'message' || k === 'raw') return row.raw
   if (k === 'summary') return row.summary
-  if (defaultLogPolicy.query.sourceAliases.includes(k)) return row.sourceType
+  if (policy.query.sourceAliases.includes(k)) return row.sourceType
   if (k === 'namespace' || k === 'ns') return row.namespace
   if (k === 'pod') return row.pod
   if (k === 'container') return row.container
   if (k === 'tag') return row.logger || row.module || row.service || row.jsonLogType || ''
   if (k === 'package') return row.service || row.serviceId || row.appId || ''
-  if (k === 'level' || k === 'priority') return rowLevel(row) ?? ''
+  if (k === 'level' || k === 'priority') return rowLevelFromPolicy(row, policy) ?? ''
   if (k === 'age') return String(ageSeconds(row))
   const column = searchableColumnKeys.find((candidate) => candidate.toLowerCase() === k)
   return column ? valueForColumn(row, column) : String((row as unknown as Record<string, unknown>)[key] ?? '')
@@ -144,34 +138,34 @@ function parseAge(value: string) {
   return amount * (unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86400)
 }
 
-function evalField(row: ParsedLogLine, key: string, value: string, regex: boolean) {
+function evalField(row: ParsedLogLine, key: string, value: string, regex: boolean, policy: LogPolicy) {
   const k = key.toLowerCase()
   if (k === 'is') {
     const v = value.toLowerCase()
     if (v === 'stacktrace') return !!row.isStacktrace || !!row.stacktraceLines?.length
-    if (v === 'crash' || v === 'error') return row.sourceType === 'error' || rowLevel(row) === 'ERROR' || !!row.exceptionName
+    if (v === 'crash' || v === 'error') return isFailureRowFromPolicy(row, policy)
     return false
   }
   if (k === 'level' || k === 'priority') {
-    const actual = rowLevel(row)
+    const actual = rowLevelFromPolicy(row, policy)
     const wanted = value.toUpperCase()
-    if (!actual || levelRank[wanted] === undefined || levelRank[actual] === undefined) return textMatches(actual ?? '', value, regex)
-    return levelRank[actual] >= levelRank[wanted]
+    if (!levelMeetsMinimumFromPolicy(actual, wanted, policy)) return textMatches(actual ?? '', value, regex)
+    return true
   }
   if (k === 'age') {
     const seconds = parseAge(value)
     return seconds === undefined ? false : ageSeconds(row) <= seconds
   }
-  if (defaultLogPolicy.query.sourceAliases.includes(k) && sourceTypesFromPolicy(defaultLogPolicy).includes(value as SourceLogType)) return row.sourceType === value as SourceLogType
-  return textMatches(rowFieldValue(row, key), value, regex)
+  if (policy.query.sourceAliases.includes(k) && sourceTypesFromPolicy(policy).includes(value as SourceLogType)) return row.sourceType === value as SourceLogType
+  return textMatches(rowFieldValue(row, key, policy), value, regex)
 }
 
-function evalExpr(row: ParsedLogLine, expr: Expr): boolean {
+function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
   if (expr.type === 'term') return textMatches(row.raw, expr.term, false)
-  if (expr.type === 'field') return evalField(row, expr.key, expr.value, expr.regex)
-  if (expr.type === 'not') return !evalExpr(row, expr.expr)
-  if (expr.type === 'and') return evalExpr(row, expr.left) && evalExpr(row, expr.right)
-  return evalExpr(row, expr.left) || evalExpr(row, expr.right)
+  if (expr.type === 'field') return evalField(row, expr.key, expr.value, expr.regex, policy)
+  if (expr.type === 'not') return !evalExpr(row, expr.expr, policy)
+  if (expr.type === 'and') return evalExpr(row, expr.left, policy) && evalExpr(row, expr.right, policy)
+  return evalExpr(row, expr.left, policy) || evalExpr(row, expr.right, policy)
 }
 
 export function validateLogQuery(query: string): QueryValidation {
@@ -186,10 +180,10 @@ export function validateLogQuery(query: string): QueryValidation {
   return balance === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
 }
 
-export function matchesLogQuery(row: ParsedLogLine, query: string): boolean {
+export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = defaultLogPolicy): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
   const tokens = tokenize(trimmed)
   const expr = parse(tokens)
-  return expr ? evalExpr(row, expr) : true
+  return expr ? evalExpr(row, expr, policy) : true
 }
