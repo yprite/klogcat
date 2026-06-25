@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, correlationKeyFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, groupFailedRequestsFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, correlationKeyFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, groupFailedRequestsFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, logPathTemplateTokens, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 import type { ParsedLogLine } from '../types/log'
 
 describe('logPolicy', () => {
@@ -25,6 +25,23 @@ describe('logPolicy', () => {
     expect(suggestions.map((suggestion) => suggestion.insert)).toEqual(expect.arrayContaining(['source:', 'trId:', 'url~:', 'message~:', 'is:stacktrace']))
     expect(defaultLogPolicy.query.sourceAliases).toEqual(['source', 'type'])
     expect(defaultLogPolicy.query.correlationFields).toEqual(['trId', 'traceId'])
+  })
+
+  it('supports source-specific path templates and exposes every path variable the builder can replace', () => {
+    const customPolicy = {
+      ...defaultLogPolicy,
+      sources: {
+        ...defaultLogPolicy.sources,
+        info: {
+          ...defaultLogPolicy.sources.info,
+          pathTemplate: '/logs/[namespace]/[pod]/[source]/[label][suffix].log',
+        },
+      },
+    }
+
+    expect(logPathTemplateTokens.map((item) => item.token)).toEqual(expect.arrayContaining(['[namespace]', '[podname]', '[pod]', '[source]', '[sourceType]', '[label]', '[suffix]']))
+    expect(buildLogPathTemplateFromPolicy(customPolicy, 'info')).toBe('/logs/[namespace]/[pod]/info/INFO.log')
+    expect(buildLogPathFromPolicy(customPolicy, 'demo-ns', 'demo-pod', 'info')).toBe('/logs/demo-ns/demo-pod/info/INFO.log')
   })
 
   it('centralizes parser field paths for base, access-like, and error logs', () => {

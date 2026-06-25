@@ -86,6 +86,7 @@ export type FailedRequestGroup = {
 export type LogSourcePolicy = {
   label: string
   pathSuffix: string
+  pathTemplate?: string
   columns: readonly LogColumnKey[]
 }
 
@@ -123,6 +124,16 @@ export const builtinLogPolicyOptions = [
     label: 'SCloud INFO / ACC / ERR',
     description: 'Use the built-in SCloud log paths, source labels, query suggestions, parser fields, severity, and grouping policy.',
   },
+] as const
+
+export const logPathTemplateTokens = [
+  { token: '[namespace]', description: '선택한 Kubernetes namespace' },
+  { token: '[podname]', description: '선택한 pod name' },
+  { token: '[pod]', description: '[podname]과 동일한 pod name alias' },
+  { token: '[source]', description: '로그 타입 key: info, access, error' },
+  { token: '[sourceType]', description: '[source]와 동일한 로그 타입 key alias' },
+  { token: '[label]', description: '로그 타입 label: INFO, ACC, ERR' },
+  { token: '[suffix]', description: '로그 타입별 suffix: 빈 값, _ACC, _ERR' },
 ] as const
 
 export const accessLogColumnPolicy = ['timestamp', 'jsonLogType', 'host', 'service', 'module', 'serviceId', 'trId', 'epochTime', 'pSpanId', 'spanId', 'method', 'url', 'length', 'srcIp', 'elapsed', 'status', 'userId', 'appId', 'body', 'rcode', 'rmsg', 'exceptionName', 'apiName'] as const satisfies readonly LogColumnKey[]
@@ -294,9 +305,10 @@ export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy
   const sourceKeys = Object.keys(defaultLogPolicy.sources)
   for (const key of sourceKeys) {
     const source = sources[key]
-    if (!isRecord(source)) throw new Error(`log policy source ${key} must be an object`)
+    if (!isRecord(source)) throw new Error(`log policy sources.${key} must be an object`)
     assertString(source.label, `sources.${key}.label`)
     assertString(source.pathSuffix, `sources.${key}.pathSuffix`)
+    if (source.pathTemplate !== undefined) assertString(source.pathTemplate, `sources.${key}.pathTemplate`)
     assertStringArray(source.columns, `sources.${key}.columns`)
   }
 
@@ -444,14 +456,21 @@ export function sourceTypesFromPolicy(policy: LogPolicy = getLogPolicy()): Sourc
 }
 
 export function buildLogPathTemplateFromPolicy(policy: LogPolicy, sourceType: SourceLogType) {
-  const suffix = policy.sources[sourceType]?.pathSuffix ?? ''
-  return policy.pathTemplate.replace('[suffix]', suffix)
+  const source = policy.sources[sourceType]
+  const suffix = source?.pathSuffix ?? ''
+  const label = source?.label ?? sourceType
+  return (source?.pathTemplate ?? policy.pathTemplate)
+    .replaceAll('[suffix]', suffix)
+    .replaceAll('[source]', sourceType)
+    .replaceAll('[sourceType]', sourceType)
+    .replaceAll('[label]', label)
 }
 
 export function buildLogPathFromPolicy(policy: LogPolicy, namespace: string, pod: string, sourceType: SourceLogType) {
   return buildLogPathTemplateFromPolicy(policy, sourceType)
     .replaceAll('[namespace]', namespace)
     .replaceAll('[podname]', pod)
+    .replaceAll('[pod]', pod)
 }
 
 export function defaultLogSourcesFromPolicy(policy: LogPolicy) {

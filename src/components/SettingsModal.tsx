@@ -5,12 +5,14 @@ import { useKubeStore } from '../stores/kubeStore'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
+import type { SourceLogType } from '../types/log'
 import { sourceLabelsForActivePolicy } from '../utils/sourceLabels'
 import {
   assertValidLogPolicy,
   buildLogPathTemplateFromPolicy,
   builtinLogPolicyOptions,
   getLogPolicy,
+  logPathTemplateTokens,
   logPolicyForBuiltinId,
   sourceTypesFromPolicy,
   type LogPolicy,
@@ -50,6 +52,21 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const sourceTypes = sourceTypesFromPolicy(previewPolicy)
   const sourceLabels = sourceLabelsForActivePolicy()
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
+  const updateSourcePathTemplate = (sourceType: SourceLogType, pathTemplate: string) => {
+    const basePolicy = policyDraft ?? previewPolicy
+    const sourcePolicy = basePolicy.sources[sourceType]
+    if (!sourcePolicy) return
+    const nextPolicy: LogPolicy = {
+      ...basePolicy,
+      sources: {
+        ...basePolicy.sources,
+        [sourceType]: { ...sourcePolicy, pathTemplate },
+      },
+    }
+    setNotice(undefined)
+    setSelectedPolicyId('custom')
+    setPolicyText(JSON.stringify(nextPolicy, null, 2))
+  }
   const handleReset = async () => {
     recordActionDebug('Reset clicked')
     setNotice(undefined)
@@ -92,9 +109,27 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" data-testid="settings-scroll-panel">
         <label className="block">Initial tail lines <input className="text-black ml-2" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
         <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
-        {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{previewPolicy.sources[type]?.label ?? sourceLabels[type]}</legend>
-          <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(previewPolicy, type)}</span>
-        </fieldset>)}
+        <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
+          <h3 className="text-sm font-semibold text-white">Log paths</h3>
+          <p className="mt-1 text-xs text-slate-400">로그 타입별 파일 경로를 직접 수정할 수 있어. 수정하면 자동으로 Custom policy로 저장돼.</p>
+          <div className="mt-2 rounded border border-slate-800 bg-slate-900/70 p-2">
+            <p className="text-xs font-semibold text-slate-200">사용 가능한 변수</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {logPathTemplateTokens.map((item) => <span className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200" key={item.token} title={item.description}><code>{item.token}</code></span>)}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">예: <code>/scloud/[namespace]/logs/[podname]/[namespace][suffix].log</code></p>
+          </div>
+          <div className="mt-3 space-y-2">
+            {sourceTypes.map((type) => <label className="block rounded border border-slate-700 p-2" key={type}>
+              <span className="text-sm font-semibold text-white">{previewPolicy.sources[type]?.label ?? sourceLabels[type]} path template</span>
+              <input
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100"
+                value={buildLogPathTemplateFromPolicy(previewPolicy, type)}
+                onChange={(e) => updateSourcePathTemplate(type, e.target.value)}
+              />
+            </label>)}
+          </div>
+        </section>
         <section className="rounded border border-slate-700 bg-slate-950/60 p-3">
           <h3 className="text-sm font-semibold text-white">Log policy</h3>
           <p className="mt-1 text-xs text-slate-400">사용할 로그 정책을 선택해. 일반 사용자는 built-in policy를 고르면 되고, 직접 policy를 만들어야 할 때만 Custom JSON을 선택해.</p>

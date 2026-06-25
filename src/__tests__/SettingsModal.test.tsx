@@ -57,7 +57,30 @@ describe('SettingsModal log policy selection', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
     expect(screen.queryByLabelText(/container/i)).not.toBeInTheDocument()
-    expect(screen.getAllByText(/fixed path:/i)).toHaveLength(3)
+    expect(screen.getByLabelText(/info path template/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/acc path template/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/err path template/i)).toBeInTheDocument()
+  })
+
+  it('lets the user edit each log type path with provided template variables', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    expect(screen.getByText('[namespace]')).toBeInTheDocument()
+    expect(screen.getByText('[podname]')).toBeInTheDocument()
+    expect(screen.getByText('[suffix]')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/custom/[namespace]/[podname]/info.log' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({
+        sources: expect.objectContaining({
+          info: expect.objectContaining({ pathTemplate: '/custom/[namespace]/[podname]/info.log' }),
+        }),
+      }),
+    })))
   })
 
   it('keeps the settings content in a scrollable panel', () => {
