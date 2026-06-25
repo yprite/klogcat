@@ -131,8 +131,8 @@ describe('settings and toolbar scenario', () => {
 
     fireEvent.change(screen.getByLabelText(/initial tail lines/i), { target: { value: '77' } })
     fireEvent.change(screen.getByLabelText(/buffer limit/i), { target: { value: '3000' } })
-    fireEvent.change(screen.getAllByLabelText('Container')[0], { target: { value: 'sidecar' } })
-    const policyInput = screen.getByLabelText(/log policy json/i)
+    fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/custom/[namespace]/[podname]/info.log' } })
+    const policyInput = await screen.findByLabelText(/custom policy json/i)
     fireEvent.change(policyInput, { target: { value: '{' } })
     expect(screen.getByText(/logPolicy:/)).toBeInTheDocument()
 
@@ -142,7 +142,8 @@ describe('settings and toolbar scenario', () => {
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       initialTailLines: 77,
       bufferLimit: 3000,
-      logSources: expect.objectContaining({ info: expect.objectContaining({ container: 'sidecar' }) }),
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({ pathTemplate: '/custom/[namespace]/[podname][suffix].jsonl' }),
     })))
     expect(onClose).toHaveBeenCalledTimes(1)
 
