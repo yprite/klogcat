@@ -67,6 +67,22 @@ export type FailurePolicy = {
   exceptionFields: readonly LogColumnKey[]
 }
 
+export type GroupingPolicy = {
+  correlationFields: readonly LogColumnKey[]
+  accessSourceTypes: readonly SourceLogType[]
+  errorSourceTypes: readonly SourceLogType[]
+}
+
+export type FailedRequestGroup = {
+  correlationKey: string
+  rows: ParsedLogLine[]
+  rawRows: ParsedLogLine[]
+  accessRow?: ParsedLogLine
+  errorRow?: ParsedLogLine
+  representativeRow: ParsedLogLine
+  failed: boolean
+}
+
 export type LogSourcePolicy = {
   label: string
   pathSuffix: string
@@ -89,6 +105,7 @@ export type LogPolicy = {
   }
   severity: SeverityPolicy
   failure: FailurePolicy
+  grouping: GroupingPolicy
   parser: {
     base: BaseParserPolicy
     access: AccessParserPolicy
@@ -162,6 +179,11 @@ export const defaultLogPolicy: LogPolicy = {
     sourceTypes: ['error'],
     minimumStatus: 500,
     exceptionFields: ['exceptionName', 'errorReason'],
+  },
+  grouping: {
+    correlationFields: ['trId', 'traceId'],
+    accessSourceTypes: ['access', 'info'],
+    errorSourceTypes: ['error'],
   },
   parser: {
     base: {
@@ -242,6 +264,43 @@ export function isFailureRowFromPolicy(row: ParsedLogLine, policy: LogPolicy = d
     || (Number.isFinite(status) && status >= policy.failure.minimumStatus)
     || policy.failure.exceptionFields.some((field) => Boolean(row[field]))
     || levelMeetsMinimumFromPolicy(rowLevelFromPolicy(row, policy), policy.severity.errorLevel, policy)
+}
+
+export function correlationKeyFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+  for (const field of policy.grouping.correlationFields) {
+    const value = row[field]
+    const key = value === undefined || value === null ? '' : String(value).trim()
+    if (key) return key
+  }
+  return undefined
+}
+
+export function groupFailedRequestsFromPolicy(rows: readonly ParsedLogLine[], policy: LogPolicy = defaultLogPolicy): FailedRequestGroup[] {
+  const byKey = new Map<string, ParsedLogLine[]>()
+  for (const row of rows) {
+    const key = correlationKeyFromPolicy(row, policy)
+    if (!key) continue
+    const groupRows = byKey.get(key)
+    if (groupRows) groupRows.push(row)
+    else byKey.set(key, [row])
+  }
+
+  const groups: FailedRequestGroup[] = []
+  for (const [correlationKey, groupRows] of byKey) {
+    if (!groupRows.some((row) => isFailureRowFromPolicy(row, policy))) continue
+    const accessRow = groupRows.find((row) => policy.grouping.accessSourceTypes.includes(row.sourceType))
+    const errorRow = groupRows.find((row) => policy.grouping.errorSourceTypes.includes(row.sourceType))
+    groups.push({
+      correlationKey,
+      rows: groupRows,
+      rawRows: groupRows,
+      accessRow,
+      errorRow,
+      representativeRow: accessRow ?? errorRow ?? groupRows[0],
+      failed: true,
+    })
+  }
+  return groups
 }
 
 export function sourceTypesFromPolicy(policy: LogPolicy = defaultLogPolicy): SourceLogType[] {

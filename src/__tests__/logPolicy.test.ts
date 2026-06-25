@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, correlationKeyFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, groupFailedRequestsFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 import type { ParsedLogLine } from '../types/log'
 
 describe('logPolicy', () => {
@@ -46,5 +46,30 @@ describe('logPolicy', () => {
     expect(defaultLogPolicy.failure.minimumStatus).toBe(500)
     expect(rowLevelFromPolicy(errorRow, defaultLogPolicy)).toBe('ERROR')
     expect(isFailureRowFromPolicy(access5xx, defaultLogPolicy)).toBe(true)
+  })
+
+  it('centralizes request correlation and grouping rules', () => {
+    const access5xx: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src-a', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: 'access raw', parseStatus: 'parsed', receivedAt: 1, summary: 'GET /v1 503', trId: 'trx-1', status: '503', method: 'GET', url: '/v1' }
+    const errorRow: ParsedLogLine = { ...access5xx, id: 2, sourceId: 'src-e', sourceType: 'error', raw: 'error raw', summary: 'boom', status: undefined, errorReason: 'boom', traceId: 'err-trace-only' }
+    const traceOnlyError: ParsedLogLine = { ...errorRow, id: 3, trId: undefined, traceId: 'trace-only' }
+
+    expect(defaultLogPolicy.grouping.correlationFields).toEqual(['trId', 'traceId'])
+    expect(correlationKeyFromPolicy(access5xx, defaultLogPolicy)).toBe('trx-1')
+    expect(correlationKeyFromPolicy(traceOnlyError, defaultLogPolicy)).toBe('trace-only')
+
+    const groups = groupFailedRequestsFromPolicy([access5xx, errorRow, traceOnlyError], defaultLogPolicy)
+    expect(groups).toHaveLength(2)
+    expect(groups[0]).toMatchObject({ correlationKey: 'trx-1', accessRow: access5xx, errorRow, representativeRow: access5xx, failed: true })
+    expect(groups[0].rawRows.map((row) => row.raw)).toEqual(['access raw', 'error raw'])
+    expect(groups[1]).toMatchObject({ correlationKey: 'trace-only', errorRow: traceOnlyError, representativeRow: traceOnlyError, failed: true })
+  })
+
+  it('uses custom grouping policy instead of hardcoded trId/traceId fields', () => {
+    const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{}', parseStatus: 'parsed', receivedAt: 1, summary: 'raw', trId: 'trx-1', traceId: 'trace-1', status: '503' }
+    const customPolicy = { ...defaultLogPolicy, grouping: { ...defaultLogPolicy.grouping, correlationFields: ['spanId'] as const } }
+
+    expect(correlationKeyFromPolicy(row, customPolicy)).toBeUndefined()
+    expect(groupFailedRequestsFromPolicy([row], customPolicy)).toEqual([])
+    expect(groupFailedRequestsFromPolicy([{ ...row, spanId: 'span-1' }], customPolicy)[0].correlationKey).toBe('span-1')
   })
 })
