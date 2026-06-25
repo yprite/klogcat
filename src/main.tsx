@@ -1,10 +1,17 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
+import { loadLogPolicyConfig } from './utils/logPolicy'
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+async function bootstrap() {
+  const result = await loadLogPolicyConfig('/log-policy.json')
+  if (!result.loaded) console.warn(`Using embedded default log policy: ${result.error ?? 'runtime config not loaded'}`)
+  const { default: App } = await import('./App')
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  )
+}
+
+void bootstrap()

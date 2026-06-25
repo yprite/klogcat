@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
-import { defaultLogPolicy, defaultVisibleColumnsForPolicy } from '../utils/logPolicy'
+import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
 import type { ParsedLogLine } from '../types/log'
@@ -20,7 +20,7 @@ const minColumnWidthCh = 12
 const valuePaddingCh = 2
 
 export function defaultVisibleColumnsFor(availableColumns: readonly LogColumnKey[]) {
-  return defaultVisibleColumnsForPolicy(defaultLogPolicy, availableColumns)
+  return defaultVisibleColumnsForPolicy(getLogPolicy(), availableColumns)
 }
 
 export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableColumns: LogColumnKey[], key: LogColumnKey, checked: boolean) {

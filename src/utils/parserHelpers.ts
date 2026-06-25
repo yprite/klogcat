@@ -1,5 +1,5 @@
 import type { ParsedLogLine, SourceMeta } from '../types/log'
-import { defaultLogPolicy, fieldPathValueFromPolicy, type FieldPath, type LogPolicy } from './logPolicy'
+import { fieldPathValueFromPolicy, getLogPolicy, type FieldPath, type LogPolicy } from './logPolicy'
 
 export type ParsedLogLineWithoutId = Omit<ParsedLogLine, 'id'>
 export function str(v: unknown): string | undefined { return typeof v === 'string' ? v : v == null ? undefined : String(v) }
@@ -9,7 +9,7 @@ export function compactJson(v: unknown): string | undefined { if (v === undefine
 export function field(json: unknown, path: FieldPath): unknown { return fieldPathValueFromPolicy(json, path) }
 export function strField(json: unknown, path: FieldPath): string | undefined { return str(field(json, path)) }
 export function numField(json: unknown, path: FieldPath): number | undefined { return num(field(json, path)) }
-export function base(json: Record<string, unknown>, raw: string, meta: SourceMeta, receivedAt: number, policy: LogPolicy = defaultLogPolicy): ParsedLogLineWithoutId {
+export function base(json: Record<string, unknown>, raw: string, meta: SourceMeta, receivedAt: number, policy: LogPolicy = getLogPolicy()): ParsedLogLineWithoutId {
   const p = policy.parser.base
   const level = p.levelCandidates.map((candidate) => strField(json, candidate)).find(Boolean)
   return {

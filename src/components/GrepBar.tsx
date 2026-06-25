@@ -2,11 +2,11 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useLogStore } from '../stores/logStore'
 import { isValidGrepRegex } from '../utils/grep'
 import { validateLogQuery } from '../utils/logQuery'
-import { defaultLogPolicy, querySuggestionsFromPolicy, type QuerySuggestionPolicy } from '../utils/logPolicy'
+import { getLogPolicy, querySuggestionsFromPolicy, type QuerySuggestionPolicy } from '../utils/logPolicy'
 
 type QuerySuggestion = QuerySuggestionPolicy
 
-const querySuggestions: QuerySuggestion[] = querySuggestionsFromPolicy(defaultLogPolicy)
+function activeQuerySuggestions() { return querySuggestionsFromPolicy(getLogPolicy()) }
 
 function tokenBounds(query: string, cursor: number) {
   let start = cursor
@@ -22,12 +22,12 @@ function suggestionMatches(suggestion: QuerySuggestion, normalizedToken: string)
     suggestion.description.toLowerCase().includes(normalizedToken)
 }
 
-export function suggestionsForQuery(query: string, cursor = query.length) {
+export function suggestionsForQuery(query: string, cursor = query.length, suggestions: QuerySuggestion[] = activeQuerySuggestions()) {
   const { token } = tokenBounds(query, cursor)
   const normalized = token.toLowerCase().replace(/^-/, '')
-  if (!normalized) return querySuggestions
-  const matches = querySuggestions.filter((suggestion) => suggestionMatches(suggestion, normalized))
-  const nonMatches = querySuggestions.filter((suggestion) => !suggestionMatches(suggestion, normalized))
+  if (!normalized) return suggestions
+  const matches = suggestions.filter((suggestion) => suggestionMatches(suggestion, normalized))
+  const nonMatches = suggestions.filter((suggestion) => !suggestionMatches(suggestion, normalized))
   return [...matches, ...nonMatches]
 }
 

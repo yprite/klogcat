@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "pathTemplate": "/scloud/[namespace]/logs/[podname]/[namespace][suffix].log",
+  "defaultContainer": "app",
+  "sources": {
+    "info": {
+      "label": "INFO",
+      "pathSuffix": "",
+      "columns": ["timestamp", "jsonLogType", "host", "service", "module", "serviceId", "trId", "epochTime", "pSpanId", "spanId", "method", "url", "length", "srcIp", "elapsed", "status", "userId", "appId", "body", "rcode", "rmsg", "exceptionName", "apiName"]
+    },
+    "access": {
+      "label": "ACC",
+      "pathSuffix": "_ACC",
+      "columns": ["timestamp", "jsonLogType", "host", "service", "module", "serviceId", "trId", "epochTime", "pSpanId", "spanId", "method", "url", "length", "srcIp", "elapsed", "status", "userId", "appId", "body", "rcode", "rmsg", "exceptionName", "apiName"]
+    },
+    "error": {
+      "label": "ERR",
+      "pathSuffix": "_ERR",
+      "columns": ["timestamp", "jsonLogType", "host", "logger", "service", "module", "submodule", "trId", "epochTime", "thread", "body", "errorServerName", "errorPath", "errorMethod", "errorTimestamp", "traceId", "errorReason"]
+    }
+  },
+  "columns": {
+    "labels": {
+      "timestamp": "time",
+      "jsonLogType": "logType",
+      "apiName": "api_name",
+      "errorServerName": "errorDetails.serverName",
+      "errorPath": "errorDetails.path",
+      "errorMethod": "errorDetails.method",
+      "errorTimestamp": "errorDetails.timestamp",
+      "errorReason": "errorDetails.errors.reason"
+    },
+    "defaultVisiblePriority": ["trId", "traceId", "method", "url", "status", "elapsed", "rcode", "rmsg", "exceptionName", "apiName", "errorMethod", "errorPath", "errorReason"]
+  },
+  "query": {
+    "sourceAliases": ["source", "type"],
+    "correlationFields": ["trId", "traceId"],
+    "suggestions": [
+      { "insert": "package:", "label": "package:", "description": "Package/service/app id contains string" },
+      { "insert": "tag:", "label": "tag:", "description": "Logger/module/type tag contains string" },
+      { "insert": "message:", "label": "message:", "description": "Raw log line contains string" },
+      { "insert": "level:", "label": "level:", "description": "Minimum severity: DEBUG, INFO, WARN, ERROR" },
+      { "insert": "source:", "label": "source:", "description": "Log source: info, access, error" },
+      { "insert": "namespace:", "label": "namespace:", "description": "Kubernetes namespace contains string" },
+      { "insert": "pod:", "label": "pod:", "description": "Pod name contains string" },
+      { "insert": "container:", "label": "container:", "description": "Container name contains string" },
+      { "insert": "status:", "label": "status:", "description": "HTTP status contains string" },
+      { "insert": "method:", "label": "method:", "description": "HTTP method contains string" },
+      { "insert": "url:", "label": "url:", "description": "URL/path contains string" },
+      { "insert": "trId:", "label": "trId:", "description": "Transaction id contains string" },
+      { "insert": "is:crash", "label": "is:crash", "description": "Crash/error rows" },
+      { "insert": "is:stacktrace", "label": "is:stacktrace", "description": "Stacktrace rows" },
+      { "insert": "age:5m", "label": "age:5m", "description": "Rows newer than duration: 30s, 5m, 1h" },
+      { "insert": "url~:", "label": "url~:", "description": "Regex match against URL/path" },
+      { "insert": "message~:", "label": "message~:", "description": "Regex match against raw line" },
+      { "insert": "-pod:", "label": "-pod:", "description": "Exclude matching pod" },
+      { "insert": "(", "label": "( ... )", "description": "Group query clauses" },
+      { "insert": "|", "label": "|", "description": "OR between clauses" }
+    ]
+  },
+  "severity": {
+    "levelRanks": { "TRACE": 0, "VERBOSE": 0, "DEBUG": 1, "INFO": 2, "WARN": 3, "WARNING": 3, "ERROR": 4, "FATAL": 5 },
+    "fallbackLevelBySource": { "error": "ERROR" },
+    "exceptionLevel": "ERROR",
+    "errorLevel": "ERROR"
+  },
+  "failure": {
+    "sourceTypes": ["error"],
+    "minimumStatus": 500,
+    "exceptionFields": ["exceptionName", "errorReason"]
+  },
+  "grouping": {
+    "correlationFields": ["trId", "traceId"],
+    "accessSourceTypes": ["access", "info"],
+    "errorSourceTypes": ["error"]
+  },
+  "parser": {
+    "base": {
+      "timestamp": "time",
+      "epochTime": "epochTime",
+      "jsonLogType": "logType",
+      "levelCandidates": ["level", "severity", "logLevel", "priority"],
+      "host": "host",
+      "service": "service",
+      "serviceId": "serviceId",
+      "module": "module",
+      "submodule": "submodule",
+      "trId": "trId",
+      "logger": "logger",
+      "thread": "thread",
+      "body": "body"
+    },
+    "access": {
+      "method": "method",
+      "url": "url",
+      "status": "status",
+      "elapsed": "elapsed",
+      "length": "length",
+      "pSpanId": "pSpanId",
+      "spanId": "spanId",
+      "srcIp": "srcIp",
+      "userId": "userId",
+      "appId": "appId",
+      "rcode": "body.rcode",
+      "rmsg": "body.rmsg",
+      "exceptionName": "body.exceptionName",
+      "apiName": "body.api_name"
+    },
+    "error": {
+      "traceId": "body.errorDetails.traceId",
+      "errorReason": "body.errorDetails.errors.0.reason",
+      "errorMethod": "body.errorDetails.method",
+      "errorPath": "body.errorDetails.path",
+      "errorServerName": "body.errorDetails.serverName",
+      "errorTimestamp": "body.errorDetails.timestamp"
+    },
+    "info": {
+      "message": "message"
+    }
+  }
+}

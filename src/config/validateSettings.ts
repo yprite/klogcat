@@ -1,7 +1,7 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
-import { defaultLogPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { getLogPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 
-const sourceKeys = sourceTypesFromPolicy(defaultLogPolicy)
+function sourceKeys() { return sourceTypesFromPolicy(getLogPolicy()) }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly string[], prefix: string, errors: SettingsValidationError[]) {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) errors.push({ field: `${prefix}.${key}`, message: `Unknown key: ${key}` })
@@ -16,9 +16,10 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   if (value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string') errors.push({ field: 'defaultNamespace', message: 'defaultNamespace must be a string when provided' })
   const logSources = value.logSources
   if (!isRecord(logSources)) { errors.push({ field: 'logSources', message: 'logSources must be an object' }); return errors }
-  const actualKeys = Object.keys(logSources).sort(); const expectedKeys = [...sourceKeys].sort()
-  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${sourceKeys.join('/')} keys` })
-  for (const key of sourceKeys) {
+  const keys = sourceKeys()
+  const actualKeys = Object.keys(logSources).sort(); const expectedKeys = [...keys].sort()
+  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${keys.join('/')} keys` })
+  for (const key of keys) {
     const source = logSources[key]
     if (!isRecord(source)) { errors.push({ field: `logSources.${key}`, message: 'source config must be an object' }); continue }
     rejectExtraKeys(source, ['container', 'filePath'], `logSources.${key}`, errors)

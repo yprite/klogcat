@@ -1,8 +1,16 @@
 import type { SourceLogType } from '../types/log'
-import { defaultLogPolicy, sourceTypesFromPolicy } from './logPolicy'
+import { getLogPolicy, sourceTypesFromPolicy } from './logPolicy'
 
-export const sourceLabels = Object.fromEntries(
-  sourceTypesFromPolicy(defaultLogPolicy).map((sourceType) => [sourceType, defaultLogPolicy.sources[sourceType].label]),
-) as Record<SourceLogType, string>
+export function sourceLabelsForActivePolicy() {
+  const policy = getLogPolicy()
+  return Object.fromEntries(
+    sourceTypesFromPolicy(policy).map((sourceType) => [sourceType, policy.sources[sourceType].label]),
+  ) as Record<SourceLogType, string>
+}
 
-export const sourceTypes: SourceLogType[] = sourceTypesFromPolicy(defaultLogPolicy)
+export function sourceTypesForActivePolicy(): SourceLogType[] {
+  return sourceTypesFromPolicy(getLogPolicy())
+}
+
+export const sourceLabels = sourceLabelsForActivePolicy()
+export const sourceTypes = sourceTypesForActivePolicy()

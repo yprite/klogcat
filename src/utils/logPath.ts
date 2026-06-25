@@ -1,6 +1,6 @@
 import type { SourceLogType } from '../types/log'
-import { buildLogPathFromPolicy, defaultLogPolicy } from './logPolicy'
+import { buildLogPathFromPolicy, getLogPolicy } from './logPolicy'
 
 export function buildScloudLogPath(namespace: string, pod: string, sourceType: SourceLogType) {
-  return buildLogPathFromPolicy(defaultLogPolicy, namespace, pod, sourceType)
+  return buildLogPathFromPolicy(getLogPolicy(), namespace, pod, sourceType)
 }

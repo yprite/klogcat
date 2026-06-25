@@ -1,12 +1,12 @@
 import type { ParsedLogLine, SourceLogType, LogColumnKey } from '../types/log'
-import { columnsForSourceFromPolicy, defaultLogPolicy, labelForColumnFromPolicy } from './logPolicy'
+import { columnsForSourceFromPolicy, getLogPolicy, labelForColumnFromPolicy } from './logPolicy'
 
 export type { LogColumnKey } from '../types/log'
-export const accessLogColumns = [...defaultLogPolicy.sources.access.columns]
-export const errorLogColumns = [...defaultLogPolicy.sources.error.columns]
+export const accessLogColumns = [...getLogPolicy().sources.access.columns]
+export const errorLogColumns = [...getLogPolicy().sources.error.columns]
 
 export function columnsForSource(sourceType: SourceLogType): LogColumnKey[] {
-  return columnsForSourceFromPolicy(defaultLogPolicy, sourceType)
+  return columnsForSourceFromPolicy(getLogPolicy(), sourceType)
 }
 
 export function columnsForRows(rows: ParsedLogLine[]): LogColumnKey[] {
@@ -22,5 +22,5 @@ export function valueForColumn(row: ParsedLogLine, key: LogColumnKey) {
 }
 
 export function labelForColumn(key: LogColumnKey) {
-  return labelForColumnFromPolicy(defaultLogPolicy, key)
+  return labelForColumnFromPolicy(getLogPolicy(), key)
 }

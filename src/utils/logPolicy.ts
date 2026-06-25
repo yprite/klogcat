@@ -231,6 +231,126 @@ export const defaultLogPolicy: LogPolicy = {
   },
 }
 
+let activeLogPolicy: LogPolicy = defaultLogPolicy
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function assertString(value: unknown, path: string): asserts value is string {
+  if (typeof value !== 'string') throw new Error(`log policy ${path} must be a string`)
+}
+
+function assertStringArray(value: unknown, path: string) {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) throw new Error(`log policy ${path} must be a string array`)
+}
+
+function assertNumberRecord(value: unknown, path: string) {
+  if (!isRecord(value) || Object.values(value).some((item) => typeof item !== 'number' || !Number.isFinite(item))) throw new Error(`log policy ${path} must be a number map`)
+}
+
+export function getLogPolicy() {
+  return activeLogPolicy
+}
+
+export function setActiveLogPolicy(policy: LogPolicy) {
+  activeLogPolicy = policy
+}
+
+export type LogPolicyLoadResult = {
+  loaded: boolean
+  source: string
+  error?: string
+}
+
+export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy {
+  if (!isRecord(value)) throw new Error('log policy must be an object')
+  if (value.version !== 1) throw new Error('log policy version must be 1')
+  assertString(value.pathTemplate, 'pathTemplate')
+  const pathTemplate = value.pathTemplate
+  if (!pathTemplate.includes('[namespace]') || !pathTemplate.includes('[podname]')) throw new Error('log policy pathTemplate must include [namespace] and [podname]')
+  assertString(value.defaultContainer, 'defaultContainer')
+  const defaultContainer = value.defaultContainer
+  if (defaultContainer.trim() === '') throw new Error('log policy defaultContainer is required')
+
+  const sources = value.sources
+  if (!isRecord(sources)) throw new Error('log policy sources must be an object')
+  const sourceKeys = Object.keys(defaultLogPolicy.sources)
+  for (const key of sourceKeys) {
+    const source = sources[key]
+    if (!isRecord(source)) throw new Error(`log policy source ${key} must be an object`)
+    assertString(source.label, `sources.${key}.label`)
+    assertString(source.pathSuffix, `sources.${key}.pathSuffix`)
+    assertStringArray(source.columns, `sources.${key}.columns`)
+  }
+
+  const columns = value.columns
+  if (!isRecord(columns)) throw new Error('log policy columns must be an object')
+  if (!isRecord(columns.labels)) throw new Error('log policy columns.labels must be an object')
+  for (const [key, label] of Object.entries(columns.labels)) assertString(label, `columns.labels.${key}`)
+  assertStringArray(columns.defaultVisiblePriority, 'columns.defaultVisiblePriority')
+
+  const query = value.query
+  if (!isRecord(query)) throw new Error('log policy query must be an object')
+  assertStringArray(query.sourceAliases, 'query.sourceAliases')
+  assertStringArray(query.correlationFields, 'query.correlationFields')
+  if (!Array.isArray(query.suggestions)) throw new Error('log policy query.suggestions must be an array')
+  query.suggestions.forEach((suggestion, index) => {
+    if (!isRecord(suggestion)) throw new Error(`log policy query.suggestions.${index} must be an object`)
+    assertString(suggestion.insert, `query.suggestions.${index}.insert`)
+    assertString(suggestion.label, `query.suggestions.${index}.label`)
+    assertString(suggestion.description, `query.suggestions.${index}.description`)
+  })
+
+  const severity = value.severity
+  if (!isRecord(severity)) throw new Error('log policy severity must be an object')
+  assertNumberRecord(severity.levelRanks, 'severity.levelRanks')
+  if (!isRecord(severity.fallbackLevelBySource)) throw new Error('log policy severity.fallbackLevelBySource must be an object')
+  for (const [key, level] of Object.entries(severity.fallbackLevelBySource)) if (level !== undefined) assertString(level, `severity.fallbackLevelBySource.${key}`)
+  assertString(severity.exceptionLevel, 'severity.exceptionLevel')
+  assertString(severity.errorLevel, 'severity.errorLevel')
+
+  const failure = value.failure
+  if (!isRecord(failure)) throw new Error('log policy failure must be an object')
+  assertStringArray(failure.sourceTypes, 'failure.sourceTypes')
+  if (typeof failure.minimumStatus !== 'number' || !Number.isFinite(failure.minimumStatus)) throw new Error('log policy failure.minimumStatus must be a number')
+  assertStringArray(failure.exceptionFields, 'failure.exceptionFields')
+
+  const grouping = value.grouping
+  if (!isRecord(grouping)) throw new Error('log policy grouping must be an object')
+  assertStringArray(grouping.correlationFields, 'grouping.correlationFields')
+  assertStringArray(grouping.accessSourceTypes, 'grouping.accessSourceTypes')
+  assertStringArray(grouping.errorSourceTypes, 'grouping.errorSourceTypes')
+
+  const parser = value.parser
+  if (!isRecord(parser)) throw new Error('log policy parser must be an object')
+  const parserSections = ['base', 'access', 'error', 'info'] as const
+  for (const sectionName of parserSections) {
+    const section = parser[sectionName]
+    if (!isRecord(section)) throw new Error(`log policy parser.${sectionName} must be an object`)
+    for (const [key, fieldPath] of Object.entries(section)) {
+      if (sectionName === 'base' && key === 'levelCandidates') assertStringArray(fieldPath, 'parser.base.levelCandidates')
+      else assertString(fieldPath, `parser.${sectionName}.${key}`)
+    }
+  }
+}
+
+export async function loadLogPolicyConfig(source = '/log-policy.json'): Promise<LogPolicyLoadResult> {
+  try {
+    const response = await fetch(source, { cache: 'no-cache' })
+    if (!response.ok) {
+      setActiveLogPolicy(defaultLogPolicy)
+      return { loaded: false, source, error: `HTTP ${response.status}` }
+    }
+    const policy = await response.json() as unknown
+    assertValidLogPolicy(policy)
+    setActiveLogPolicy(policy)
+    return { loaded: true, source }
+  } catch (error) {
+    setActiveLogPolicy(defaultLogPolicy)
+    return { loaded: false, source, error: error instanceof Error ? error.message : String(error) }
+  }
+}
 
 export function fieldPathValueFromPolicy(json: unknown, fieldPath: FieldPath): unknown {
   if (!fieldPath) return undefined
@@ -242,7 +362,7 @@ export function fieldPathValueFromPolicy(json: unknown, fieldPath: FieldPath): u
   }, json)
 }
 
-export function rowLevelFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+export function rowLevelFromPolicy(row: ParsedLogLine, policy: LogPolicy = getLogPolicy()) {
   const candidates = [
     row.level,
     row.jsonLogType,
@@ -252,13 +372,13 @@ export function rowLevelFromPolicy(row: ParsedLogLine, policy: LogPolicy = defau
   return candidates.find((value) => value && policy.severity.levelRanks[value.toUpperCase()] !== undefined)?.toUpperCase()
 }
 
-export function levelMeetsMinimumFromPolicy(level: string | undefined, minimumLevel: string, policy: LogPolicy = defaultLogPolicy) {
+export function levelMeetsMinimumFromPolicy(level: string | undefined, minimumLevel: string, policy: LogPolicy = getLogPolicy()) {
   const actualRank = level ? policy.severity.levelRanks[level.toUpperCase()] : undefined
   const minimumRank = policy.severity.levelRanks[minimumLevel.toUpperCase()]
   return actualRank !== undefined && minimumRank !== undefined && actualRank >= minimumRank
 }
 
-export function isFailureRowFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+export function isFailureRowFromPolicy(row: ParsedLogLine, policy: LogPolicy = getLogPolicy()) {
   const status = Number(row.status)
   return policy.failure.sourceTypes.includes(row.sourceType)
     || (Number.isFinite(status) && status >= policy.failure.minimumStatus)
@@ -266,7 +386,7 @@ export function isFailureRowFromPolicy(row: ParsedLogLine, policy: LogPolicy = d
     || levelMeetsMinimumFromPolicy(rowLevelFromPolicy(row, policy), policy.severity.errorLevel, policy)
 }
 
-export function correlationKeyFromPolicy(row: ParsedLogLine, policy: LogPolicy = defaultLogPolicy) {
+export function correlationKeyFromPolicy(row: ParsedLogLine, policy: LogPolicy = getLogPolicy()) {
   for (const field of policy.grouping.correlationFields) {
     const value = row[field]
     const key = value === undefined || value === null ? '' : String(value).trim()
@@ -275,7 +395,7 @@ export function correlationKeyFromPolicy(row: ParsedLogLine, policy: LogPolicy =
   return undefined
 }
 
-export function groupFailedRequestsFromPolicy(rows: readonly ParsedLogLine[], policy: LogPolicy = defaultLogPolicy): FailedRequestGroup[] {
+export function groupFailedRequestsFromPolicy(rows: readonly ParsedLogLine[], policy: LogPolicy = getLogPolicy()): FailedRequestGroup[] {
   const byKey = new Map<string, ParsedLogLine[]>()
   for (const row of rows) {
     const key = correlationKeyFromPolicy(row, policy)
@@ -303,7 +423,7 @@ export function groupFailedRequestsFromPolicy(rows: readonly ParsedLogLine[], po
   return groups
 }
 
-export function sourceTypesFromPolicy(policy: LogPolicy = defaultLogPolicy): SourceLogType[] {
+export function sourceTypesFromPolicy(policy: LogPolicy = getLogPolicy()): SourceLogType[] {
   return Object.keys(policy.sources) as SourceLogType[]
 }
 
@@ -339,6 +459,6 @@ export function labelForColumnFromPolicy(policy: LogPolicy, key: LogColumnKey) {
   return policy.columns.labels[key] ?? key
 }
 
-export function querySuggestionsFromPolicy(policy: LogPolicy = defaultLogPolicy) {
+export function querySuggestionsFromPolicy(policy: LogPolicy = getLogPolicy()) {
   return [...policy.query.suggestions]
 }

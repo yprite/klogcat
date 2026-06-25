@@ -1,6 +1,6 @@
 import type { ParsedLogLine, SourceLogType } from '../types/log'
 import { compileGrepRegex } from './grep'
-import { defaultLogPolicy, isFailureRowFromPolicy, levelMeetsMinimumFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy, type LogPolicy } from './logPolicy'
+import { getLogPolicy, isFailureRowFromPolicy, levelMeetsMinimumFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy, type LogPolicy } from './logPolicy'
 import { valueForColumn, accessLogColumns, errorLogColumns, type LogColumnKey } from './logColumns'
 
 export type QueryValidation = { ok: true } | { ok: false; message: string }
@@ -180,7 +180,7 @@ export function validateLogQuery(query: string): QueryValidation {
   return balance === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
 }
 
-export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = defaultLogPolicy): boolean {
+export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = getLogPolicy()): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
   const tokens = tokenize(trimmed)

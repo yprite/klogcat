@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useLogStore } from '../stores/logStore'
-import { defaultLogPolicy, groupFailedRequestsFromPolicy } from '../utils/logPolicy'
+import { getLogPolicy, groupFailedRequestsFromPolicy } from '../utils/logPolicy'
 
 function requestTitle(group: ReturnType<typeof groupFailedRequestsFromPolicy>[number]) {
   const method = group.accessRow?.method ?? group.errorRow?.errorMethod
@@ -18,8 +18,9 @@ function reasonLabel(group: ReturnType<typeof groupFailedRequestsFromPolicy>[num
 
 export function FailedRequestsView() {
   const { visibleRows } = useLogStore()
-  const failedRequests = useMemo(() => groupFailedRequestsFromPolicy(visibleRows, defaultLogPolicy), [visibleRows])
-  const correlationLabel = defaultLogPolicy.grouping.correlationFields.join(' → ')
+  const policy = getLogPolicy()
+  const failedRequests = useMemo(() => groupFailedRequestsFromPolicy(visibleRows, policy), [visibleRows, policy])
+  const correlationLabel = policy.grouping.correlationFields.join(' → ')
 
   return <section data-testid="failed-requests-view" className="min-h-0 flex-1 overflow-auto rounded border border-slate-800 bg-slate-950 p-4">
     <div className="mb-4 border-b border-slate-800 pb-3">

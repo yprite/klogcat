@@ -1,9 +1,9 @@
 import type { SourceMeta } from '../types/log'
-import { defaultLogPolicy, type LogPolicy } from './logPolicy'
+import { getLogPolicy, type LogPolicy } from './logPolicy'
 import type { ParsedLogLineWithoutId } from './parserHelpers'
 import { base, field, nonEmptySummary, numField, rec, str, strField } from './parserHelpers'
 
-export function parseInfoLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number, policy: LogPolicy = defaultLogPolicy): ParsedLogLineWithoutId {
+export function parseInfoLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number, policy: LogPolicy = getLogPolicy()): ParsedLogLineWithoutId {
   const j = rec(json) ?? {}
   const body = field(j, policy.parser.base.body)
   let bodySummary: string | undefined
