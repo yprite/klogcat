@@ -6,6 +6,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
 import { sourceLabels, sourceTypes } from '../utils/sourceLabels'
+import { buildLogPathTemplateFromPolicy, defaultLogPolicy } from '../utils/logPolicy'
 
 export function SettingsModal({ open, onClose, onRestart = () => window.location.reload() }: { open: boolean; onClose: () => void; onRestart?: () => void }) {
   const { settings, saveSettings, resetSettings, error, loading } = useSettingsStore()
@@ -47,7 +48,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     <label className="block">Buffer limit <input className="text-black ml-2" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
     {sourceTypes.map((type) => <fieldset className="border border-slate-700 p-2" key={type}><legend>{sourceLabels[type]}</legend>
       <label>Container <input className="text-black mx-2" value={draft.logSources[type].container} onChange={e=>setDraft({ ...draft, logSources: { ...draft.logSources, [type]: { ...draft.logSources[type], container: e.target.value } } })} /></label>
-      <span className="text-slate-300 text-sm">Fixed path: {type === 'info' ? '/scloud/[namespace]/logs/[podname]/[namespace].log' : type === 'access' ? '/scloud/[namespace]/logs/[podname]/[namespace]_ACC.log' : '/scloud/[namespace]/logs/[podname]/[namespace]_ERR.log'}</span>
+      <span className="text-slate-300 text-sm">Fixed path: {buildLogPathTemplateFromPolicy(defaultLogPolicy, type)}</span>
     </fieldset>)}
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map(e => <li key={e.field}>{e.field}: {e.message}</li>)}</ul>}
     {notice && <p className="text-green-300">{notice}</p>}

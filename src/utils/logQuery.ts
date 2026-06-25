@@ -1,5 +1,6 @@
 import type { ParsedLogLine, SourceLogType } from '../types/log'
 import { compileGrepRegex } from './grep'
+import { defaultLogPolicy, sourceTypesFromPolicy } from './logPolicy'
 import { valueForColumn, accessLogColumns, errorLogColumns, type LogColumnKey } from './logColumns'
 
 export type QueryValidation = { ok: true } | { ok: false; message: string }
@@ -117,7 +118,7 @@ function rowFieldValue(row: ParsedLogLine, key: string): string {
   const k = key.toLowerCase()
   if (k === 'line' || k === 'message' || k === 'raw') return row.raw
   if (k === 'summary') return row.summary
-  if (k === 'source' || k === 'type') return row.sourceType
+  if (defaultLogPolicy.query.sourceAliases.includes(k)) return row.sourceType
   if (k === 'namespace' || k === 'ns') return row.namespace
   if (k === 'pod') return row.pod
   if (k === 'container') return row.container
@@ -161,7 +162,7 @@ function evalField(row: ParsedLogLine, key: string, value: string, regex: boolea
     const seconds = parseAge(value)
     return seconds === undefined ? false : ageSeconds(row) <= seconds
   }
-  if ((k === 'source' || k === 'type') && ['info','access','error'].includes(value)) return row.sourceType === value as SourceLogType
+  if (defaultLogPolicy.query.sourceAliases.includes(k) && sourceTypesFromPolicy(defaultLogPolicy).includes(value as SourceLogType)) return row.sourceType === value as SourceLogType
   return textMatches(rowFieldValue(row, key), value, regex)
 }
 

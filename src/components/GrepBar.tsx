@@ -2,31 +2,11 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useLogStore } from '../stores/logStore'
 import { isValidGrepRegex } from '../utils/grep'
 import { validateLogQuery } from '../utils/logQuery'
+import { defaultLogPolicy, querySuggestionsFromPolicy, type QuerySuggestionPolicy } from '../utils/logPolicy'
 
-type QuerySuggestion = { insert: string; label: string; description: string }
+type QuerySuggestion = QuerySuggestionPolicy
 
-const querySuggestions: QuerySuggestion[] = [
-  { insert: 'package:', label: 'package:', description: 'Package/service/app id contains string' },
-  { insert: 'tag:', label: 'tag:', description: 'Logger/module/type tag contains string' },
-  { insert: 'message:', label: 'message:', description: 'Raw log line contains string' },
-  { insert: 'level:', label: 'level:', description: 'Minimum severity: DEBUG, INFO, WARN, ERROR' },
-  { insert: 'source:', label: 'source:', description: 'Log source: info, access, error' },
-  { insert: 'namespace:', label: 'namespace:', description: 'Kubernetes namespace contains string' },
-  { insert: 'pod:', label: 'pod:', description: 'Pod name contains string' },
-  { insert: 'container:', label: 'container:', description: 'Container name contains string' },
-  { insert: 'status:', label: 'status:', description: 'HTTP status contains string' },
-  { insert: 'method:', label: 'method:', description: 'HTTP method contains string' },
-  { insert: 'url:', label: 'url:', description: 'URL/path contains string' },
-  { insert: 'trId:', label: 'trId:', description: 'Transaction id contains string' },
-  { insert: 'is:crash', label: 'is:crash', description: 'Crash/error rows' },
-  { insert: 'is:stacktrace', label: 'is:stacktrace', description: 'Stacktrace rows' },
-  { insert: 'age:5m', label: 'age:5m', description: 'Rows newer than duration: 30s, 5m, 1h' },
-  { insert: 'url~:', label: 'url~:', description: 'Regex match against URL/path' },
-  { insert: 'message~:', label: 'message~:', description: 'Regex match against raw line' },
-  { insert: '-pod:', label: '-pod:', description: 'Exclude matching pod' },
-  { insert: '(', label: '( ... )', description: 'Group query clauses' },
-  { insert: '|', label: '|', description: 'OR between clauses' },
-]
+const querySuggestions: QuerySuggestion[] = querySuggestionsFromPolicy(defaultLogPolicy)
 
 function tokenBounds(query: string, cursor: number) {
   let start = cursor

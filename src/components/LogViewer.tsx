@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
+import { defaultLogPolicy, defaultVisibleColumnsForPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
 import type { ParsedLogLine } from '../types/log'
@@ -18,16 +19,8 @@ type LogViewerColumnSettings = {
 const minColumnWidthCh = 12
 const valuePaddingCh = 2
 
-const defaultColumnPriority: LogColumnKey[] = [
-  'trId', 'traceId', 'method', 'url', 'status', 'elapsed',
-  'rcode', 'rmsg', 'exceptionName', 'apiName',
-  'errorMethod', 'errorPath', 'errorReason',
-]
-
 export function defaultVisibleColumnsFor(availableColumns: readonly LogColumnKey[]) {
-  const available = new Set(availableColumns)
-  const defaults = defaultColumnPriority.filter((column) => available.has(column))
-  return defaults.length > 0 ? defaults : availableColumns.slice(0, Math.min(6, availableColumns.length))
+  return defaultVisibleColumnsForPolicy(defaultLogPolicy, availableColumns)
 }
 
 export function nextVisibleColumnsForToggle(current: LogColumnKey[], availableColumns: LogColumnKey[], key: LogColumnKey, checked: boolean) {

@@ -1,6 +1,7 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
+import { defaultLogPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 
-const sourceKeys = ['info', 'access', 'error'] as const
+const sourceKeys = sourceTypesFromPolicy(defaultLogPolicy)
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly string[], prefix: string, errors: SettingsValidationError[]) {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) errors.push({ field: `${prefix}.${key}`, message: `Unknown key: ${key}` })
@@ -16,7 +17,7 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   const logSources = value.logSources
   if (!isRecord(logSources)) { errors.push({ field: 'logSources', message: 'logSources must be an object' }); return errors }
   const actualKeys = Object.keys(logSources).sort(); const expectedKeys = [...sourceKeys].sort()
-  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: 'logSources must contain exactly info/access/error keys' })
+  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${sourceKeys.join('/')} keys` })
   for (const key of sourceKeys) {
     const source = logSources[key]
     if (!isRecord(source)) { errors.push({ field: `logSources.${key}`, message: 'source config must be an object' }); continue }
