@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, correlationKeyFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, groupFailedRequestsFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, logPathTemplateTokens, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { buildLogPathFromPolicy, buildLogPathTemplateFromPolicy, correlationKeyFromPolicy, defaultLogPolicy, defaultLogSourcesFromPolicy, defaultVisibleColumnsForPolicy, fieldPathValueFromPolicy, groupFailedRequestsFromPolicy, isFailureRowFromPolicy, labelForColumnFromPolicy, logPathTemplateTokens, logPolicyForBuiltinId, querySuggestionsFromPolicy, rowLevelFromPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 import type { ParsedLogLine } from '../types/log'
 
 describe('logPolicy', () => {
@@ -25,6 +25,10 @@ describe('logPolicy', () => {
     expect(suggestions.map((suggestion) => suggestion.insert)).toEqual(expect.arrayContaining(['source:', 'trId:', 'url~:', 'message~:', 'is:stacktrace']))
     expect(defaultLogPolicy.query.sourceAliases).toEqual(['source', 'type'])
     expect(defaultLogPolicy.query.correlationFields).toEqual(['trId', 'traceId'])
+  })
+
+  it('falls back to the default policy for unknown built-in policy ids', () => {
+    expect(logPolicyForBuiltinId('unknown' as never)).toBe(defaultLogPolicy)
   })
 
   it('supports source-specific path templates and exposes every path variable the builder can replace', () => {

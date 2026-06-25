@@ -36,6 +36,7 @@ rust_pattern='^(src-tauri/.*\.rs|src-tauri/Cargo\.toml|src-tauri/Cargo\.lock)$'
 source_metrics_pattern='^(src/.*\.(ts|tsx)|src-tauri/.*\.rs)$'
 
 if printf '%s\n' "$staged_files" | grep -E "$frontend_pattern" >/dev/null; then
+  run npm run lint
   run npm run typecheck
 fi
 

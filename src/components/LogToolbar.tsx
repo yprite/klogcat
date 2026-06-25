@@ -134,7 +134,11 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     <button disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button><button disabled={stopBusy} onClick={stop}>Stop</button><button disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
     <AnimatedStatusPill active={operationActive} label={operationLabel} detail={operationDetail} />
     {operationActive && <div className="basis-full sm:basis-64"><ProgressStripe label={`${operationLabel} progress`} /></div>}
-    <button onClick={() => { log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`); log.viewerPaused ? log.resume() : log.pause() }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
+    <button onClick={() => {
+      log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`)
+      if (log.viewerPaused) log.resume()
+      else log.pause()
+    }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button><button onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
     <label><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
     <label><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>
     <span>Targets: {targets.length}</span><span>Status: {log.streamStatus}</span><span>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</span>{log.latestStderr && <span className="text-yellow-300">stderr: {log.latestStderr}</span>}{log.totalDroppedCount>0 && <span>Dropped: {log.totalDroppedCount}</span>}

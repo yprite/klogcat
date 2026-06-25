@@ -18,7 +18,6 @@ import {
   defaultLogSourcesFromPolicy,
   defaultVisibleColumnsForPolicy,
   fieldPathValueFromPolicy,
-  getLogPolicy,
   groupFailedRequestsFromPolicy,
   isFailureRowFromPolicy,
   labelForColumnFromPolicy,

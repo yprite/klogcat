@@ -174,7 +174,7 @@ describe('SettingsModal log policy selection', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText(/path pattern/i), { target: { value: '/logs/' } })
-    fireEvent.click(screen.getByRole('button', { name: '\[namespace\]' }))
+    fireEvent.click(screen.getByRole('button', { name: '[namespace]' }))
     expect(screen.getByLabelText(/path pattern/i)).toHaveValue('/logs/[namespace]')
 
     fireEvent.click(screen.getByRole('button', { name: /reset log paths to scloud defaults/i }))
@@ -185,5 +185,39 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByText(/info ok/i)).toBeInTheDocument()
     expect(screen.getByText(/acc ok/i)).toBeInTheDocument()
     expect(screen.getByText(/err ok/i)).toBeInTheDocument()
+  })
+
+  it('reports path test prerequisites before testing paths', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /test paths/i }))
+    expect(screen.getByText(/select a namespace and pod before testing paths/i)).toBeInTheDocument()
+  })
+
+  it('reports per-source path test errors', async () => {
+    const { checkLogPath } = await import('../commands/tauriLogs')
+    seedSelectedTarget()
+    vi.mocked(checkLogPath).mockRejectedValueOnce(new Error('permission denied'))
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /test paths/i }))
+    await waitFor(() => expect(screen.getByText(/permission denied/i)).toBeInTheDocument())
+  })
+
+  it('lets suffix controls switch the profile to a custom policy', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/acc suffix/i), { target: { value: '_ACCESS' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({
+        sources: expect.objectContaining({
+          access: expect.objectContaining({ pathSuffix: '_ACCESS' }),
+        }),
+      }),
+    })))
   })
 })

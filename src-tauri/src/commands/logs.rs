@@ -52,23 +52,44 @@ fn build_check_log_path_args(request: &CheckLogPathRequest) -> Vec<String> {
 }
 
 #[tauri::command]
-pub async fn check_log_path(request: CheckLogPathRequest) -> Result<CheckLogPathResult, CommandError> {
+pub async fn check_log_path(
+    request: CheckLogPathRequest,
+) -> Result<CheckLogPathResult, CommandError> {
     if request.namespace.trim().is_empty()
         || request.pod.trim().is_empty()
         || request.container.trim().is_empty()
         || request.file_path.trim().is_empty()
     {
-        return Err(CommandError::new("path_check_invalid_request", "namespace, pod, container, and filePath are required"));
+        return Err(CommandError::new(
+            "path_check_invalid_request",
+            "namespace, pod, container, and filePath are required",
+        ));
     }
     let output = Command::new("kubectl")
         .args(build_check_log_path_args(&request))
         .output()
-        .map_err(|e| CommandError::new("path_check_spawn_failed", "failed to spawn kubectl exec test").with_details(e.to_string()))?;
+        .map_err(|e| {
+            CommandError::new(
+                "path_check_spawn_failed",
+                "failed to spawn kubectl exec test",
+            )
+            .with_details(e.to_string())
+        })?;
     if output.status.success() {
-        Ok(CheckLogPathResult { exists: true, message: Some("OK".to_string()) })
+        Ok(CheckLogPathResult {
+            exists: true,
+            message: Some("OK".to_string()),
+        })
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Ok(CheckLogPathResult { exists: false, message: Some(if stderr.is_empty() { format!("{} not found", request.source_type) } else { stderr }) })
+        Ok(CheckLogPathResult {
+            exists: false,
+            message: Some(if stderr.is_empty() {
+                format!("{} not found", request.source_type)
+            } else {
+                stderr
+            }),
+        })
     }
 }
 
@@ -101,6 +122,22 @@ mod tests {
             source_type: "info".to_string(),
             file_path: "/var/log/app.log".to_string(),
         });
-        assert_eq!(args, vec!["--context", "ctx", "exec", "-n", "ns", "pod", "-c", "app", "--", "test", "-f", "/var/log/app.log"]);
+        assert_eq!(
+            args,
+            vec![
+                "--context",
+                "ctx",
+                "exec",
+                "-n",
+                "ns",
+                "pod",
+                "-c",
+                "app",
+                "--",
+                "test",
+                "-f",
+                "/var/log/app.log"
+            ]
+        );
     }
 }

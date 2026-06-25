@@ -58,7 +58,10 @@ fi
 rm -f /tmp/klogcat-blocked-tracked.$$
 
 run_capture typecheck npm run typecheck
+run_capture lint npm run lint
 run_capture metrics-prepush npm run metrics:prepush
+run_capture coverage npm run test:coverage
+run_capture security-license npm run security:license
 run_capture test-unit npm run test:unit
 run_capture test-scenario npm run test:scenario
 run_capture test-e2e npm run test:e2e

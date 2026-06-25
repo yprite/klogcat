@@ -64,6 +64,10 @@ stable.
 | Architecture dependency rule | Imports crossing forbidden boundaries | No forbidden import is allowed. |
 | Maintainability | Overall maintainability regression | Score must not fall below the configured baseline. |
 
+The frontend coverage gate enforces `100%` line coverage for `src/**/*.ts(x)`.
+Statement, function, and branch coverage are tracked as ratcheted baselines so
+they cannot regress while historical branch gaps are closed.
+
 The first implementation must record the current repository baseline before
 turning baseline-based coupling or maintainability checks into hard failures.
 After that baseline is recorded, the gate fails on any regression.
@@ -144,6 +148,7 @@ The commit passes only when all applicable checks pass:
 | Any staged file | Conflict marker scan | No staged file contains conflict markers. |
 | Any staged file | Generated-file scan | No blocked generated/dependency path is staged. |
 | `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `src/**/*.ts`, `src/**/*.tsx` | `npm run typecheck` | TypeScript exits `0`. |
+| `package.json`, `package-lock.json`, `eslint.config.js`, `src/**/*.ts`, `src/**/*.tsx`, `scripts/**/*.js`, `scripts/**/*.mjs` | `npm run lint` | ESLint exits `0`. |
 | `src/**/*.test.ts`, `src/**/*.test.tsx`, `src/**/*.spec.ts`, `src/**/*.spec.tsx`, or source files under `src/` | Frontend unit tests | Vitest exits `0`. |
 | `src/**/*.ts`, `src/**/*.tsx`, `src-tauri/**/*.rs` | Changed-code static quality metrics | Complexity, function length, file length, and local dependency rules pass for changed source files. |
 | `src-tauri/**/*.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` | `cargo fmt --check` from `src-tauri/` | rustfmt exits `0`. |
@@ -155,6 +160,7 @@ When the harness scripts are implemented, these commands should be the default
 pre-commit checks:
 
 ```bash
+npm run lint
 npm run typecheck
 npm test -- --run
 npm run metrics:precommit
@@ -191,9 +197,12 @@ The push passes only when every command below exits `0`:
 | Surface | Required command | Pass criteria |
 | --- | --- | --- |
 | Frontend type safety | `npm run typecheck` | TypeScript exits `0`. |
+| Frontend lint | `npm run lint` | ESLint exits `0`. |
 | Frontend tests | `npm test` | All Vitest tests pass. |
+| Frontend coverage | `npm run test:coverage` | All frontend tests pass and line coverage is `100%`; statement/function/branch coverage cannot regress below the configured baseline. |
 | Frontend production build | `npm run build` | `tsc` and Vite production build both exit `0`. |
 | Full static code quality metrics | `npm run metrics:prepush` | Complexity, coupling, circular dependency, architecture rule, and maintainability checks pass for the full repository. |
+| Security and license | `npm run security:license` | npm audit has no high vulnerabilities, cargo audit has no vulnerabilities, and npm/Rust dependency licenses match the allowlist. |
 | Rust formatting | `(cd src-tauri && cargo fmt --check)` | rustfmt reports no changes needed. |
 | Rust static analysis | `(cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)` | Clippy exits `0` with warnings treated as errors. |
 | Rust tests | `(cd src-tauri && cargo test --all-targets)` | All Rust tests pass. |

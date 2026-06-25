@@ -133,10 +133,13 @@ function copyE2eArtifacts(reportDir, e2eResult) {
 
 function buildBuildResults(logs) {
   return {
+    lint: { status: logs.lint ? 'passed' : 'not-run' },
     typecheck: { status: logs.typecheck ? 'passed' : 'not-run' },
+    coverage: parseCoverageOutput(logs.coverage?.output ?? ''),
     frontendBuild: parseViteBuildOutput(logs['frontend-build']?.output ?? ''),
     rustClippy: { status: logs['rust-clippy'] ? 'passed' : 'not-run' },
     rustFmt: { status: logs['rust-fmt'] ? 'passed' : 'not-run' },
+    securityLicense: { status: logs['security-license'] ? 'passed' : 'not-run' },
     tauriBuild: releaseGate
       ? { status: logs['tauri-build'] ? 'passed' : 'not-run' }
       : { status: 'skipped' },
@@ -254,6 +257,18 @@ function parseRustTestOutput(output) {
   }
 }
 
+function parseCoverageOutput(output) {
+  const passed = output.match(/\[coverage\] Passed\. lines=([^%\s]+)% statements=([^%\s]+)% functions=([^%\s]+)% branches=([^%\s]+)%/)
+  if (!passed) return { status: output ? 'unknown' : 'not-run' }
+  return {
+    status: 'passed',
+    lines: Number(passed[1]),
+    statements: Number(passed[2]),
+    functions: Number(passed[3]),
+    branches: Number(passed[4]),
+  }
+}
+
 function parseViteBuildOutput(output) {
   const assets = [...output.matchAll(/^\s*(dist\/\S+)\s+([0-9.]+)\s+kB(?:\s+│\s+gzip:\s+([0-9.]+)\s+kB)?/gm)]
     .map((match) => ({
@@ -323,10 +338,13 @@ function renderSummaryMarkdown(summary, metrics) {
 
 | Check | Status |
 | --- | --- |
+| ESLint | \`${summary.buildResults.lint.status}\` |
 | TypeScript typecheck | \`${summary.buildResults.typecheck.status}\` |
+| Coverage line gate | \`${summary.buildResults.coverage.status}\`${summary.buildResults.coverage.lines !== undefined ? ` (${summary.buildResults.coverage.lines}% lines)` : ''} |
 | Frontend build | \`${build.status}\` |
 | Rust fmt | \`${summary.buildResults.rustFmt.status}\` |
 | Rust clippy | \`${summary.buildResults.rustClippy.status}\` |
+| Security/license | \`${summary.buildResults.securityLicense.status}\` |
 | Tauri build | \`${summary.buildResults.tauriBuild.status}\` |
 
 ## Frontend build assets

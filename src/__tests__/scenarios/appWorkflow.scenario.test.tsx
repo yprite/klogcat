@@ -145,6 +145,8 @@ describe('main investigation workflow scenario', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
     expect(useLogStore.getState().viewerPaused).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
+    expect(useLogStore.getState().viewerPaused).toBe(false)
     fireEvent.click(screen.getByLabelText('Auto-reconnect'))
     expect(useLogStore.getState().reconnectEnabled).toBe(true)
 
@@ -153,6 +155,8 @@ describe('main investigation workflow scenario', () => {
     expect(screen.getByText('Request-centric investigation layer')).toBeInTheDocument()
     expect(screen.getByText('trx-1')).toBeInTheDocument()
     expect(screen.getByText('boom')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(useLogStore.getState().rows).toEqual([])
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     expect(screen.getByText('Target cache')).toBeInTheDocument()
