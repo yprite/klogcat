@@ -75,6 +75,7 @@ function parse(tokens: Token[]): Expr | null {
       if (peek()?.type === 'rparen') take()
       return expr
     }
+    /* v8 ignore next -- validateLogQuery rejects operator and closing-paren tokens before parsing. */
     return null
   }
   const parseAnd = (): Expr | null => {

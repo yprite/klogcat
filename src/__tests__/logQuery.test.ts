@@ -13,6 +13,7 @@ describe('matchesLogQuery', () => {
 
   it('supports negation, regex fields, or and parentheses', () => {
     expect(matchesLogQuery(row, '(status:200 | status:500) & -pod:worker')).toBe(true)
+    expect(matchesLogQuery(row, '! status:200')).toBe(true)
     expect(matchesLogQuery(row, 'url~:/api/.+ & method:POST')).toBe(true)
   })
 
