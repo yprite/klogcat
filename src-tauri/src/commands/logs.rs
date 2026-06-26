@@ -30,6 +30,36 @@ pub struct CheckLogPathResult {
     pub message: Option<String>,
 }
 
+fn run_check_log_path_command(
+    request: &CheckLogPathRequest,
+) -> Result<std::process::Output, CommandError> {
+    Command::new("kubectl")
+        .args(build_check_log_path_args(request))
+        .output()
+        .map_err(|e| {
+            CommandError::new(
+                "path_check_spawn_failed",
+                "failed to spawn kubectl exec test",
+            )
+            .with_details(e.to_string())
+        })
+}
+
+fn empty_path_error() -> CommandError {
+    CommandError::new(
+        "path_check_invalid_request",
+        "namespace, pod, container, and filePath are required",
+    )
+}
+
+fn not_found_message(request: &CheckLogPathRequest, stderr: String) -> Option<String> {
+    Some(if stderr.is_empty() {
+        format!("{} not found", request.source_type)
+    } else {
+        stderr
+    })
+}
+
 fn build_check_log_path_args(request: &CheckLogPathRequest) -> Vec<String> {
     let mut args = Vec::new();
     if let Some(context) = request.context.as_deref().filter(|c| !c.trim().is_empty()) {
@@ -60,35 +90,20 @@ pub async fn check_log_path(
         || request.container.trim().is_empty()
         || request.file_path.trim().is_empty()
     {
-        return Err(CommandError::new(
-            "path_check_invalid_request",
-            "namespace, pod, container, and filePath are required",
-        ));
+        return Err(empty_path_error());
     }
-    let output = Command::new("kubectl")
-        .args(build_check_log_path_args(&request))
-        .output()
-        .map_err(|e| {
-            CommandError::new(
-                "path_check_spawn_failed",
-                "failed to spawn kubectl exec test",
-            )
-            .with_details(e.to_string())
-        })?;
+
+    let output = run_check_log_path_command(&request)?;
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     if output.status.success() {
         Ok(CheckLogPathResult {
             exists: true,
             message: Some("OK".to_string()),
         })
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Ok(CheckLogPathResult {
             exists: false,
-            message: Some(if stderr.is_empty() {
-                format!("{} not found", request.source_type)
-            } else {
-                stderr
-            }),
+            message: not_found_message(&request, stderr),
         })
     }
 }
