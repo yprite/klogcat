@@ -15,6 +15,23 @@ let preview
 let devServer
 let browser
 
+const label = {
+  settings: /^(Settings|설정)$/,
+  save: /^(Save|저장)$/,
+  changeTargets: /^(Change Targets|대상 변경)$/,
+  chooseTarget: /^(Choose Target|대상 선택)$/,
+  selectLogTargets: /^(Select Log Targets|로그 대상 선택)$/,
+  noSelectablePodsLoaded: /^(No selectable pods loaded|선택 가능한 Pod를 불러오지 못함)$/,
+  close: /^(Close|닫기)$/,
+  failedRequests: /^(Failed Requests|실패 요청)$/,
+  rawLogs: /^(Raw Logs|원본 로그)$/,
+  start: /^(Start|시작)$/,
+  startUnavailable: /Start: unavailable \(Select namespace and pod\)|시작: 사용 불가 \(Namespace와 Pod 선택\)/,
+  filterUrl: /^(Filter url|필터 url)$/,
+  filterStatus: /^(Filter status|필터 status)$/,
+  filterTrId: /^(Filter trId|필터 trId)$/,
+}
+
 console.log(`[browser-e2e] status=running artifacts=${relativeToRepo(artifactDir)}`)
 
 try {
@@ -33,21 +50,21 @@ try {
 
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' })
   await page.getByText('klogcat').waitFor()
-  await page.getByRole('button', { name: 'Settings' }).click()
-  await page.getByRole('heading', { name: 'Settings' }).waitFor()
-  await page.getByRole('button', { name: 'Save' }).click()
-  const chooseTarget = page.getByRole('button', { name: 'Choose Target' })
-  const changeTargets = page.getByRole('button', { name: 'Change Targets' })
+  await page.getByRole('button', { name: label.settings }).click()
+  await page.getByRole('heading', { name: label.settings }).waitFor()
+  await page.getByRole('button', { name: label.save }).click()
+  const chooseTarget = page.getByRole('button', { name: label.chooseTarget })
+  const changeTargets = page.getByRole('button', { name: label.changeTargets })
   if (await chooseTarget.count()) await chooseTarget.click()
   else await changeTargets.click()
-  await page.getByRole('dialog', { name: /select log targets/i }).waitFor()
-  await page.getByText('No selectable pods loaded').waitFor()
-  await page.getByRole('button', { name: 'Close' }).click()
-  const failedRequestsTabCount = await page.getByRole('tab', { name: 'Failed Requests' }).count()
+  await page.getByRole('dialog', { name: label.selectLogTargets }).waitFor()
+  await page.getByText(label.noSelectablePodsLoaded).waitFor()
+  await page.getByRole('button', { name: label.close }).click()
+  const failedRequestsTabCount = await page.getByRole('tab', { name: label.failedRequests }).count()
   if (failedRequestsTabCount !== 0) throw new Error('Failed Requests should not be a core production tab')
-  await page.getByRole('tab', { name: 'Raw Logs' }).waitFor()
-  await page.getByRole('button', { name: 'Start', exact: true }).waitFor({ state: 'visible' })
-  await page.getByText('Start: unavailable (Select namespace and pod)').waitFor()
+  await page.getByRole('tab', { name: label.rawLogs }).waitFor()
+  await page.getByRole('button', { name: label.start }).waitFor({ state: 'visible' })
+  await page.getByText(label.startUnavailable).waitFor()
 
   await page.screenshot({ path: path.join(artifactDir, 'browser-final.png'), fullPage: true })
   await writeBrowserArtifacts(page, 'production')
@@ -114,22 +131,22 @@ async function runMockStreamingBrowserE2e(activeBrowser) {
   const earlyCount = await readRowsCount(page)
   await waitForRowsCount(page, (count) => count.total > earlyCount.total, 'mock rows to continue streaming')
   await waitForRowsCount(page, (count) => count.total === 80 && count.filtered === 80, 'all mock rows to stream')
-  await page.getByLabel('Filter url').waitFor()
+  await page.getByLabel(label.filterUrl).waitFor()
   await assertCompactRowSpacing(page)
   await page.screenshot({ path: path.join(artifactDir, 'mock-stream-rows.png'), fullPage: true })
 
   await assertAutoScrolledToBottom(page)
 
-  await page.getByLabel('Filter url').fill('/api/')
+  await page.getByLabel(label.filterUrl).fill('/api/')
   const urlFiltered = await waitForRowsCount(page, (count) => count.filtered > 0 && count.filtered < count.total, 'url column filter to narrow rows')
 
-  await page.getByLabel('Filter status').fill('2')
+  await page.getByLabel(label.filterStatus).fill('2')
   await waitForRowsCount(page, (count) => count.total === urlFiltered.total && count.filtered > 0 && count.filtered < urlFiltered.filtered, 'status column filter to narrow rows further')
 
-  await page.getByLabel('Filter status').fill('')
+  await page.getByLabel(label.filterStatus).fill('')
   await waitForRowsCount(page, (count) => count.filtered === urlFiltered.filtered && count.total === urlFiltered.total, 'status filter clear to restore url-filtered rows')
 
-  await page.getByLabel('Filter trId').fill('mock-tr-1')
+  await page.getByLabel(label.filterTrId).fill('mock-tr-1')
   await waitForRowsCount(page, (count) => count.total === urlFiltered.total && count.filtered > 0 && count.filtered < urlFiltered.filtered, 'trId column filter to narrow rows')
 
   await page.screenshot({ path: path.join(artifactDir, 'mock-stream-filtered.png'), fullPage: true })
