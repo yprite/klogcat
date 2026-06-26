@@ -36,7 +36,10 @@ try {
   await page.getByRole('button', { name: 'Settings' }).click()
   await page.getByRole('heading', { name: 'Settings' }).waitFor()
   await page.getByRole('button', { name: 'Save' }).click()
-  await page.getByRole('button', { name: 'Change Targets' }).click()
+  const chooseTarget = page.getByRole('button', { name: 'Choose Target' })
+  const changeTargets = page.getByRole('button', { name: 'Change Targets' })
+  if (await chooseTarget.count()) await chooseTarget.click()
+  else await changeTargets.click()
   await page.getByRole('dialog', { name: /select log targets/i }).waitFor()
   await page.getByText('No selectable pods loaded').waitFor()
   await page.getByRole('button', { name: 'Close' }).click()
@@ -112,6 +115,7 @@ async function runMockStreamingBrowserE2e(activeBrowser) {
   await waitForRowsCount(page, (count) => count.total > earlyCount.total, 'mock rows to continue streaming')
   await waitForRowsCount(page, (count) => count.total === 80 && count.filtered === 80, 'all mock rows to stream')
   await page.getByLabel('Filter url').waitFor()
+  await assertCompactRowSpacing(page)
   await page.screenshot({ path: path.join(artifactDir, 'mock-stream-rows.png'), fullPage: true })
 
   await assertAutoScrolledToBottom(page)
@@ -193,6 +197,19 @@ async function assertAutoScrolledToBottom(page) {
     return distance >= 0 && distance < 80
   })
   if (!atBottom) throw new Error('log viewer did not auto-scroll to the streamed row bottom')
+}
+
+async function assertCompactRowSpacing(page) {
+  const spacing = await page.locator('[data-testid^="log-row-"]').evaluateAll((nodes) => {
+    const rows = nodes.slice(0, 20).map((node) => {
+      const rect = node.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom, height: rect.height }
+    }).filter((row) => row.height > 0)
+    const gaps = rows.slice(1).map((row, index) => row.top - rows[index].bottom)
+    return { rows: rows.length, gaps, minGap: gaps.length ? Math.min(...gaps) : 0, maxGap: gaps.length ? Math.max(...gaps) : 0 }
+  })
+  if (spacing.rows < 2) throw new Error(`not enough rendered log rows for spacing check: ${JSON.stringify(spacing)}`)
+  if (spacing.minGap < -1 || spacing.maxGap > 1) throw new Error(`log rows have incorrect vertical spacing: ${JSON.stringify(spacing)}`)
 }
 
 async function renameRecordedVideo(label) {

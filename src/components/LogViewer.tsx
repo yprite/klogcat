@@ -200,7 +200,13 @@ export function LogViewer() {
   }, [filteredRows.length, rows.length, selectedTargetCount, visibleRows.length, language])
   const selectedRow = filteredRows.find((row) => row.id === selectedRowId)
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, columnOrder), [columnOrder, filteredRows])
-  const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
+  const virtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 40,
+    measureElement: (element) => element.getBoundingClientRect().height,
+    overscan: 10,
+  })
   useEffect(() => {
     const currentIds = new Set(rows.map((row) => row.id))
     const seenRowIds = seenRowIdsRef.current
@@ -332,7 +338,7 @@ export function LogViewer() {
           {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">{t(language, 'Choose Target')}</button>}
         </div>
       </div>}
-      {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
+      {virtualizer.getVirtualItems().map(v => <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
   <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
