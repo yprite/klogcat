@@ -182,6 +182,36 @@ describe('kubeStore context selection', () => {
     expect(useKubeStore.getState().pods).toEqual([{ name: 'live-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
   })
 
+  it('keeps the representative context aligned with the first scoped namespace selection', async () => {
+    const clusterScope = scopeKey('cluster-a', 'prod')
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }, { name: 'cluster-a' }],
+      selectedContext: 'ctx',
+      selectedContexts: ['ctx', 'cluster-a'],
+      namespaces: [{ name: 'default' }],
+      namespacesByContext: {
+        ctx: [{ name: 'default' }],
+        'cluster-a': [{ name: 'prod' }],
+      },
+      selectedNamespace: 'default',
+      selectedNamespaces: { ctx: ['default'] },
+      pods: [{ name: 'default-pod', namespace: 'default', phase: 'Running', containers: ['app'] }],
+      podsByScope: {
+        [scopeKey('ctx', 'default')]: [{ name: 'default-pod', namespace: 'default', phase: 'Running', containers: ['app'] }],
+        [clusterScope]: [{ name: 'gateway-pod', namespace: 'prod', phase: 'Running', containers: ['app'] }],
+      },
+    })
+    vi.mocked(listPods).mockResolvedValueOnce({ context: 'cluster-a', namespace: 'prod', pods: [{ name: 'gateway-live', namespace: 'prod', phase: 'Running', containers: ['app'] }] })
+
+    await useKubeStore.getState().selectNamespaces([clusterScope])
+
+    const state = useKubeStore.getState()
+    expect(state.selectedContext).toBe('cluster-a')
+    expect(state.selectedNamespace).toBe('prod')
+    expect(state.namespaces).toEqual([{ name: 'prod' }])
+    expect(state.pods).toEqual([{ name: 'gateway-live', namespace: 'prod', phase: 'Running', containers: ['app'] }])
+  })
+
   it('keeps exact selected pods when they are still live and uses workload only for stale selections', () => {
     const key = scopeKey('ctx', 'default')
     useKubeStore.setState({

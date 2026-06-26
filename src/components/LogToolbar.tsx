@@ -18,7 +18,7 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const source = settings?.logSources[primarySourceType]
   const targets = kube.getSelectedPodTargets()
   const containerFor = (containers: string[]) => source && containers.includes(source.container) ? source.container : containers[0] ?? source?.container ?? ''
-  const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running')
+  const invalidTargets = targets.filter((t) => t.pod.phase !== 'Running' || t.pod.containers.length === 0)
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason

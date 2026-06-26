@@ -30,6 +30,15 @@ describe('QueryBar', () => {
     expect(screen.getByText('invalid regex')).toBeInTheDocument()
   })
 
+  it('marks incomplete boolean query syntax while query mode is active', () => {
+    render(<GrepBar />)
+
+    fireEvent.change(screen.getByLabelText('Query'), { target: { value: 'status:500 |' } })
+
+    expect(screen.getByLabelText('Query')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('incomplete query expression')).toBeInTheDocument()
+  })
+
   it('opens Android Logcat style query suggestions with Ctrl+Space and inserts one', () => {
     render(<GrepBar />)
 

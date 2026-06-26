@@ -327,6 +327,7 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     await get().selectNamespaces(context && namespace ? [`${context}\u0000${namespace}`] : [])
   },
   async selectNamespaces(scopeValues) {
+    const state = get()
     const selectedNamespaces: Record<string, string[]> = {}
     for (const value of scopeValues) {
       const { context, namespace } = parseScopeKey(value)
@@ -336,8 +337,21 @@ export const useKubeStore = create<KubeState>((set, get) => ({
     const firstContext = Object.keys(selectedNamespaces)[0]
     const firstNs = firstContext ? selectedNamespaces[firstContext][0] : undefined
     const pairs = Object.entries(selectedNamespaces).flatMap(([context, namespaces]) => namespaces.map((namespace) => ({ context, namespace })))
-    const cachedPodsByScope = get().podsByScope
-    set({ selectedNamespaces, selectedNamespace: firstNs, selectedPod: undefined, selectedPods: {}, selectedWorkloads: {}, pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [], loadingPods: pairs.length > 0 })
+    const selectedContext = firstContext ?? state.selectedContext
+    const selectedContexts = firstContext && !state.selectedContexts.includes(firstContext) ? [...state.selectedContexts, firstContext] : state.selectedContexts
+    const cachedPodsByScope = state.podsByScope
+    set({
+      selectedContext,
+      selectedContexts,
+      selectedNamespaces,
+      selectedNamespace: firstNs,
+      selectedPod: undefined,
+      selectedPods: {},
+      selectedWorkloads: {},
+      namespaces: selectedContext ? state.namespacesByContext[selectedContext] ?? [] : [],
+      pods: firstContext && firstNs ? cachedPodsByScope[scopeKey(firstContext, firstNs)] ?? [] : [],
+      loadingPods: pairs.length > 0,
+    })
     if (pairs.length === 0) return
     try {
       recordKubeDebug(`selectNamespaces loadPods start targets=${pairs.map(({ context, namespace }) => `${context}/${namespace}`).join(',') || '(none)'}`)
