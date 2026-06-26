@@ -146,3 +146,16 @@ npm test
 npm run build
 cd src-tauri && cargo fmt -- --check && cargo test && cargo check
 ```
+
+## 팀 규칙: 푸시 정책
+
+이 저장소는 품질 게이트를 우회하지 않습니다.
+`--no-verify` 사용은 금지합니다.
+
+푸시는 아래 명령으로만 수행합니다.
+
+```bash
+npm run push
+```
+
+원격 브랜치로 직접 `git push --no-verify`를 실행하면 정책 위반으로 간주됩니다.
