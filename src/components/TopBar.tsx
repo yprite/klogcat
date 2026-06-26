@@ -27,7 +27,7 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   return <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-2 py-1.5">
     <strong>klogcat</strong>
     <AnimatedStatusPill active={targetsLoading} label={targetStatusLabel(kube, selectedCount, language)} detail={t(language, 'Targets: {count} selected', { count: selectedCount })} />
-    {selectedCount > 0 && <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>{t(language, 'Change Targets')}</button>}
+    <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>{selectedCount > 0 ? t(language, 'Change Targets') : t(language, 'Choose Target')}</button>
     <button className="rounded border border-slate-700 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={onSettings}>{t(language, 'Settings')}</button>
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}
   </div>

@@ -85,7 +85,7 @@ describe('Korean i18n rendering', () => {
     expect(screen.getByLabelText('선택된 대상')).toHaveTextContent('1개 선택됨')
   })
 
-  it('shows only the Korean Choose Target CTA before a log target is selected', () => {
+  it('shows Korean Choose Target CTAs before a log target is selected', () => {
     useKubeStore.setState({ selectedPod: undefined, selectedPods: {} })
     render(<>
       <TopBar onSettings={() => undefined} onContextChange={() => undefined} onNamespaceChange={() => undefined} onPodChange={() => undefined} />
@@ -94,6 +94,7 @@ describe('Korean i18n rendering', () => {
 
     expect(screen.getByText('선택된 로그 대상 없음')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '대상 변경' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '대상 선택' })).toBeEnabled()
+    expect(screen.getAllByRole('button', { name: '대상 선택' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: '대상 선택' }).every((button) => !button.hasAttribute('disabled'))).toBe(true)
   })
 })
