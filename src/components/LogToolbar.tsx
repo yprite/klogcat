@@ -38,22 +38,24 @@ function StreamControls({
       <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Stream controls</span>
       <AnimatedStatusPill active={operation.active} label={operation.label} detail={operation.detail} />
     </div>
-    <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2">
       {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
-      <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={status.startBusy || status.alreadyRunning} title={status.startBlockedReason} onClick={onStart}>Start</button>
-      <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={status.stopBusy} onClick={onStop}>Stop</button>
-      <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={status.startBusy || status.stopBusy} onClick={onRestart}>Restart</button>
+      <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(status.startBlockedReason)} title={status.startBlockedReason || 'Start selected target streams'} onClick={onStart}>Start</button>
+      <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!status.canStop} title={status.canStop ? 'Stop active streams' : 'No active stream to stop'} onClick={onStop}>Stop</button>
+      <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!status.canRestart} title={status.canRestart ? 'Restart active streams' : 'Start a stream before restarting'} onClick={onRestart}>Restart</button>
     </div>
     {operation.active && <div className="mt-2"><ProgressStripe label={`${operation.label} progress`} /></div>}
   </div>
 }
 
 function ViewerControls({ log }: { log: LogStoreState }) {
+  const canPause = log.streamStatus === 'running' || log.viewerPaused
+  const hasRows = log.rows.length > 0
   return <div aria-label="Viewer controls" className="rounded border border-slate-800 bg-slate-950/60 p-2">
     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Viewer controls</div>
     <div className="flex flex-wrap items-center gap-2">
-      <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => togglePause(log)}>{log.viewerPaused ? 'Resume' : 'Pause'}</button>
-      <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
+      <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canPause} title={canPause ? 'Pause or resume log rendering' : 'Start a stream before pausing'} onClick={() => togglePause(log)}>{log.viewerPaused ? 'Resume' : 'Pause'}</button>
+      <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!hasRows} title={hasRows ? 'Clear buffered logs' : 'No logs to clear'} onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
       <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.autoScrollEnabled} onChange={(event) => setAutoScroll(log, event.target.checked)} /> Auto-scroll</label>
       <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.reconnectEnabled} onChange={(event) => setReconnect(log, event.target.checked)} /> Auto-reconnect</label>
     </div>
@@ -77,7 +79,7 @@ function setReconnect(log: LogStoreState, checked: boolean) {
 }
 
 function RuntimeStatus({ log, status, targets }: { log: LogStoreState; status: ToolbarStatus; targets: SelectedTarget[] }) {
-  const startState = status.startBusy || status.alreadyRunning ? 'disabled' : 'enabled'
+  const startState = status.startBlockedReason ? 'unavailable' : 'enabled'
   return <div aria-label="Runtime status" className="rounded border border-slate-800 bg-slate-950/60 p-2">
     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Runtime status</div>
     <div className="grid grid-cols-3 gap-2 text-xs">

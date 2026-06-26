@@ -22,6 +22,7 @@ describe('matchesLogQuery', () => {
   it('supports negation, regex fields, or and parentheses', () => {
     expect(matchesLogQuery(row, '(status:200 | status:500) & -pod:worker')).toBe(true)
     expect(matchesLogQuery(row, 'url~:/api/.+ & method:POST')).toBe(true)
+    expect(matchesLogQuery(row, '! status:200')).toBe(true)
   })
 
   it('supports severity and stacktrace predicates', () => {
@@ -31,6 +32,7 @@ describe('matchesLogQuery', () => {
 
   it('uses failure and severity policy for query predicates', () => {
     const statusFailure: ParsedLogLine = { ...row, level: undefined, status: '503', exceptionName: undefined, sourceType: 'access' }
+    expect(matchesLogQuery(statusFailure, 'is:crash')).toBe(true)
     expect(matchesLogQuery(statusFailure, 'is:error')).toBe(true)
 
     const policy = {
@@ -53,5 +55,19 @@ describe('matchesLogQuery', () => {
   it('validates regex field queries', () => {
     expect(validateLogQuery('url~:[').ok).toBe(false)
     expect(validateLogQuery('(status:500 | source:error)').ok).toBe(true)
+  })
+
+  it('rejects out-of-order parentheses instead of treating malformed queries as match-all', () => {
+    expect(validateLogQuery(')(')).toEqual({ ok: false, message: 'unbalanced parentheses' })
+    expect(validateLogQuery('status:500 ) ( source:error')).toEqual({ ok: false, message: 'unbalanced parentheses' })
+    expect(matchesLogQuery(row, ')(')).toBe(false)
+  })
+
+  it('rejects incomplete boolean expressions instead of partially applying them', () => {
+    expect(validateLogQuery('status:500 |')).toEqual({ ok: false, message: 'incomplete query expression' })
+    expect(validateLogQuery('| status:500')).toEqual({ ok: false, message: 'incomplete query expression' })
+    expect(validateLogQuery('status:500 & | source:error')).toEqual({ ok: false, message: 'incomplete query expression' })
+    expect(validateLogQuery('!')).toEqual({ ok: false, message: 'incomplete query expression' })
+    expect(matchesLogQuery(row, 'status:500 |')).toBe(false)
   })
 })

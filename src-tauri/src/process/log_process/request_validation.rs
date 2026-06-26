@@ -75,10 +75,10 @@ fn is_dns_label(value: &str) -> bool {
         return false;
     }
     let bytes = value.as_bytes();
-    if !is_dns_label_char(*bytes.first().expect("non-empty")) {
+    if !is_dns_label_boundary_char(*bytes.first().expect("non-empty")) {
         return false;
     }
-    if !is_dns_label_char(*bytes.last().expect("non-empty")) {
+    if !is_dns_label_boundary_char(*bytes.last().expect("non-empty")) {
         return false;
     }
     bytes.iter().all(is_dns_label_inner_char)
@@ -90,6 +90,10 @@ fn is_dns_label_inner_char(byte: &u8) -> bool {
 
 fn is_dns_label_char(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+}
+
+fn is_dns_label_boundary_char(byte: u8) -> bool {
+    byte.is_ascii_lowercase() || byte.is_ascii_digit()
 }
 
 fn is_dns_subdomain(value: &str) -> bool {

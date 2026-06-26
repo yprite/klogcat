@@ -54,16 +54,12 @@ fn extract_json_log_time_ms(raw: &str) -> Option<u128> {
 }
 
 fn extract_json_time_number(value: &serde_json::Value, key: &str) -> Option<u128> {
-    let Some(number) = value.get(key).and_then(|entry| entry.as_f64()) else {
-        return None;
-    };
+    let number = value.get(key).and_then(|entry| entry.as_f64())?;
     epoch_number_to_ms(number)
 }
 
 fn extract_json_time_string(value: &serde_json::Value, key: &str) -> Option<u128> {
-    let Some(raw) = value.get(key).and_then(|entry| entry.as_str()) else {
-        return None;
-    };
+    let raw = value.get(key).and_then(|entry| entry.as_str())?;
     parse_time_string_ms(raw)
 }
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogToolbar } from '../components/LogToolbar'
 import { SettingsModal } from '../components/SettingsModal'
+import { selectedStreamIds, stopStreams } from '../components/logToolbarActions'
 import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
@@ -61,16 +62,13 @@ function resetStores() {
 describe('button actions', () => {
   beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
-  it('keeps Start clickable and reports why it cannot start', () => {
+  it('disables Start until a live target is selected and explains why', () => {
     render(<LogToolbar sourceType="info" />)
 
     const start = screen.getByRole('button', { name: 'Start' })
-    expect(start).toBeEnabled()
-
-    fireEvent.click(start)
-
-    expect(useLogStore.getState().streamStatus).toBe('error')
-    expect(useLogStore.getState().errorMessage).toMatch(/select namespace and pod/i)
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/select namespace and pod/i))
+    expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument()
   })
 
   it('groups log source toggles with stream controls while keeping viewer and status groups separate', () => {
@@ -84,21 +82,26 @@ describe('button actions', () => {
     expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ERR' }))
     expect(streamControls).toContainElement(screen.getByRole('button', { name: 'Stop' }))
     expect(screen.getByLabelText('Viewer controls')).toContainElement(screen.getByRole('button', { name: 'Clear' }))
-    expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Start: enabled/)
+    expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Start: unavailable/)
 
     fireEvent.click(screen.getByRole('button', { name: 'ACC' }))
     expect(onSourceTypesChange).toHaveBeenCalledWith(['info', 'access'])
   })
 
-  it('keeps Stop clickable and reports when no stream is active', () => {
+  it('disables Stop when no stream is active', () => {
     render(<LogToolbar sourceType="info" />)
 
     const stop = screen.getByRole('button', { name: 'Stop' })
-    expect(stop).toBeEnabled()
+    expect(stop).toBeDisabled()
+    expect(stop).toHaveAttribute('title', expect.stringMatching(/no active stream/i))
+  })
 
-    fireEvent.click(stop)
+  it('reports empty stop attempts through the shared stream action helper', async () => {
+    const log = useLogStore.getState()
 
-    expect(useLogStore.getState().streamStatus).toBe('error')
+    expect(selectedStreamIds({ ...log, activeStreamId: 'legacy-stream', activeStreamIds: [] })).toEqual(['legacy-stream'])
+    await stopStreams(log, [], true)
+
     expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
   })
 
@@ -129,7 +132,37 @@ describe('button actions', () => {
     expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })
 
+  it('keeps Start disabled for a Running pod when no container information is available', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'default',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: [] }],
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['default'] },
+      podsByScope: {
+        'ctx\u0000default': [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: [] }],
+      },
+      selectedPods: { 'ctx\u0000default': ['pod-1'] },
+    })
+    render(<LogToolbar sourceType="info" />)
+
+    const start = screen.getByRole('button', { name: 'Start' })
+
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/container/i))
+    expect(startLogStream).not.toHaveBeenCalled()
+  })
+
   it('records visible action debug when Start is clicked', () => {
+    useKubeStore.setState({
+      selectedNamespace: 'default',
+      selectedPod: 'pod-1',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: ['app'] }],
+    })
     render(<LogToolbar sourceType="info" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
@@ -245,6 +278,10 @@ describe('button actions', () => {
     await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/no live pod/i))
     expect(startLogStream).not.toHaveBeenCalled()
   })
+})
+
+describe('button action settings and stream batches', () => {
+  beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
   it('clears Kubernetes target cache from settings and exposes restart', () => {
     const restart = vi.fn()

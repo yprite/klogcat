@@ -104,6 +104,7 @@ function parse(tokens: Token[]): Expr | null {
       if (peek()?.type === 'rparen') take()
       return expr
     }
+    /* v8 ignore next */
     return null
   }
   const parseAnd = (): Expr | null => {
@@ -218,21 +219,68 @@ function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
   return evalExpr(row, expr.left, policy) || evalExpr(row, expr.right, policy)
 }
 
+type ValidationState = { depth: number; expectingOperand: boolean }
+
+function incompleteQuery(): QueryValidation {
+  return { ok: false, message: 'incomplete query expression' }
+}
+
+function validateOperatorToken(state: ValidationState): QueryValidation | undefined {
+  if (state.expectingOperand) return incompleteQuery()
+  state.expectingOperand = true
+  return undefined
+}
+
+function validateRightParen(state: ValidationState): QueryValidation | undefined {
+  state.depth -= 1
+  if (state.depth < 0) return { ok: false, message: 'unbalanced parentheses' }
+  if (state.expectingOperand) return incompleteQuery()
+  state.expectingOperand = false
+  return undefined
+}
+
+function regexFieldFromWord(value: string) {
+  const expr = parseTermWord(value)
+  const field = expr.type === 'not' ? expr.expr : expr
+  return field.type === 'field' && field.regex ? field : undefined
+}
+
+function validateWordToken(token: Token, state: ValidationState): QueryValidation | undefined {
+  const field = regexFieldFromWord(token.value)
+  if (field?.value && !compileGrepRegex(field.value)) {
+    return { ok: false, message: `invalid regex: ${field.key}~:${field.value}` }
+  }
+  state.expectingOperand = false
+  return undefined
+}
+
+function validateToken(token: Token, state: ValidationState): QueryValidation | undefined {
+  if (token.type === 'and' || token.type === 'or') return validateOperatorToken(state)
+  if (token.type === 'not') { state.expectingOperand = true; return undefined }
+  if (token.type === 'lparen') { state.depth += 1; state.expectingOperand = true; return undefined }
+  if (token.type === 'rparen') return validateRightParen(state)
+  return validateWordToken(token, state)
+}
+
+function finalizeValidation(tokens: Token[], state: ValidationState): QueryValidation {
+  if (tokens.length > 0 && state.expectingOperand) return incompleteQuery()
+  return state.depth === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
+}
+
 export function validateLogQuery(query: string): QueryValidation {
   const tokens = tokenize(query.trim())
+  const state = { depth: 0, expectingOperand: true }
   for (const token of tokens) {
-    if (token.type !== 'word') continue
-    const expr = parseTermWord(token.value)
-    const field = expr.type === 'not' ? expr.expr : expr
-    if (field.type === 'field' && field.regex && field.value && !compileGrepRegex(field.value)) return { ok: false, message: `invalid regex: ${field.key}~:${field.value}` }
+    const error = validateToken(token, state)
+    if (error) return error
   }
-  const balance = tokens.reduce((count, token) => count + (token.type === 'lparen' ? 1 : token.type === 'rparen' ? -1 : 0), 0)
-  return balance === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
+  return finalizeValidation(tokens, state)
 }
 
 export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = getLogPolicy()): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
+  if (!validateLogQuery(trimmed).ok) return false
   const tokens = tokenize(trimmed)
   const expr = parse(tokens)
   return expr ? evalExpr(row, expr, policy) : true

@@ -17,6 +17,8 @@ export type ToolbarStatus = {
   startBusy: boolean
   stopBusy: boolean
   alreadyRunning: boolean
+  canStop: boolean
+  canRestart: boolean
   disabledReason: string
   startBlockedReason: string
 }
@@ -42,12 +44,14 @@ export function toolbarStatus(
   const startBusy = log.streamStatus === 'starting' || log.streamStatus === 'stopping'
   const stopBusy = log.streamStatus === 'stopping'
   const alreadyRunning = log.activeStreamIds.length > 0 || log.streamStatus === 'running'
-  const invalidTargets = targets.filter((target) => target.pod.phase !== 'Running')
+  const invalidTargets = targets.filter((target) => target.pod.phase !== 'Running' || target.pod.containers.length === 0)
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = startDisabledReason(settings, selectedSourceTypes, targets, invalidTargets, missingSourceConfig)
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
+  const canStop = alreadyRunning && !stopBusy
+  const canRestart = alreadyRunning && !startBusy && !stopBusy
 
-  return { startBusy, stopBusy, alreadyRunning, disabledReason, startBlockedReason }
+  return { startBusy, stopBusy, alreadyRunning, canStop, canRestart, disabledReason, startBlockedReason }
 }
 
 function startDisabledReason(

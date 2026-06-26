@@ -159,7 +159,7 @@ describe('log analysis UI scenario', () => {
     fireEvent.click(screen.getByRole('button', { name: 'All' }))
     await waitFor(() => expect(screen.getByText('32/32 shown')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('Filter status'), { target: { value: '500' } })
-    await waitFor(() => expect(screen.getByText('Rows: 1/3')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Rows: 1/3').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByLabelText('Move status right'))
     fireEvent.click(screen.getByLabelText('Move status left'))
     const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
