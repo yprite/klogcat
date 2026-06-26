@@ -8,8 +8,8 @@ const argv = process.argv.slice(2)
 const layer = argv[0]
 const coverageEnabled = argv.includes('--coverage')
 
-if (!['unit', 'scenario', 'e2e'].includes(layer)) {
-  console.error('[test-layer] usage: run-test-layer.mjs <unit|scenario|e2e>')
+if (!['unit', 'scenario', 'stress', 'e2e'].includes(layer)) {
+  console.error('[test-layer] usage: run-test-layer.mjs <unit|scenario|stress|e2e>')
   process.exit(1)
 }
 
@@ -64,8 +64,10 @@ function selectFiles(targetLayer) {
     return allTests.filter((file) => file.startsWith('src/__tests__/')
       && !file.includes('/scenarios/')
       && !file.includes('/scenario/')
+      && !file.includes('/stress/')
       && !file.includes('/e2e/')
       && !file.includes('.scenario.')
+      && !file.includes('.stress.')
       && !file.includes('.e2e.'))
   }
 
@@ -73,6 +75,11 @@ function selectFiles(targetLayer) {
     return allTests.filter((file) => file.includes('/scenarios/')
       || file.includes('/scenario/')
       || file.includes('.scenario.'))
+  }
+
+  if (targetLayer === 'stress') {
+    return allTests.filter((file) => file.includes('/stress/')
+      || file.includes('.stress.'))
   }
 
   return allTests.filter((file) => file.startsWith('e2e/')

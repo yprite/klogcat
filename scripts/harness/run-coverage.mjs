@@ -15,6 +15,19 @@ if (!fs.existsSync(vitestBin)) {
   process.exit(1)
 }
 
+const testFiles = [
+  ...listMatchingFiles(path.join(repoRoot, 'src'), /\.(test|spec)\.(ts|tsx)$/),
+  ...listMatchingFiles(path.join(repoRoot, 'e2e'), /\.(test|spec)\.(ts|tsx)$/),
+  ...listMatchingFiles(path.join(repoRoot, 'tests'), /\.(test|spec)\.(ts|tsx)$/),
+].map((file) => normalize(path.relative(repoRoot, file)))
+  .filter((file) => !file.includes('/stress/') && !file.includes('.stress.'))
+  .sort()
+
+if (testFiles.length === 0) {
+  console.error('[coverage] no non-stress test files found')
+  process.exit(1)
+}
+
 const result = spawnSync(vitestBin, [
   'run',
   '--coverage',
@@ -26,6 +39,7 @@ const result = spawnSync(vitestBin, [
   '--coverage.exclude=src/**/*.test.{ts,tsx}',
   '--coverage.exclude=src/__tests__/**',
   '--coverage.exclude=src/vite-env.d.ts',
+  ...testFiles,
 ], {
   cwd: repoRoot,
   stdio: 'inherit',
@@ -57,3 +71,25 @@ if (failures.length > 0) {
 }
 
 console.log(`[coverage] Passed. lines=${summary.lines.pct}% statements=${summary.statements.pct}% functions=${summary.functions.pct}% branches=${summary.branches.pct}%`)
+
+function listMatchingFiles(dir, pattern) {
+  if (!fs.existsSync(dir)) return []
+  const files = []
+  walk(dir, files, pattern)
+  return files
+}
+
+function walk(dir, files, pattern) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      walk(fullPath, files, pattern)
+    } else if (entry.isFile() && pattern.test(entry.name)) {
+      files.push(fullPath)
+    }
+  }
+}
+
+function normalize(file) {
+  return file.split(path.sep).join('/')
+}
