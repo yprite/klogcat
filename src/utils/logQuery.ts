@@ -13,12 +13,33 @@ type Expr =
   | { type: 'and' | 'or'; left: Expr; right: Expr }
 
 const searchableColumnKeys: LogColumnKey[] = Array.from(new Set([...accessLogColumns, ...errorLogColumns]))
+type QuoteChar = '"' | "'"
+type BoundaryChar = '(' | ')' | '&' | '|'
+
+function isWhitespace(char: string) {
+  return /\s/.test(char)
+}
+
+function isQuoteChar(char: string): char is QuoteChar {
+  return char === '"' || char === "'"
+}
+
+function isBoundaryToken(char: string): char is BoundaryChar {
+  return char === '(' || char === ')' || char === '&' || char === '|'
+}
+
+function boundaryToken(type: BoundaryChar): Token {
+  if (type === '(') return { type: 'lparen', value: type }
+  if (type === ')') return { type: 'rparen', value: type }
+  if (type === '&') return { type: 'and', value: type }
+  return { type: 'or', value: type }
+}
 
 function tokenize(input: string): Token[] {
   const tokens: Token[] = []
   let current = ''
   let quoted = false
-  let quote = ''
+  let quote: QuoteChar = '"'
   const pushWord = () => { if (current.trim()) tokens.push(wordToken(current.trim())); current = '' }
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i]
@@ -27,12 +48,20 @@ function tokenize(input: string): Token[] {
       else current += ch
       continue
     }
-    if (ch === '"' || ch === "'") { quoted = true; quote = ch; continue }
-    if (/\s/.test(ch)) { pushWord(); continue }
-    if (ch === '(') { pushWord(); tokens.push({ type: 'lparen', value: ch }); continue }
-    if (ch === ')') { pushWord(); tokens.push({ type: 'rparen', value: ch }); continue }
-    if (ch === '&') { pushWord(); tokens.push({ type: 'and', value: ch }); continue }
-    if (ch === '|') { pushWord(); tokens.push({ type: 'or', value: ch }); continue }
+    if (isQuoteChar(ch)) {
+      quoted = true
+      quote = ch
+      continue
+    }
+    if (isWhitespace(ch)) {
+      pushWord()
+      continue
+    }
+    if (isBoundaryToken(ch)) {
+      pushWord()
+      tokens.push(boundaryToken(ch))
+      continue
+    }
     current += ch
   }
   pushWord()
@@ -107,18 +136,25 @@ function textMatches(value: string, query: string, regex: boolean) {
   return re ? re.test(value) : false
 }
 
+const directFieldReaders: Record<string, (row: ParsedLogLine) => string> = {
+  line: (row) => row.raw,
+  message: (row) => row.raw,
+  raw: (row) => row.raw,
+  summary: (row) => row.summary,
+  namespace: (row) => row.namespace,
+  ns: (row) => row.namespace,
+  pod: (row) => row.pod,
+  container: (row) => row.container,
+  tag: (row) => row.logger || row.module || row.service || row.jsonLogType || '',
+  package: (row) => row.service || row.serviceId || row.appId || '',
+}
+
 function rowFieldValue(row: ParsedLogLine, key: string, policy: LogPolicy): string {
   const k = key.toLowerCase()
-  if (k === 'line' || k === 'message' || k === 'raw') return row.raw
-  if (k === 'summary') return row.summary
+  const directReader = directFieldReaders[k]
+  if (directReader) return directReader(row)
   if (policy.query.sourceAliases.includes(k)) return row.sourceType
-  if (k === 'namespace' || k === 'ns') return row.namespace
-  if (k === 'pod') return row.pod
-  if (k === 'container') return row.container
-  if (k === 'tag') return row.logger || row.module || row.service || row.jsonLogType || ''
-  if (k === 'package') return row.service || row.serviceId || row.appId || ''
   if (k === 'level' || k === 'priority') return rowLevelFromPolicy(row, policy) ?? ''
-  if (k === 'age') return String(ageSeconds(row))
   const column = searchableColumnKeys.find((candidate) => candidate.toLowerCase() === k)
   return column ? valueForColumn(row, column) : String((row as unknown as Record<string, unknown>)[key] ?? '')
 }
@@ -139,24 +175,39 @@ function parseAge(value: string) {
 
 function evalField(row: ParsedLogLine, key: string, value: string, regex: boolean, policy: LogPolicy) {
   const k = key.toLowerCase()
-  if (k === 'is') {
-    const v = value.toLowerCase()
-    if (v === 'stacktrace') return !!row.isStacktrace || !!row.stacktraceLines?.length
-    if (v === 'crash' || v === 'error') return isFailureRowFromPolicy(row, policy)
-    return false
-  }
-  if (k === 'level' || k === 'priority') {
-    const actual = rowLevelFromPolicy(row, policy)
-    const wanted = value.toUpperCase()
-    if (!levelMeetsMinimumFromPolicy(actual, wanted, policy)) return textMatches(actual ?? '', value, regex)
-    return true
-  }
-  if (k === 'age') {
-    const seconds = parseAge(value)
-    return seconds === undefined ? false : ageSeconds(row) <= seconds
-  }
-  if (policy.query.sourceAliases.includes(k) && sourceTypesFromPolicy(policy).includes(value as SourceLogType)) return row.sourceType === value as SourceLogType
+  if (k === 'is') return evalIsField(row, value, policy)
+  if (isLevelField(k)) return evalLevelField(row, value, regex, policy)
+  if (k === 'age') return evalAgeField(row, value)
+  if (isSourceAliasMatch(k, value, policy)) return row.sourceType === value as SourceLogType
   return textMatches(rowFieldValue(row, key, policy), value, regex)
+}
+
+function evalIsField(row: ParsedLogLine, value: string, policy: LogPolicy) {
+  const matchers: Record<string, () => boolean> = {
+    stacktrace: () => Boolean(row.isStacktrace || row.stacktraceLines?.length),
+    crash: () => isFailureRowFromPolicy(row, policy),
+    error: () => isFailureRowFromPolicy(row, policy),
+  }
+  return matchers[value.toLowerCase()]?.() ?? false
+}
+
+function isLevelField(key: string) {
+  return key === 'level' || key === 'priority'
+}
+
+function evalLevelField(row: ParsedLogLine, value: string, regex: boolean, policy: LogPolicy) {
+  const actual = rowLevelFromPolicy(row, policy)
+  const wanted = value.toUpperCase()
+  return levelMeetsMinimumFromPolicy(actual, wanted, policy) || textMatches(actual ?? '', value, regex)
+}
+
+function evalAgeField(row: ParsedLogLine, value: string) {
+  const seconds = parseAge(value)
+  return seconds === undefined ? false : ageSeconds(row) <= seconds
+}
+
+function isSourceAliasMatch(key: string, value: string, policy: LogPolicy) {
+  return policy.query.sourceAliases.includes(key) && sourceTypesFromPolicy(policy).includes(value as SourceLogType)
 }
 
 function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
