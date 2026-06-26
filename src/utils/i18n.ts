@@ -69,7 +69,7 @@ const ko: Record<string, string> = {
   'No logs to clear': '지울 로그 없음',
   'Action debug': '액션 디버그',
   'No log target selected': '선택된 로그 대상 없음',
-  'Use Change Targets to choose a running pod, then start a stream.': '대상 변경에서 실행 중인 Pod를 선택한 뒤 스트림을 시작하세요.',
+  'Use Choose Target to choose a running pod, then start a stream.': '대상 선택에서 실행 중인 Pod를 선택한 뒤 스트림을 시작하세요.',
   'Ready to stream logs': '로그 스트리밍 준비됨',
   'Targets selected: {count}. Press Start to begin tailing logs.': '대상 {count}개 선택됨. 시작을 눌러 로그 tailing을 시작하세요.',
   'No rows match current filters': '현재 필터와 일치하는 행 없음',

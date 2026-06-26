@@ -72,6 +72,15 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getAllByText('Running').length).toBeGreaterThan(0)
   })
 
+  it('does not expose Change Targets before a log target is selected', () => {
+    useKubeStore.setState({ selectedPod: undefined, selectedPods: {} })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    expect(screen.getByText('Targets: 0 selected')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /change targets/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeEnabled()
+  })
+
   it('collapses and expands each cluster in the target picker', () => {
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
 
@@ -134,8 +143,8 @@ describe('TopBar target picker', () => {
       selectedNamespaces: {},
       pods: [],
       podsByScope: {},
-      selectedPod: undefined,
-      selectedPods: {},
+      selectedPod: 'stale-selected-pod',
+      selectedPods: { [scopeKey('ctx', 'default')]: ['stale-selected-pod'] },
       error: { code: 'kubectl_failed', message: 'kubectl unavailable' },
     })
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)

@@ -193,7 +193,7 @@ export function LogViewer() {
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleColumns, visibleRows])
   const emptyState = useMemo(() => {
-    if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Change Targets to choose a running pod, then start a stream.') }
+    if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Choose Target to choose a running pod, then start a stream.') }
     if (rows.length === 0) return { title: t(language, 'Ready to stream logs'), detail: t(language, 'Targets selected: {count}. Press Start to begin tailing logs.', { count: selectedTargetCount }) }
     if (visibleRows.length === 0 || filteredRows.length === 0) return { title: t(language, 'No rows match current filters'), detail: t(language, 'Adjust Query or column filters to bring rows back into view.') }
     return undefined

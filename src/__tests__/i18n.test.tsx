@@ -3,7 +3,9 @@ import { render, screen } from '@testing-library/react'
 import { GrepBar } from '../components/GrepBar'
 import { InvestigationModeSelector } from '../components/InvestigationModeSelector'
 import { LogToolbar } from '../components/LogToolbar'
+import { LogViewer } from '../components/LogViewer'
 import { TargetPickerDialog } from '../components/TargetPickerDialog'
+import { TopBar } from '../components/TopBar'
 import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests } from '../stores/logStore'
@@ -76,5 +78,17 @@ describe('Korean i18n rendering', () => {
     expect(screen.getByRole('dialog', { name: '로그 대상 선택' })).toBeInTheDocument()
     expect(screen.getByLabelText('대상 검색')).toHaveAttribute('placeholder', 'context / namespace / pod / phase / container')
     expect(screen.getByLabelText('선택된 대상')).toHaveTextContent('1개 선택됨')
+  })
+
+  it('shows only the Korean Choose Target CTA before a log target is selected', () => {
+    useKubeStore.setState({ selectedPod: undefined, selectedPods: {} })
+    render(<>
+      <TopBar onSettings={() => undefined} onContextChange={() => undefined} onNamespaceChange={() => undefined} onPodChange={() => undefined} />
+      <LogViewer />
+    </>)
+
+    expect(screen.getByText('선택된 로그 대상 없음')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '대상 변경' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '대상 선택' })).toBeEnabled()
   })
 })
