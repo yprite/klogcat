@@ -11,6 +11,9 @@ import { startLogStream, stopLogStream } from '../src/commands/tauriLogs'
 import { resetLogStoreForTests, useLogStore } from '../src/stores/logStore'
 import { useKubeStore } from '../src/stores/kubeStore'
 import { useSettingsStore } from '../src/stores/settingsStore'
+import { failedRequestsExtensionModule } from '../src/extensions/examples/FailedRequestsExtension'
+import { activateKlogcatExtensionModule } from '../src/extensions/logViewerExtensionLoader'
+import { resetLogViewerExtensionsForTests } from '../src/extensions/logViewerExtensions'
 import type { GetSettingsResponse, PersistedSettings, SettingsWarning } from '../src/types/settings'
 import type { ContextInfo, PodInfo } from '../src/types/kube'
 import type {
@@ -181,6 +184,7 @@ describe('product quality e2e', () => {
   beforeEach(() => {
     installLocalStorageMock()
     window.localStorage.clear()
+    resetLogViewerExtensionsForTests()
     resetLogStoreForTests()
     resetKubeStore()
     resetFakeBackend()
@@ -207,7 +211,7 @@ describe('product quality e2e', () => {
     expect(screen.getByRole('button', { name: 'Choose Target' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'Failed Requests' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Failed Requests' })).not.toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument())
     expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Targets\s*0/)
@@ -231,6 +235,7 @@ describe('product quality e2e', () => {
   })
 
   it('drives the Kubernetes target, stream contract, log event, failed request, and cleanup flow', async () => {
+    activateKlogcatExtensionModule(failedRequestsExtensionModule)
     seedKubernetesTargets()
     fakeBackend.settings = { ...defaultSettings, initialTailLines: 77 }
 

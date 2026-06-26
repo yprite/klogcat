@@ -40,9 +40,9 @@ try {
   await page.getByRole('dialog', { name: /select log targets/i }).waitFor()
   await page.getByText('No selectable pods loaded').waitFor()
   await page.getByRole('button', { name: 'Close' }).click()
-  await page.getByRole('tab', { name: 'Failed Requests' }).click()
-  await page.getByText('Request-centric investigation layer').waitFor()
-  await page.getByRole('tab', { name: 'Raw Logs' }).click()
+  const failedRequestsTabCount = await page.getByRole('tab', { name: 'Failed Requests' }).count()
+  if (failedRequestsTabCount !== 0) throw new Error('Failed Requests should not be a core production tab')
+  await page.getByRole('tab', { name: 'Raw Logs' }).waitFor()
   await page.getByRole('button', { name: 'Start', exact: true }).waitFor({ state: 'visible' })
   await page.getByText('Start: unavailable (Select namespace and pod)').waitFor()
 

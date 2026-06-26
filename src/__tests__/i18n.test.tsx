@@ -44,6 +44,11 @@ function resetKubeStore() {
   })
 }
 
+const koreanModes = [
+  { id: 'raw', label: 'Raw Logs', description: 'Source-of-truth log stream' },
+  { id: 'klogcat.example.failed-requests', label: 'Failed Requests', description: 'SDK-only request-centric investigation view' },
+]
+
 describe('Korean i18n rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -54,7 +59,7 @@ describe('Korean i18n rendering', () => {
 
   it('renders investigation tabs and query controls in Korean', () => {
     render(<>
-      <InvestigationModeSelector value="raw" onChange={() => undefined} />
+      <InvestigationModeSelector value="raw" modes={koreanModes} onChange={() => undefined} />
       <GrepBar />
     </>)
 

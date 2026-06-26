@@ -7,6 +7,8 @@ import { startLogStream } from './commands/tauriLogs'
 import type { ActiveStreamMeta, LogStreamExitEvent } from './types/log'
 import { buildScloudLogPath } from './utils/logPath'
 import { findFallbackPod } from './utils/podFallback'
+import { activateConfiguredKlogcatExtensions } from './extensions/logViewerExtensionLoader'
+import { configuredLogViewerExtensions } from './extensions/configuredLogViewerExtensions'
 
 function nextReconnectStreamId(oldStreamId: string) {
   return `${oldStreamId}-retry-${crypto.randomUUID()}`
@@ -137,6 +139,12 @@ export function handleLogExit(e: LogStreamExitEvent) {
 
 export default function App() {
   const [eventError, setEventError] = useState<string>()
+  const [extensionError, setExtensionError] = useState<string>()
+  useEffect(() => {
+    const activation = activateConfiguredKlogcatExtensions(configuredLogViewerExtensions)
+    setExtensionError(activation.errors.length ? `Extension load failed: ${activation.errors.map((error) => `${error.id}: ${error.message}`).join('; ')}` : undefined)
+    return () => activation.cleanup()
+  }, [])
   useEffect(() => {
     let cleanup: undefined | (() => void)
     subscribeLogEvents({
@@ -155,5 +163,5 @@ export default function App() {
     }).then((fn) => { cleanup = fn }).catch((e) => setEventError(String(e)))
     return () => { cleanup?.() }
   }, [])
-  return <AppShell eventError={eventError} />
+  return <AppShell eventError={eventError || extensionError} />
 }
