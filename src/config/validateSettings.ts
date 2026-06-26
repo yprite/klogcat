@@ -8,9 +8,10 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
+    ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
     ['initialTailLines', !integerInRange(value.initialTailLines, 0, 100000), 'initialTailLines must be 0..100000'],
     ['bufferLimit', !integerInRange(value.bufferLimit, 1000, 200000), 'bufferLimit must be 1000..200000'],
     ['defaultNamespace', value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string', 'defaultNamespace must be a string when provided'],

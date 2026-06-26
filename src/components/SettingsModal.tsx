@@ -6,6 +6,7 @@ import { useKubeStore } from '../stores/kubeStore'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
+import { t } from '../utils/i18n'
 import {
   assertValidLogPolicy,
   buildLogPathFromPolicy,
@@ -45,6 +46,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const recordActionDebug = useLogStore((s) => s.recordActionDebug)
   const clearCachedTargets = useKubeStore((s) => s.clearCachedTargets)
   const [draft, setDraft] = useState<PersistedSettings>(settings ?? defaultSettings)
+  const language = draft.language ?? settings?.language ?? 'en'
   const [selectedPolicyId, setSelectedPolicyId] = useState<LogPolicySelectionId>((settings ?? defaultSettings).logPolicyId ?? 'scloud')
   const [policyText, setPolicyText] = useState(() => JSON.stringify((settings ?? defaultSettings).logPolicy ?? getLogPolicy(), null, 2))
   const [showPathOverrides, setShowPathOverrides] = useState(false)
@@ -91,7 +93,8 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const errors = [...validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy }), ...(policyError ? [{ field: 'logPolicy', message: policyError }] : [])]
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
-  const setCustomPolicy = (policy: LogPolicy, message = 'Profile: Custom, based on SCloud') => {
+  const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
+  const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
     setSelectedPolicyId('custom')
     setPolicyText(JSON.stringify(policy, null, 2))
@@ -117,7 +120,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       setDraft(saved)
       setSelectedPolicyId(saved.logPolicyId ?? 'scloud')
       setPolicyText(JSON.stringify(saved.logPolicy ?? getLogPolicy(), null, 2))
-      setNotice('Settings reset to defaults')
+      setNotice(t(language, 'Settings reset to defaults'))
     }
   }
   const handleSave = async () => {
@@ -130,7 +133,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const handleClearTargetCache = () => {
     recordActionDebug('Clear target cache clicked')
     clearCachedTargets()
-    setNotice('Target cache cleared. Restart to reload fresh Kubernetes targets.')
+    setNotice(t(language, 'Target cache cleared. Restart to reload fresh Kubernetes targets.'))
   }
   const handleRestart = () => {
     recordActionDebug('Restart app clicked')
@@ -143,7 +146,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   }
   const handleTestPaths = async () => {
     if (!activeTarget) {
-      setNotice('Select a namespace and pod before testing paths.')
+      setNotice(t(language, 'Select a namespace and pod before testing paths.'))
       return
     }
     setTestingPaths(true)
@@ -168,13 +171,22 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
     <div aria-labelledby="settings-title" aria-modal="true" role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
-        <h2 className="text-lg font-bold" id="settings-title">Settings</h2>
+        <h2 className="text-lg font-bold" id="settings-title">{t(language, 'Settings')}</h2>
         <button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[12rem_minmax(0,1fr)] overflow-hidden">
         <SettingsNav />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
           <RuntimeSection draft={draft} setNum={setNum} />
+          <section id="settings-appearance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+            <h3 className="text-sm font-semibold text-white">{t(language, 'Appearance')}</h3>
+            <p className="mt-1 text-xs text-slate-400">{t(language, 'Choose the UI language used by top-level navigation and future localized labels.')}</p>
+            <label className="mt-2 block text-sm" htmlFor="settings-language">{t(language, 'Language')}</label>
+            <select id="settings-language" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={draft.language ?? 'en'} onChange={(e) => setLanguage(e.target.value as PersistedSettings['language'])}>
+              <option value="en">English / {t(language, 'English')}</option>
+              <option value="ko">한국어 / {t(language, 'Korean')}</option>
+            </select>
+          </section>
           <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />
           <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />
           <StatusMessages error={error} errors={errors} notice={notice} />
