@@ -24,6 +24,7 @@
     "security:license": "node scripts/harness/security-license.mjs",
     "harness:precommit": "scripts/harness/pre-commit.sh",
     "harness:prepush": "scripts/harness/pre-push.sh",
+    "wiki:release-report": "node scripts/harness/wiki-release-report.mjs",
     "start": "node ./bin/klogcat.js",
     "klogcat:build": "node ./bin/klogcat.js --build-only",
     "klogcat:dev": "node ./bin/klogcat.js --dev"

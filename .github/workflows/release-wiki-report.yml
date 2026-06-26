@@ -1,0 +1,44 @@
+name: Release Wiki Report
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to the wiki
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-wiki-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate pre-push report
+        run: npm run harness:prepush
+
+      - name: Publish release report to GitHub Wiki
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          npm run wiki:release-report -- --tag "$RELEASE_TAG" --remote "https://github.com/${{ github.repository }}.wiki.git"
