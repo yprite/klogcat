@@ -22,8 +22,13 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = !settings ? 'Settings are not loaded' : selectedSourceTypes.length === 0 ? 'Select at least one log type' : missingSourceConfig ? 'Settings are not loaded' : targets.length === 0 ? 'Select namespace and pod' : invalidTargets.length ? 'Every selected pod must be Running and have a container' : ''
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
+  const canStart = !startBusy && !alreadyRunning && !disabledReason
+  const canStop = alreadyRunning && !stopBusy
+  const canRestart = alreadyRunning && !startBusy && !stopBusy
+  const canPause = log.streamStatus === 'running' || log.viewerPaused
+  const hasRows = log.rows.length > 0
   const operationActive = startBusy || kube.loadingPods || kube.cacheRefreshing
-  const operationLabel = log.streamStatus === 'starting' ? 'Starting streams' : log.streamStatus === 'stopping' ? 'Stopping streams' : kube.loadingPods ? 'Refreshing pods' : kube.cacheRefreshing ? 'Refreshing target cache' : 'Ready'
+  const operationLabel = log.streamStatus === 'starting' ? 'Starting streams' : log.streamStatus === 'stopping' ? 'Stopping streams' : kube.loadingPods ? 'Refreshing pods' : kube.cacheRefreshing ? 'Refreshing target cache' : targets.length === 0 ? 'Waiting for target' : alreadyRunning ? 'Streaming' : 'Idle'
   const operationDetail = log.streamStatus === 'starting' ? `${log.activeStreamIds.length}/${Math.max(1, targets.length * selectedSourceTypes.length)} streams` : kube.loadingPods ? `${targets.length || 1} target scope` : undefined
   const start = async (allowRestart = false) => {
     log.recordActionDebug(`Start clicked: status=${log.streamStatus}, targets=${targets.map(t=>`${t.context}/${t.namespace}/${t.pod.name}/${containerFor(t.pod.containers)}`).join(', ') || '(none)'}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`)
@@ -137,9 +142,9 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
       </div>
       <div className="flex items-center gap-2">
         {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
-        <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={startBusy || alreadyRunning} title={startBlockedReason} onClick={() => void start()}>Start</button>
-        <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={stopBusy} onClick={stop}>Stop</button>
-        <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={startBusy || stopBusy} onClick={() => void restart()}>Restart</button>
+        <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canStart} title={startBlockedReason || 'Start selected target streams'} onClick={() => void start()}>Start</button>
+        <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canStop} title={canStop ? 'Stop active streams' : 'No active stream to stop'} onClick={stop}>Stop</button>
+        <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canRestart} title={canRestart ? 'Restart active streams' : 'Start a stream before restarting'} onClick={() => void restart()}>Restart</button>
       </div>
       {operationActive && <div className="mt-2"><ProgressStripe label={`${operationLabel} progress`} /></div>}
     </div>
@@ -147,12 +152,12 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     <div aria-label="Viewer controls" className="rounded border border-slate-800 bg-slate-950/60 p-2">
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Viewer controls</div>
       <div className="flex flex-wrap items-center gap-2">
-        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => {
+        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canPause} title={canPause ? 'Pause or resume log rendering' : 'Start a stream before pausing'} onClick={() => {
           log.recordActionDebug(`${log.viewerPaused ? 'Resume' : 'Pause'} clicked`)
           if (log.viewerPaused) log.resume()
           else log.pause()
         }}>{log.viewerPaused ? 'Resume' : 'Pause'}</button>
-        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
+        <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!hasRows} title={hasRows ? 'Clear buffered logs' : 'No logs to clear'} onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>Clear</button>
         <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.autoScrollEnabled} onChange={e=>{ log.recordActionDebug(`Auto-scroll changed: ${e.target.checked}`); log.setAutoScrollEnabled(e.target.checked) }} /> Auto-scroll</label>
         <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.reconnectEnabled} onChange={e=>{ log.recordActionDebug(`Reconnect changed: ${e.target.checked}`); log.setReconnectEnabled(e.target.checked) }} /> Auto-reconnect</label>
       </div>
@@ -162,10 +167,10 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Runtime status</div>
       <div className="grid grid-cols-3 gap-2 text-xs">
         <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Targets</span><strong className="ml-2 text-slate-100">{targets.length}</strong></span>
-        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Status</span><strong className="ml-2 text-slate-100">{log.streamStatus}</strong></span>
-        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Start</span><strong className="ml-2 text-slate-100">{startBusy || alreadyRunning ? 'disabled' : 'enabled'}</strong></span>
+        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Status</span><strong className="ml-2 text-slate-100">{operationLabel}</strong></span>
+        <span className="rounded border border-slate-800 bg-slate-900 px-2 py-1"><span className="text-slate-500">Start</span><strong className="ml-2 text-slate-100">{canStart ? 'enabled' : 'unavailable'}</strong></span>
       </div>
-      <p className="mt-2 truncate text-xs text-slate-400" title={startBlockedReason}>Start: {startBusy || alreadyRunning ? 'disabled' : 'enabled'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</p>
+      <p className="mt-2 truncate text-xs text-slate-400" title={startBlockedReason}>Start: {canStart ? 'enabled' : 'unavailable'}{startBlockedReason ? ` (${startBlockedReason})` : ''}</p>
       {log.latestStderr && <p className="mt-1 truncate text-xs text-yellow-300" title={log.latestStderr}>stderr: {log.latestStderr}</p>}
       {log.totalDroppedCount > 0 && <p className="mt-1 text-xs text-yellow-300">Dropped: {log.totalDroppedCount}</p>}
     </div>

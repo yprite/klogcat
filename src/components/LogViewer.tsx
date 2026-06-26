@@ -146,6 +146,7 @@ export function LogViewer() {
   const skipNextColumnPersistRef = useRef(false)
   const [highlightedRowIds, setHighlightedRowIds] = useState<Set<number>>(() => new Set())
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
+  const openTargetPicker = () => window.dispatchEvent(new Event('klogcat:open-target-picker'))
   useEffect(() => {
     if (availableColumns.length === 0 && !columnsInitializedRef.current) return
     if (savedColumnSettingsRef.current === undefined) savedColumnSettingsRef.current = readLogViewerColumnSettings()
@@ -320,19 +321,21 @@ export function LogViewer() {
           </span>
         })}
       </div>}
-      {emptyState && <div className="absolute inset-0 flex items-start justify-center p-10">
+      {emptyState && <div className="absolute inset-0 flex items-start justify-center p-10 font-sans">
         <div className="w-[36rem] max-w-full rounded border border-dashed border-slate-700 bg-slate-900/80 p-5 text-center shadow-lg shadow-black/20">
           <p className="text-base font-semibold text-slate-100">{emptyState.title}</p>
           <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
           <p className="mt-3 text-xs text-slate-500">Stream status: {streamStatus}</p>
+          {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">Choose Target</button>}
         </div>
       </div>}
       {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
   <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
-    <button type="button" onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
-    <button type="button" onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
+    <span className="text-slate-400">Rows: {filteredRows.length}/{visibleRows.length}</span>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
     <span className="text-slate-400">Selected: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : 'none'}</span>
   </div>
   {selectedRow && <aside aria-label="Log row detail" className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">
