@@ -220,4 +220,16 @@ describe('SettingsModal log policy selection', () => {
       }),
     })))
   })
+
+  it('saves the selected UI language', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/language/i), { target: { value: 'ko' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'ko',
+    })))
+  })
 })
