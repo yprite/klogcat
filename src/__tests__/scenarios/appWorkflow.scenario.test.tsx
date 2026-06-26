@@ -7,6 +7,9 @@ import { resetLogStoreForTests, useLogStore } from '../../stores/logStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import type { ParsedLogLine } from '../../types/log'
 import { startLogStream, stopLogStream } from '../../commands/tauriLogs'
+import { failedRequestsExtensionModule } from '../../extensions/examples/FailedRequestsExtension'
+import { activateKlogcatExtensionModule } from '../../extensions/logViewerExtensionLoader'
+import { resetLogViewerExtensionsForTests } from '../../extensions/logViewerExtensions'
 
 vi.mock('../../commands/tauriLogs', () => ({
   startLogStream: vi.fn(async () => undefined),
@@ -83,6 +86,7 @@ function installLocalStorageMock() {
 }
 
 function arrangeReadyAppState() {
+  resetLogViewerExtensionsForTests()
   resetLogStoreForTests()
   useSettingsStore.setState({ settings: defaultSettings, warning: undefined, loading: false, error: undefined })
   useKubeStore.setState({
@@ -122,7 +126,9 @@ describe('main investigation workflow scenario', () => {
     arrangeReadyAppState()
   })
 
-  it('moves through target-ready stream controls, raw filtering, failed request mode, and settings', async () => {
+  it('moves through target-ready stream controls, raw filtering, extension mode, and settings', async () => {
+    activateKlogcatExtensionModule(failedRequestsExtensionModule)
+
     render(<AppShell />)
 
     expect(screen.getByText('klogcat')).toBeInTheDocument()

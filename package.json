@@ -59,6 +59,12 @@
   "bin": {
     "klogcat": "./bin/klogcat.js"
   },
+  "exports": {
+    "./sdk/log-viewer": {
+      "types": "./src/sdk/log-viewer.ts",
+      "default": "./src/sdk/log-viewer.ts"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/yprite/klogcat.git"
