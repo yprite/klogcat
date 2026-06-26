@@ -53,7 +53,11 @@ describe('wiki release report publisher', () => {
     expect(index).toContain('- [v0.0.7](Release-Report-v0.0.7) — `adc3e04`')
 
     const home = fs.readFileSync(path.join(wikiDir, 'Home.md'), 'utf8')
+    expect(home).toContain('# klogcat')
+    expect(home).toContain('Kubernetes pod 안의 로그 파일')
+    expect(home).toContain('## 메뉴')
     expect(home).toContain('[릴리즈 보고서](Release-Reports)')
+    expect(home).toContain('## 운영/품질 리포팅')
 
     expect(fs.existsSync(path.join(wikiDir, 'artifacts', 'v0.0.7', 'test-results.json'))).toBe(true)
     expect(fs.existsSync(path.join(wikiDir, 'artifacts', 'v0.0.7', 'logs', 'test-stress.out'))).toBe(true)

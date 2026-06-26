@@ -123,14 +123,95 @@ ${summaryMarkdown}
 
 function upsertHome(dir) {
   const homePath = path.join(dir, 'Home.md')
+  const landingPage = renderHomePage()
   if (!fs.existsSync(homePath)) {
-    fs.writeFileSync(homePath, '# klogcat Wiki\n\n- [릴리즈 보고서](Release-Reports)\n', 'utf8')
+    fs.writeFileSync(homePath, landingPage, 'utf8')
     return
   }
+
   const content = fs.readFileSync(homePath, 'utf8')
-  if (!content.includes('Release-Reports')) {
-    fs.writeFileSync(homePath, `${content.trim()}\n\n- [릴리즈 보고서](Release-Reports)\n`, 'utf8')
+  if (isManagedHome(content)) {
+    fs.writeFileSync(homePath, landingPage, 'utf8')
+    return
   }
+
+  if (!content.includes('Release-Reports')) {
+    fs.writeFileSync(homePath, `${content.trim()}\n\n## 운영 메뉴\n\n- [릴리즈 보고서](Release-Reports)\n`, 'utf8')
+  }
+}
+
+function renderHomePage() {
+  return `<!-- klogcat:managed-home -->
+# klogcat
+
+Kubernetes pod 안의 로그 파일을 빠르게 선택하고 실시간으로 tail 하는 Tauri + React 데스크톱 로그 뷰어입니다.
+
+## 메뉴
+
+- [릴리즈 보고서](Release-Reports) — 릴리즈마다 생성된 테스트/스트레스/품질 검증 보고서
+- [설치](#설치) — GitHub에서 설치하고 처음 실행하기
+- [사용 흐름](#사용-흐름) — context, namespace, pod, container, file path 선택 후 로그 스트리밍
+- [문제 해결](#문제-해결) — 로그가 안 보이거나 버튼 동작이 막힐 때 확인할 것
+
+## 주요 기능
+
+- Kubernetes context/namespace/pod/container 선택
+- pod 내부 파일 경로를 \`tail -F\`로 실시간 스트리밍
+- grep 필터와 일시정지로 로그 탐색
+- Start/Stop/Reset 버튼의 명확한 상태 피드백
+- 터미널 진단 모드로 실제 \`kubectl exec ... tail -F ...\` 명령 확인
+
+## 설치
+
+Debian/Ubuntu Linux에서 처음 빌드한다면 native dependency를 먼저 설치하세요.
+
+\`\`\`bash
+sudo apt-get update
+sudo apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
+\`\`\`
+
+그 다음 GitHub에서 설치합니다.
+
+\`\`\`bash
+npm install -g git+ssh://git@github.com/yprite/klogcat.git
+klogcat
+\`\`\`
+
+처음 실행하면 로컬에서 Tauri native binary를 빌드한 뒤 앱을 실행합니다.
+
+## 사용 흐름
+
+1. \`klogcat\` 실행
+2. Kubernetes context 선택
+3. namespace, pod, container 선택
+4. 로그 파일 경로 입력
+5. **Start**로 스트리밍 시작
+6. 필요하면 grep 필터, pause, reset 사용
+
+## 문제 해결
+
+앱은 열리지만 로그가 보이지 않으면 진단 모드로 실행하세요.
+
+\`\`\`bash
+klogcat --debug
+\`\`\`
+
+진단 모드에서는 터미널에 다음 정보가 출력됩니다.
+
+- 실제 \`kubectl exec ... tail -F ...\` 명령
+- pod 파일에서 받은 stdout 라인
+- \`kubectl\` / \`tail\` stderr
+- stream 종료 코드 또는 signal
+
+## 운영/품질 리포팅
+
+릴리즈가 발행될 때마다 Wiki의 [릴리즈 보고서](Release-Reports)에 검증 결과가 자동으로 추가됩니다.
+각 보고서에는 요약 Markdown, JSON 결과, command 결과, 원본 로그 artifact 링크가 포함됩니다.
+`
+}
+
+function isManagedHome(content) {
+  return content.includes('<!-- klogcat:managed-home -->') || content.trim() === '# klogcat Wiki\n\n- [릴리즈 보고서](Release-Reports)'
 }
 
 function upsertReleaseIndex(dir, release) {
