@@ -7,6 +7,8 @@ use tauri::Manager;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PersistedSettings {
     pub schema_version: u8,
+    #[serde(default = "default_language")]
+    pub language: String,
     pub default_namespace: Option<String>,
     pub initial_tail_lines: u32,
     pub buffer_limit: u32,
@@ -36,9 +38,14 @@ pub struct GetSettingsResponse {
     pub warning: Option<SettingsWarning>,
 }
 
+fn default_language() -> String {
+    "en".into()
+}
+
 pub fn default_settings() -> PersistedSettings {
     PersistedSettings {
         schema_version: 1,
+        language: default_language(),
         default_namespace: None,
         initial_tail_lines: 200,
         buffer_limit: 50_000,
@@ -80,6 +87,7 @@ const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
 pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> {
     let mut errors = Vec::new();
     validate_schema_version(s, &mut errors);
+    validate_language(s, &mut errors);
     validate_runtime_limits(s, &mut errors);
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
@@ -90,6 +98,12 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
 fn validate_schema_version(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     if s.schema_version != 1 {
         errors.push(err("schemaVersion", "schemaVersion must be 1"));
+    }
+}
+
+fn validate_language(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
+    if s.language != "en" && s.language != "ko" {
+        errors.push(err("language", "language must be en or ko"));
     }
 }
 
