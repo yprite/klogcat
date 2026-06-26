@@ -81,50 +81,86 @@ fn debug_enabled() -> bool {
     env::var("KLOGCAT_DEBUG").is_ok_and(|v| !matches!(v.as_str(), "" | "0" | "false" | "False"))
         || env::args().any(|arg| arg == "--debug")
 }
+
+const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
+
 pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> {
-    let mut e = Vec::new();
+    let mut errors = Vec::new();
+    validate_schema_version(s, &mut errors);
+    validate_language(s, &mut errors);
+    validate_runtime_limits(s, &mut errors);
+    validate_log_policy_id(s, &mut errors);
+    validate_log_source_keys(s, &mut errors);
+    validate_log_sources(s, &mut errors);
+    errors
+}
+
+fn validate_schema_version(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     if s.schema_version != 1 {
-        e.push(err("schemaVersion", "schemaVersion must be 1"));
+        errors.push(err("schemaVersion", "schemaVersion must be 1"));
     }
+}
+
+fn validate_language(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     if s.language != "en" && s.language != "ko" {
-        e.push(err("language", "language must be en or ko"));
+        errors.push(err("language", "language must be en or ko"));
     }
+}
+
+fn validate_runtime_limits(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     if s.initial_tail_lines > 100000 {
-        e.push(err(
+        errors.push(err(
             "initialTailLines",
             "initialTailLines must be 0..100000",
         ));
     }
     if s.buffer_limit < 1000 || s.buffer_limit > 200000 {
-        e.push(err("bufferLimit", "bufferLimit must be 1000..200000"));
+        errors.push(err("bufferLimit", "bufferLimit must be 1000..200000"));
     }
-    if let Some(log_policy_id) = &s.log_policy_id {
-        if log_policy_id != "scloud" && log_policy_id != "custom" {
-            e.push(err("logPolicyId", "logPolicyId must be scloud or custom"));
-        }
+}
+
+fn validate_log_policy_id(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
+    let Some(log_policy_id) = &s.log_policy_id else {
+        return;
+    };
+    if log_policy_id != "scloud" && log_policy_id != "custom" {
+        errors.push(err("logPolicyId", "logPolicyId must be scloud or custom"));
     }
+}
+
+fn validate_log_source_keys(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     let keys: Vec<_> = s.log_sources.keys().map(String::as_str).collect();
-    if keys != vec!["access", "error", "info"] {
-        e.push(err(
+    if keys.as_slice() != REQUIRED_LOG_SOURCE_KEYS {
+        errors.push(err(
             "logSources",
             "logSources must contain exactly info/access/error keys",
         ));
     }
+}
+
+fn validate_log_sources(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     for (k, v) in &s.log_sources {
-        if v.container.trim().is_empty() {
-            e.push(err(
-                format!("logSources.{k}.container"),
-                "container is required",
-            ));
-        }
-        if !v.file_path.starts_with('/') || v.file_path.contains('\0') {
-            e.push(err(
-                format!("logSources.{k}.filePath"),
-                "filePath must be an absolute path without null bytes",
-            ));
-        }
+        validate_log_source(k, v, errors);
     }
-    e
+}
+
+fn validate_log_source(
+    key: &str,
+    source: &LogSourceConfig,
+    errors: &mut Vec<SettingsValidationError>,
+) {
+    if source.container.trim().is_empty() {
+        errors.push(err(
+            format!("logSources.{key}.container"),
+            "container is required",
+        ));
+    }
+    if !source.file_path.starts_with('/') || source.file_path.contains('\0') {
+        errors.push(err(
+            format!("logSources.{key}.filePath"),
+            "filePath must be an absolute path without null bytes",
+        ));
+    }
 }
 fn err(field: impl Into<String>, message: impl Into<String>) -> SettingsValidationError {
     SettingsValidationError {
@@ -177,48 +213,19 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
         eprintln!("[klogcat debug] loading settings from {}", path.display());
     }
     if !path.exists() {
-        let s = default_settings();
-        save_to_path(path, s.clone())?;
-        return Ok(GetSettingsResponse {
-            settings: s,
-            warning: None,
-        });
+        return save_default_settings(path);
     }
-    let text = match fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) => {
+    let mut value = match read_settings_json(&path) {
+        Ok(value) => value,
+        Err(warning) => {
             return Ok(GetSettingsResponse {
                 settings: default_settings(),
-                warning: Some(SettingsWarning {
-                    code: "read_failed".into(),
-                    message: "Failed to read settings; using defaults".into(),
-                    details: Some(e.to_string()),
-                }),
-            })
-        }
-    };
-    let mut value: serde_json::Value = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(e) => {
-            return Ok(GetSettingsResponse {
-                settings: default_settings(),
-                warning: Some(SettingsWarning {
-                    code: "parse_failed".into(),
-                    message: "Failed to parse settings; using defaults".into(),
-                    details: Some(e.to_string()),
-                }),
-            })
+                warning: Some(warning),
+            });
         }
     };
     migrate_legacy_app_log_source(&mut value);
-    let settings: PersistedSettings = serde_json::from_value(value).map_err(|e| {
-        CommandError::new("settings_validation_failed", "settings validation failed")
-            .with_details(e.to_string())
-            .with_validation_errors(vec![SettingsValidationError {
-                field: "settings".into(),
-                message: e.to_string(),
-            }])
-    })?;
+    let settings = load_settings_from_value(value)?;
     let errors = validate_settings(&settings);
     if !errors.is_empty() {
         return Err(
@@ -238,24 +245,76 @@ pub fn save_to_path(
     if debug_enabled() {
         eprintln!("[klogcat debug] saving settings to {}", path.display());
     }
-    let errors = validate_settings(&settings);
-    if !errors.is_empty() {
-        return Err(
-            CommandError::new("settings_validation_failed", "settings validation failed")
-                .with_validation_errors(errors),
-        );
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            CommandError::new(
-                "settings_save_failed",
-                "failed to create settings directory",
-            )
+    ensure_settings_valid(&settings)?;
+    persist_settings(path, &settings)?;
+    Ok(settings)
+}
+
+fn save_default_settings(path: PathBuf) -> Result<GetSettingsResponse, CommandError> {
+    let settings = default_settings();
+    save_to_path(path, settings.clone())?;
+    Ok(GetSettingsResponse {
+        settings,
+        warning: None,
+    })
+}
+
+fn read_settings_json(path: &PathBuf) -> Result<serde_json::Value, SettingsWarning> {
+    let text = fs::read_to_string(path).map_err(|e| {
+        settings_warning(
+            "read_failed",
+            "Failed to read settings; using defaults",
+            e.to_string(),
+        )
+    })?;
+
+    serde_json::from_str(&text).map_err(|e| {
+        settings_warning(
+            "parse_failed",
+            "Failed to parse settings; using defaults",
+            e.to_string(),
+        )
+    })
+}
+
+fn load_settings_from_value(value: serde_json::Value) -> Result<PersistedSettings, CommandError> {
+    serde_json::from_value(value).map_err(|e| {
+        CommandError::new("settings_validation_failed", "settings validation failed")
             .with_details(e.to_string())
-        })?;
+            .with_validation_errors(vec![SettingsValidationError {
+                field: "settings".into(),
+                message: e.to_string(),
+            }])
+    })
+}
+
+fn settings_warning(
+    code: impl Into<String>,
+    message: impl Into<String>,
+    details: String,
+) -> SettingsWarning {
+    SettingsWarning {
+        code: code.into(),
+        message: message.into(),
+        details: Some(details),
     }
+}
+
+fn ensure_settings_valid(settings: &PersistedSettings) -> Result<(), CommandError> {
+    let errors = validate_settings(settings);
+    if errors.is_empty() {
+        return Ok(());
+    }
+    Err(
+        CommandError::new("settings_validation_failed", "settings validation failed")
+            .with_validation_errors(errors),
+    )
+}
+
+fn persist_settings(path: PathBuf, settings: &PersistedSettings) -> Result<(), CommandError> {
+    ensure_parent_directory(path.as_path())?;
     let tmp = path.with_extension("json.tmp");
-    let text = serde_json::to_string_pretty(&settings).map_err(|e| {
+    let text = serde_json::to_string_pretty(settings).map_err(|e| {
         CommandError::new("settings_save_failed", "failed to serialize settings")
             .with_details(e.to_string())
     })?;
@@ -267,7 +326,20 @@ pub fn save_to_path(
         CommandError::new("settings_save_failed", "failed to replace settings")
             .with_details(e.to_string())
     })?;
-    Ok(settings)
+    Ok(())
+}
+
+fn ensure_parent_directory(path: &std::path::Path) -> Result<(), CommandError> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    fs::create_dir_all(parent).map_err(|e| {
+        CommandError::new(
+            "settings_save_failed",
+            "failed to create settings directory",
+        )
+        .with_details(e.to_string())
+    })
 }
 
 #[cfg(test)]

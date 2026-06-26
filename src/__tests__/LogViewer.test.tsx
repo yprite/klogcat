@@ -146,7 +146,8 @@ describe('LogViewer', () => {
     render(<LogViewer />)
 
     expect(screen.getByText('No log target selected')).toBeInTheDocument()
-    expect(screen.getByText(/Use Change Targets/)).toBeInTheDocument()
+    expect(screen.getByText(/Use Choose Target/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose Target' })).toBeEnabled()
   })
 
   it('guides the user to start streaming when targets exist but rows are empty', () => {

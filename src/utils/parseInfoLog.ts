@@ -3,14 +3,16 @@ import { getLogPolicy, type LogPolicy } from './logPolicy'
 import type { ParsedLogLineWithoutId } from './parserHelpers'
 import { base, field, nonEmptySummary, numField, rec, strField } from './parserHelpers'
 
+function bodySummaryFrom(body: unknown) {
+  if (typeof body === 'string') return body
+  if (body === undefined) return undefined
+  try { return JSON.stringify(body) } catch { return String(body) }
+}
+
 export function parseInfoLog(json: unknown, raw: string, sourceMeta: SourceMeta, receivedAt: number, policy: LogPolicy = getLogPolicy()): ParsedLogLineWithoutId {
   const j = rec(json) ?? {}
   const body = field(j, policy.parser.base.body)
-  let bodySummary: string | undefined
-  if (typeof body === 'string') bodySummary = body
-  else if (body !== undefined) {
-    try { bodySummary = JSON.stringify(body) } catch { bodySummary = String(body) }
-  }
+  const bodySummary = bodySummaryFrom(body)
   const access = policy.parser.access
   const message = strField(j, policy.parser.info.message)
   const status = strField(j, access.status)

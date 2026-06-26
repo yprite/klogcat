@@ -72,6 +72,15 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getAllByText('Running').length).toBeGreaterThan(0)
   })
 
+  it('does not expose Change Targets before a log target is selected', () => {
+    useKubeStore.setState({ selectedPod: undefined, selectedPods: {} })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    expect(screen.getByText('Targets: 0 selected')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /change targets/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeEnabled()
+  })
+
   it('collapses and expands each cluster in the target picker', () => {
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
 
@@ -134,8 +143,8 @@ describe('TopBar target picker', () => {
       selectedNamespaces: {},
       pods: [],
       podsByScope: {},
-      selectedPod: undefined,
-      selectedPods: {},
+      selectedPod: 'stale-selected-pod',
+      selectedPods: { [scopeKey('ctx', 'default')]: ['stale-selected-pod'] },
       error: { code: 'kubectl_failed', message: 'kubectl unavailable' },
     })
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
@@ -224,6 +233,30 @@ describe('TopBar target picker', () => {
     expect(within(dialog).getByLabelText(/target discovery progress/i).querySelector('.animate-klogcat-progress')).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Loading namespaces for ctx')).toBeInTheDocument()
     await waitFor(() => expect(useKubeStore.getState().loadingNamespaces).toBe(false))
+  })
+
+  it('shows namespace pod loading state for selected namespaces without loaded pods', () => {
+    useKubeStore.setState({
+      podsByScope: { [scopeKey('ctx', 'default')]: [] },
+      selectedPods: {},
+      loadingPods: true,
+    })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByRole('status', { name: /loading pods for default/i })).toHaveTextContent(/loading pods/i)
+  })
+
+  it('renders legacy selected pod values without scoped separators', () => {
+    useKubeStore.setState({ selectedPods: { legacy: ['legacy-pod'] } })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByText(/legacy-pod/)).toBeInTheDocument()
   })
 
   it('animates cache refresh progress in the top bar', () => {

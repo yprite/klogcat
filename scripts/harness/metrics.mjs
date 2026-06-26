@@ -18,6 +18,15 @@ const defaultThresholds = {
   maintainability: 60,
 }
 
+const staticQualityPolicy = {
+  version: 1,
+  northStarScore: 900,
+  minimumGateScore: 600,
+  complexFunctionBudget: 5,
+  averageMaintainabilityTarget: 75,
+  averageCouplingTarget: 6,
+}
+
 const args = new Set(process.argv.slice(2))
 const modeArg = process.argv.find((arg) => arg.startsWith('--mode='))
 const mode = modeArg ? modeArg.slice('--mode='.length) : 'prepush'
@@ -51,13 +60,17 @@ function main() {
   }
 
   const analysis = analyzeFiles(selectedFiles, contentByFile, allSourceFiles, rules)
+  const staticQuality = calculateStaticQuality(analysis)
   const effectiveThresholds = buildEffectiveThresholds(baseline)
-  const violations = evaluateViolations(analysis, effectiveThresholds, mode)
+  const effectiveStaticQualityGate = buildEffectiveStaticQualityGate(baseline)
+  const violations = evaluateViolations(analysis, effectiveThresholds, mode, staticQuality, effectiveStaticQualityGate)
 
   const report = {
     mode,
     generatedAt: new Date().toISOString(),
     thresholds: effectiveThresholds,
+    staticQualityGate: effectiveStaticQualityGate,
+    staticQuality,
     summary: analysis.summary,
     violations,
     files: analysis.files,
@@ -76,6 +89,11 @@ function main() {
       version: 1,
       generatedAt: new Date().toISOString(),
       thresholds: defaultThresholds,
+      staticQuality: {
+        policy: staticQualityPolicy,
+        score: staticQuality.score,
+        phase: staticQuality.phase,
+      },
       repository: analysis.summary,
     }
     fs.writeFileSync(baselinePath, `${JSON.stringify(nextBaseline, null, 2)}\n`)
@@ -121,6 +139,15 @@ function analyzeFiles(files, contentByFile, allSourceFiles, rules) {
   const maxFileLines = max(fileReports.map((file) => file.nonBlankLines), 0)
   const maxCoupling = max(fileReports.map((file) => file.coupling), 0)
   const minMaintainability = min(fileReports.map((file) => file.maintainability), 100)
+  const avgMaintainability = average(fileReports.map((file) => file.maintainability))
+  const avgCoupling = average(fileReports.map((file) => file.coupling))
+  const overComplexFunctionCount = allFunctions.filter((fn) =>
+    fn.cyclomaticComplexity > defaultThresholds.cyclomaticComplexity ||
+    fn.cognitiveComplexity > defaultThresholds.cognitiveComplexity,
+  ).length
+  const lowMaintainabilityFileCount = fileReports.filter((file) =>
+    file.maintainability < defaultThresholds.maintainability,
+  ).length
 
   return {
     summary: {
@@ -132,6 +159,10 @@ function analyzeFiles(files, contentByFile, allSourceFiles, rules) {
       maxFileLines,
       maxCoupling,
       minMaintainability,
+      avgMaintainability,
+      avgCoupling,
+      overComplexFunctionCount,
+      lowMaintainabilityFileCount,
       cycleCount: cycles.length,
       architectureViolationCount: architectureViolations.length,
     },
@@ -139,6 +170,61 @@ function analyzeFiles(files, contentByFile, allSourceFiles, rules) {
     cycles,
     architectureViolations,
   }
+}
+
+function calculateStaticQuality(analysis) {
+  const summary = analysis.summary
+  const architectureScore = boundedScore(125 - summary.cycleCount * 75) +
+    boundedScore(125 - summary.architectureViolationCount * 75)
+  const maintainabilityScore =
+    120 * higherBetter(summary.minMaintainability, defaultThresholds.maintainability) +
+    80 * higherBetter(summary.avgMaintainability, staticQualityPolicy.averageMaintainabilityTarget)
+  const complexityScore =
+    90 * lowerBetter(summary.maxCyclomaticComplexity, defaultThresholds.cyclomaticComplexity) +
+    110 * lowerBetter(summary.maxCognitiveComplexity, defaultThresholds.cognitiveComplexity) +
+    50 * countBetter(summary.overComplexFunctionCount, staticQualityPolicy.complexFunctionBudget)
+  const sizeScore =
+    90 * lowerBetter(summary.maxFunctionLines, defaultThresholds.functionLines) +
+    60 * lowerBetter(summary.maxFileLines, defaultThresholds.fileLines)
+  const couplingScore =
+    100 * lowerBetter(summary.maxCoupling, defaultThresholds.coupling) +
+    50 * lowerBetter(summary.avgCoupling, staticQualityPolicy.averageCouplingTarget)
+  const score = roundScore(architectureScore + maintainabilityScore + complexityScore + sizeScore + couplingScore)
+
+  return {
+    policy: staticQualityPolicy,
+    score,
+    northStarScore: staticQualityPolicy.northStarScore,
+    phase: staticQualityPhase(score),
+    components: {
+      architecture: roundScore(architectureScore),
+      maintainability: roundScore(maintainabilityScore),
+      complexity: roundScore(complexityScore),
+      size: roundScore(sizeScore),
+      coupling: roundScore(couplingScore),
+    },
+    inputs: {
+      maxCyclomaticComplexity: summary.maxCyclomaticComplexity,
+      maxCognitiveComplexity: summary.maxCognitiveComplexity,
+      overComplexFunctionCount: summary.overComplexFunctionCount,
+      maxFunctionLines: summary.maxFunctionLines,
+      maxFileLines: summary.maxFileLines,
+      maxCoupling: summary.maxCoupling,
+      avgCoupling: summary.avgCoupling,
+      minMaintainability: summary.minMaintainability,
+      avgMaintainability: summary.avgMaintainability,
+      cycleCount: summary.cycleCount,
+      architectureViolationCount: summary.architectureViolationCount,
+    },
+  }
+}
+
+function staticQualityPhase(score) {
+  if (score >= staticQualityPolicy.northStarScore) return 'north-star-900'
+  if (score >= 800) return 'product-hardening-800'
+  if (score >= 700) return 'architecture-improvement-700'
+  if (score >= staticQualityPolicy.minimumGateScore) return 'stabilization-600'
+  return 'foundation-below-600'
 }
 
 function analyzeTypeScriptFile(file, content, allFileSet) {
@@ -238,15 +324,17 @@ function analyzeRustFile(file, content, allFileSet) {
   const lines = content.split(/\r?\n/)
   const functions = []
   const imports = new Set()
+  const sanitizeForImports = makeRustCodeSanitizer()
 
   for (let i = 0; i < lines.length; i += 1) {
-    const modMatch = lines[i].match(/^\s*(?:pub\s+)?mod\s+([a-zA-Z0-9_]+)\s*;/)
+    const codeLine = sanitizeForImports(lines[i])
+    const modMatch = codeLine.match(/^\s*(?:pub\s+)?mod\s+([a-zA-Z0-9_]+)\s*;/)
     if (modMatch) {
       const resolved = resolveRustModule(file, modMatch[1], allFileSet)
       if (resolved) imports.add(resolved)
     }
 
-    const useMatch = lines[i].match(/^\s*use\s+crate::([a-zA-Z0-9_]+)(?:::([a-zA-Z0-9_]+))?/)
+    const useMatch = codeLine.match(/^\s*use\s+crate::([a-zA-Z0-9_]+)(?:::([a-zA-Z0-9_]+))?/)
     if (useMatch) {
       const resolved = resolveRustCrateUse(useMatch[1], useMatch[2], allFileSet)
       if (resolved && resolved !== file && !isRustParentModuleReference(file, resolved)) imports.add(resolved)
@@ -261,9 +349,10 @@ function analyzeRustFile(file, content, allFileSet) {
     let end = i
     let braceDepth = 0
     let seenBody = false
+    const sanitizeForBody = makeRustCodeSanitizer()
 
     for (let j = i; j < lines.length; j += 1) {
-      const line = stripLineComment(lines[j])
+      const line = sanitizeForBody(lines[j])
       const open = countMatches(line, /\{/g)
       const close = countMatches(line, /\}/g)
       if (open > 0) seenBody = true
@@ -293,9 +382,10 @@ function computeRustComplexity(lines) {
   let cyclomaticComplexity = 1
   let cognitiveComplexity = 0
   let nesting = 0
+  const sanitize = makeRustCodeSanitizer()
 
   for (const rawLine of lines) {
-    const line = stripLineComment(rawLine)
+    const line = sanitize(rawLine)
     const decisions = countMatches(line, /\b(if|for|while|loop|match)\b|\?|&&|\|\|/g)
     if (decisions > 0) {
       cyclomaticComplexity += decisions
@@ -305,6 +395,96 @@ function computeRustComplexity(lines) {
   }
 
   return { cyclomaticComplexity, cognitiveComplexity }
+}
+
+function makeRustCodeSanitizer() {
+  let inBlockComment = false
+  return (line) => {
+    let out = ''
+    let inString = false
+    let inChar = false
+    let inRawString = false
+    let rawHashes = 0
+    let escaped = false
+
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i]
+      const next = line[i + 1]
+
+      if (inBlockComment) {
+        if (char === '*' && next === '/') {
+          inBlockComment = false
+          i += 1
+        }
+        out += ' '
+        continue
+      }
+
+      if (inRawString) {
+        if (char === '"') {
+          let hashes = 0
+          while (line[i + 1 + hashes] === '#') hashes += 1
+          if (hashes === rawHashes) {
+            inRawString = false
+            i += hashes
+          }
+        }
+        out += ' '
+        continue
+      }
+
+      if (inString) {
+        if (!escaped && char === '"') inString = false
+        escaped = !escaped && char === '\\'
+        if (char !== '\\') escaped = false
+        out += ' '
+        continue
+      }
+
+      if (inChar) {
+        if (!escaped && char === "'") inChar = false
+        escaped = !escaped && char === '\\'
+        if (char !== '\\') escaped = false
+        out += ' '
+        continue
+      }
+
+      if (char === '/' && next === '/') break
+      if (char === '/' && next === '*') {
+        inBlockComment = true
+        out += ' '
+        i += 1
+        continue
+      }
+      if (char === 'r' && (next === '"' || next === '#')) {
+        const rest = line.slice(i)
+        const match = rest.match(/^r(#+)?"/)
+        if (match) {
+          inRawString = true
+          rawHashes = match[1]?.length ?? 0
+          out += ' '.repeat(match[0].length)
+          i += match[0].length - 1
+          continue
+        }
+      }
+      if (char === '"') {
+        inString = true
+        escaped = false
+        out += ' '
+        continue
+      }
+      if (char === "'") {
+        inChar = true
+        escaped = false
+        out += ' '
+        continue
+      }
+
+      out += char
+    }
+
+    return out
+  }
 }
 
 function buildFileReport(file, content, functions, imports) {
@@ -341,7 +521,7 @@ function calculateMaintainability(nonBlankLines, functions, coupling) {
   return Math.max(0, Math.min(100, Number(score.toFixed(2))))
 }
 
-function evaluateViolations(analysis, thresholds, currentMode) {
+function evaluateViolations(analysis, thresholds, currentMode, staticQuality, staticQualityGate) {
   const violations = []
 
   for (const file of analysis.files) {
@@ -413,9 +593,28 @@ function evaluateViolations(analysis, thresholds, currentMode) {
         message: `circular dependency: ${cycle.join(' -> ')}`,
       })
     }
+
+    if (staticQuality.score < staticQualityGate.minimumScore) {
+      violations.push({
+        file: 'repository',
+        metric: 'staticQualityScore',
+        message: `static quality score is ${staticQuality.score}/1000, gate is ${staticQualityGate.minimumScore}/1000, north-star is ${staticQualityGate.northStarScore}/1000`,
+      })
+    }
   }
 
   return violations
+}
+
+function buildEffectiveStaticQualityGate(baseline) {
+  const baselineScore = baseline?.staticQuality?.score
+  return {
+    policyVersion: staticQualityPolicy.version,
+    minimumScore: Math.max(staticQualityPolicy.minimumGateScore, baselineScore ?? 0),
+    northStarScore: staticQualityPolicy.northStarScore,
+    hardFailCycles: true,
+    hardFailArchitectureViolations: true,
+  }
 }
 
 function buildEffectiveThresholds(baseline) {
@@ -618,8 +817,32 @@ function countNonBlankLines(content) {
   return content.split(/\r?\n/).filter((line) => line.trim().length > 0).length
 }
 
-function stripLineComment(line) {
-  return line.replace(/\/\/.*$/, '')
+function lowerBetter(value, target) {
+  if (value <= target) return 1
+  return (target / value) ** 2
+}
+
+function higherBetter(value, target) {
+  if (value >= target) return 1
+  return (value / target) ** 2
+}
+
+function countBetter(count, budget) {
+  if (count <= budget) return 1
+  return (budget / count) ** 2
+}
+
+function boundedScore(value) {
+  return Math.max(0, value)
+}
+
+function roundScore(value) {
+  return Number(value.toFixed(1))
+}
+
+function average(values) {
+  if (values.length === 0) return 0
+  return roundScore(values.reduce((sum, value) => sum + value, 0) / values.length)
 }
 
 function countMatches(text, pattern) {

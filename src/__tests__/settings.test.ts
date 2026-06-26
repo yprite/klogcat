@@ -6,6 +6,7 @@ describe('settings validation', () => {
   it('accepts default settings', () => { expect(validateSettings(defaultSettings)).toEqual([]) })
   it('rejects uppercase source keys', () => { expect(validateSettings({ ...defaultSettings, logSources: { INFO: { container: 'app', filePath: '/x' } } })).toContainEqual(expect.objectContaining({ field: 'logSources' })) })
   it('rejects relative file paths', () => { expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { container: 'app', filePath: 'relative.log' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.filePath' })) })
+  it('rejects non-object log source maps', () => { expect(validateSettings({ ...defaultSettings, logSources: null })).toContainEqual(expect.objectContaining({ field: 'logSources' })) })
   it('enforces numeric boundaries', () => {
     expect(validateSettings({ ...defaultSettings, initialTailLines: -1 })).toContainEqual(expect.objectContaining({ field: 'initialTailLines' }))
     expect(validateSettings({ ...defaultSettings, initialTailLines: 100001 })).toContainEqual(expect.objectContaining({ field: 'initialTailLines' }))

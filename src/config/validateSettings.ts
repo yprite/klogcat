@@ -6,32 +6,57 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly string[], prefix: string, errors: SettingsValidationError[]) {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) errors.push({ field: `${prefix}.${key}`, message: `Unknown key: ${key}` })
 }
+
+function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
+  const validators: Array<[string, boolean, string]> = [
+    ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
+    ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
+    ['initialTailLines', !integerInRange(value.initialTailLines, 0, 100000), 'initialTailLines must be 0..100000'],
+    ['bufferLimit', !integerInRange(value.bufferLimit, 1000, 200000), 'bufferLimit must be 1000..200000'],
+    ['defaultNamespace', value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string', 'defaultNamespace must be a string when provided'],
+    ['logPolicyId', value.logPolicyId !== undefined && value.logPolicyId !== 'scloud' && value.logPolicyId !== 'custom', 'logPolicyId must be scloud or custom'],
+  ]
+  for (const [field, invalid, message] of validators) if (invalid) errors.push({ field, message })
+}
+
+function integerInRange(value: unknown, min: number, max: number) {
+  return Number.isInteger(value) && (value as number) >= min && (value as number) <= max
+}
+
+function validateEmbeddedLogPolicy(value: Record<string, unknown>, errors: SettingsValidationError[]) {
+  if (value.logPolicy === undefined) return
+  try { assertValidLogPolicy(value.logPolicy) }
+  catch (error) { errors.push({ field: 'logPolicy', message: error instanceof Error ? error.message : String(error) }) }
+}
+
+function validateLogSources(value: unknown, errors: SettingsValidationError[]) {
+  if (!isRecord(value)) {
+    errors.push({ field: 'logSources', message: 'logSources must be an object' })
+    return
+  }
+  const keys = sourceKeys()
+  const actualKeys = Object.keys(value).sort(); const expectedKeys = [...keys].sort()
+  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${keys.join('/')} keys` })
+  for (const key of keys) validateLogSource(key, value[key], errors)
+}
+
+function validateLogSource(key: string, source: unknown, errors: SettingsValidationError[]) {
+  if (!isRecord(source)) {
+    errors.push({ field: `logSources.${key}`, message: 'source config must be an object' })
+    return
+  }
+  rejectExtraKeys(source, ['container', 'filePath'], `logSources.${key}`, errors)
+  if (typeof source.container !== 'string' || source.container.trim() === '') errors.push({ field: `logSources.${key}.container`, message: 'container is required' })
+  if (typeof source.filePath !== 'string' || !source.filePath.startsWith('/') || source.filePath.includes('\0')) errors.push({ field: `logSources.${key}.filePath`, message: 'filePath must be an absolute path without null bytes' })
+}
+
 export function validateSettings(value: unknown): SettingsValidationError[] {
   const errors: SettingsValidationError[] = []
   if (!isRecord(value)) return [{ field: 'settings', message: 'Settings must be an object' }]
-  rejectExtraKeys(value, ['schemaVersion', 'language', 'defaultNamespace', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
-  if (value.schemaVersion !== 1) errors.push({ field: 'schemaVersion', message: 'schemaVersion must be 1' })
-  if (value.language !== 'en' && value.language !== 'ko') errors.push({ field: 'language', message: 'language must be en or ko' })
-  if (!Number.isInteger(value.initialTailLines) || (value.initialTailLines as number) < 0 || (value.initialTailLines as number) > 100000) errors.push({ field: 'initialTailLines', message: 'initialTailLines must be 0..100000' })
-  if (!Number.isInteger(value.bufferLimit) || (value.bufferLimit as number) < 1000 || (value.bufferLimit as number) > 200000) errors.push({ field: 'bufferLimit', message: 'bufferLimit must be 1000..200000' })
-  if (value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string') errors.push({ field: 'defaultNamespace', message: 'defaultNamespace must be a string when provided' })
-  if (value.logPolicyId !== undefined && value.logPolicyId !== 'scloud' && value.logPolicyId !== 'custom') errors.push({ field: 'logPolicyId', message: 'logPolicyId must be scloud or custom' })
-  if (value.logPolicy !== undefined) {
-    try { assertValidLogPolicy(value.logPolicy) }
-    catch (error) { errors.push({ field: 'logPolicy', message: error instanceof Error ? error.message : String(error) }) }
-  }
-  const logSources = value.logSources
-  if (!isRecord(logSources)) { errors.push({ field: 'logSources', message: 'logSources must be an object' }); return errors }
-  const keys = sourceKeys()
-  const actualKeys = Object.keys(logSources).sort(); const expectedKeys = [...keys].sort()
-  if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${keys.join('/')} keys` })
-  for (const key of keys) {
-    const source = logSources[key]
-    if (!isRecord(source)) { errors.push({ field: `logSources.${key}`, message: 'source config must be an object' }); continue }
-    rejectExtraKeys(source, ['container', 'filePath'], `logSources.${key}`, errors)
-    if (typeof source.container !== 'string' || source.container.trim() === '') errors.push({ field: `logSources.${key}.container`, message: 'container is required' })
-    if (typeof source.filePath !== 'string' || !source.filePath.startsWith('/') || source.filePath.includes('\0')) errors.push({ field: `logSources.${key}.filePath`, message: 'filePath must be an absolute path without null bytes' })
-  }
+  validateTopLevelFields(value, errors)
+  validateEmbeddedLogPolicy(value, errors)
+  validateLogSources(value.logSources, errors)
   return errors
 }
 export function assertValidSettings(value: unknown): asserts value is PersistedSettings {

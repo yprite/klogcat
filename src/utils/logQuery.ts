@@ -13,12 +13,33 @@ type Expr =
   | { type: 'and' | 'or'; left: Expr; right: Expr }
 
 const searchableColumnKeys: LogColumnKey[] = Array.from(new Set([...accessLogColumns, ...errorLogColumns]))
+type QuoteChar = '"' | "'"
+type BoundaryChar = '(' | ')' | '&' | '|'
+
+function isWhitespace(char: string) {
+  return /\s/.test(char)
+}
+
+function isQuoteChar(char: string): char is QuoteChar {
+  return char === '"' || char === "'"
+}
+
+function isBoundaryToken(char: string): char is BoundaryChar {
+  return char === '(' || char === ')' || char === '&' || char === '|'
+}
+
+function boundaryToken(type: BoundaryChar): Token {
+  if (type === '(') return { type: 'lparen', value: type }
+  if (type === ')') return { type: 'rparen', value: type }
+  if (type === '&') return { type: 'and', value: type }
+  return { type: 'or', value: type }
+}
 
 function tokenize(input: string): Token[] {
   const tokens: Token[] = []
   let current = ''
   let quoted = false
-  let quote = ''
+  let quote: QuoteChar = '"'
   const pushWord = () => { if (current.trim()) tokens.push(wordToken(current.trim())); current = '' }
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i]
@@ -27,12 +48,20 @@ function tokenize(input: string): Token[] {
       else current += ch
       continue
     }
-    if (ch === '"' || ch === "'") { quoted = true; quote = ch; continue }
-    if (/\s/.test(ch)) { pushWord(); continue }
-    if (ch === '(') { pushWord(); tokens.push({ type: 'lparen', value: ch }); continue }
-    if (ch === ')') { pushWord(); tokens.push({ type: 'rparen', value: ch }); continue }
-    if (ch === '&') { pushWord(); tokens.push({ type: 'and', value: ch }); continue }
-    if (ch === '|') { pushWord(); tokens.push({ type: 'or', value: ch }); continue }
+    if (isQuoteChar(ch)) {
+      quoted = true
+      quote = ch
+      continue
+    }
+    if (isWhitespace(ch)) {
+      pushWord()
+      continue
+    }
+    if (isBoundaryToken(ch)) {
+      pushWord()
+      tokens.push(boundaryToken(ch))
+      continue
+    }
     current += ch
   }
   pushWord()
@@ -75,6 +104,7 @@ function parse(tokens: Token[]): Expr | null {
       if (peek()?.type === 'rparen') take()
       return expr
     }
+    /* v8 ignore next -- validateLogQuery rejects operator and closing-paren tokens before parsing. */
     return null
   }
   const parseAnd = (): Expr | null => {
@@ -107,18 +137,25 @@ function textMatches(value: string, query: string, regex: boolean) {
   return re ? re.test(value) : false
 }
 
+const directFieldReaders: Record<string, (row: ParsedLogLine) => string> = {
+  line: (row) => row.raw,
+  message: (row) => row.raw,
+  raw: (row) => row.raw,
+  summary: (row) => row.summary,
+  namespace: (row) => row.namespace,
+  ns: (row) => row.namespace,
+  pod: (row) => row.pod,
+  container: (row) => row.container,
+  tag: (row) => row.logger || row.module || row.service || row.jsonLogType || '',
+  package: (row) => row.service || row.serviceId || row.appId || '',
+}
+
 function rowFieldValue(row: ParsedLogLine, key: string, policy: LogPolicy): string {
   const k = key.toLowerCase()
-  if (k === 'line' || k === 'message' || k === 'raw') return row.raw
-  if (k === 'summary') return row.summary
+  const directReader = directFieldReaders[k]
+  if (directReader) return directReader(row)
   if (policy.query.sourceAliases.includes(k)) return row.sourceType
-  if (k === 'namespace' || k === 'ns') return row.namespace
-  if (k === 'pod') return row.pod
-  if (k === 'container') return row.container
-  if (k === 'tag') return row.logger || row.module || row.service || row.jsonLogType || ''
-  if (k === 'package') return row.service || row.serviceId || row.appId || ''
   if (k === 'level' || k === 'priority') return rowLevelFromPolicy(row, policy) ?? ''
-  if (k === 'age') return String(ageSeconds(row))
   const column = searchableColumnKeys.find((candidate) => candidate.toLowerCase() === k)
   return column ? valueForColumn(row, column) : String((row as unknown as Record<string, unknown>)[key] ?? '')
 }
@@ -139,24 +176,39 @@ function parseAge(value: string) {
 
 function evalField(row: ParsedLogLine, key: string, value: string, regex: boolean, policy: LogPolicy) {
   const k = key.toLowerCase()
-  if (k === 'is') {
-    const v = value.toLowerCase()
-    if (v === 'stacktrace') return !!row.isStacktrace || !!row.stacktraceLines?.length
-    if (v === 'crash' || v === 'error') return isFailureRowFromPolicy(row, policy)
-    return false
-  }
-  if (k === 'level' || k === 'priority') {
-    const actual = rowLevelFromPolicy(row, policy)
-    const wanted = value.toUpperCase()
-    if (!levelMeetsMinimumFromPolicy(actual, wanted, policy)) return textMatches(actual ?? '', value, regex)
-    return true
-  }
-  if (k === 'age') {
-    const seconds = parseAge(value)
-    return seconds === undefined ? false : ageSeconds(row) <= seconds
-  }
-  if (policy.query.sourceAliases.includes(k) && sourceTypesFromPolicy(policy).includes(value as SourceLogType)) return row.sourceType === value as SourceLogType
+  if (k === 'is') return evalIsField(row, value, policy)
+  if (isLevelField(k)) return evalLevelField(row, value, regex, policy)
+  if (k === 'age') return evalAgeField(row, value)
+  if (isSourceAliasMatch(k, value, policy)) return row.sourceType === value as SourceLogType
   return textMatches(rowFieldValue(row, key, policy), value, regex)
+}
+
+function evalIsField(row: ParsedLogLine, value: string, policy: LogPolicy) {
+  const matchers: Record<string, () => boolean> = {
+    stacktrace: () => Boolean(row.isStacktrace || row.stacktraceLines?.length),
+    crash: () => isFailureRowFromPolicy(row, policy),
+    error: () => isFailureRowFromPolicy(row, policy),
+  }
+  return matchers[value.toLowerCase()]?.() ?? false
+}
+
+function isLevelField(key: string) {
+  return key === 'level' || key === 'priority'
+}
+
+function evalLevelField(row: ParsedLogLine, value: string, regex: boolean, policy: LogPolicy) {
+  const actual = rowLevelFromPolicy(row, policy)
+  const wanted = value.toUpperCase()
+  return levelMeetsMinimumFromPolicy(actual, wanted, policy) || textMatches(actual ?? '', value, regex)
+}
+
+function evalAgeField(row: ParsedLogLine, value: string) {
+  const seconds = parseAge(value)
+  return seconds === undefined ? false : ageSeconds(row) <= seconds
+}
+
+function isSourceAliasMatch(key: string, value: string, policy: LogPolicy) {
+  return policy.query.sourceAliases.includes(key) && sourceTypesFromPolicy(policy).includes(value as SourceLogType)
 }
 
 function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
@@ -167,21 +219,68 @@ function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
   return evalExpr(row, expr.left, policy) || evalExpr(row, expr.right, policy)
 }
 
+type ValidationState = { depth: number; expectingOperand: boolean }
+
+function incompleteQuery(): QueryValidation {
+  return { ok: false, message: 'incomplete query expression' }
+}
+
+function validateOperatorToken(state: ValidationState): QueryValidation | undefined {
+  if (state.expectingOperand) return incompleteQuery()
+  state.expectingOperand = true
+  return undefined
+}
+
+function validateRightParen(state: ValidationState): QueryValidation | undefined {
+  state.depth -= 1
+  if (state.depth < 0) return { ok: false, message: 'unbalanced parentheses' }
+  if (state.expectingOperand) return incompleteQuery()
+  state.expectingOperand = false
+  return undefined
+}
+
+function regexFieldFromWord(value: string) {
+  const expr = parseTermWord(value)
+  const field = expr.type === 'not' ? expr.expr : expr
+  return field.type === 'field' && field.regex ? field : undefined
+}
+
+function validateWordToken(token: Token, state: ValidationState): QueryValidation | undefined {
+  const field = regexFieldFromWord(token.value)
+  if (field?.value && !compileGrepRegex(field.value)) {
+    return { ok: false, message: `invalid regex: ${field.key}~:${field.value}` }
+  }
+  state.expectingOperand = false
+  return undefined
+}
+
+function validateToken(token: Token, state: ValidationState): QueryValidation | undefined {
+  if (token.type === 'and' || token.type === 'or') return validateOperatorToken(state)
+  if (token.type === 'not') { state.expectingOperand = true; return undefined }
+  if (token.type === 'lparen') { state.depth += 1; state.expectingOperand = true; return undefined }
+  if (token.type === 'rparen') return validateRightParen(state)
+  return validateWordToken(token, state)
+}
+
+function finalizeValidation(tokens: Token[], state: ValidationState): QueryValidation {
+  if (tokens.length > 0 && state.expectingOperand) return incompleteQuery()
+  return state.depth === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
+}
+
 export function validateLogQuery(query: string): QueryValidation {
   const tokens = tokenize(query.trim())
+  const state = { depth: 0, expectingOperand: true }
   for (const token of tokens) {
-    if (token.type !== 'word') continue
-    const expr = parseTermWord(token.value)
-    const field = expr.type === 'not' ? expr.expr : expr
-    if (field.type === 'field' && field.regex && field.value && !compileGrepRegex(field.value)) return { ok: false, message: `invalid regex: ${field.key}~:${field.value}` }
+    const error = validateToken(token, state)
+    if (error) return error
   }
-  const balance = tokens.reduce((count, token) => count + (token.type === 'lparen' ? 1 : token.type === 'rparen' ? -1 : 0), 0)
-  return balance === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
+  return finalizeValidation(tokens, state)
 }
 
 export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = getLogPolicy()): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
+  if (!validateLogQuery(trimmed).ok) return false
   const tokens = tokenize(trimmed)
   const expr = parse(tokens)
   return expr ? evalExpr(row, expr, policy) : true

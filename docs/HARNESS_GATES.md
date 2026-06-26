@@ -72,6 +72,67 @@ The first implementation must record the current repository baseline before
 turning baseline-based coupling or maintainability checks into hard failures.
 After that baseline is recorded, the gate fails on any regression.
 
+### Static quality score
+
+The full `pre-push` metrics gate also emits a conservative 1000-point static
+quality score. The north-star target is `900/1000`; the project advances toward
+that target in ratcheted phases rather than weakening existing checks.
+
+The score uses only data already present in `metrics-prepush.json`:
+
+```text
+staticQualityScore =
+  architectureScore +
+  maintainabilityScore +
+  complexityScore +
+  sizeScore +
+  couplingScore
+```
+
+The helper functions are intentionally conservative:
+
+```text
+lowerBetter(value, target) =
+  value <= target ? 1 : (target / value)^2
+
+higherBetter(value, target) =
+  value >= target ? 1 : (value / target)^2
+
+countBetter(count, budget) =
+  count <= budget ? 1 : (budget / count)^2
+```
+
+| Score component | Points | Formula |
+| --- | ---: | --- |
+| Architecture purity | 250 | `max(0, 125 - cycleCount * 75) + max(0, 125 - architectureViolationCount * 75)` |
+| Maintainability | 200 | `120 * higherBetter(minMaintainability, 60) + 80 * higherBetter(avgMaintainability, 75)` |
+| Complexity | 250 | `90 * lowerBetter(maxCyclomaticComplexity, 10) + 110 * lowerBetter(maxCognitiveComplexity, 15) + 50 * countBetter(overComplexFunctionCount, 5)` |
+| Size | 150 | `90 * lowerBetter(maxFunctionLines, 80) + 60 * lowerBetter(maxFileLines, 500)` |
+| Coupling | 150 | `100 * lowerBetter(maxCoupling, 12) + 50 * lowerBetter(avgCoupling, 6)` |
+
+`cycleCount > 0` and `architectureViolationCount > 0` are hard failures even
+if the numeric score is otherwise high. The score cannot be used to compensate
+for forbidden architecture boundaries or circular dependencies.
+
+The `pre-push` score gate is phased:
+
+| Phase | Score range | Gate behavior |
+| --- | ---: | --- |
+| Foundation | `< 600` | Fails. The repository is below the minimum static quality floor. |
+| Stabilization | `600-699` | Passes only if the score is not below the recorded baseline. |
+| Architecture improvement | `700-799` | Next ratchet target after the current baseline is stable. |
+| Product hardening | `800-899` | Required before claiming product-grade architecture quality. |
+| North star | `>= 900` | Final static quality target. |
+
+The gate minimum is:
+
+```text
+max(600, recordedBaselineStaticQualityScore)
+```
+
+This means the first stabilized baseline can pass while every later push must
+preserve or improve the total score until the `900` north-star target is reached.
+
 Metric reports must be written to an ignored local path such as:
 
 ```text

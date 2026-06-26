@@ -52,8 +52,9 @@ describe('i18n language settings', () => {
     expect(selector).toHaveValue('en')
 
     fireEvent.change(selector, { target: { value: 'ko' } })
-    expect(screen.getByText(/한국어 UI 미리보기/i)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(selector).toHaveValue('ko')
+    expect(screen.getByText('화면 표시')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Save|저장/ }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: 'ko' })))
   })
@@ -63,7 +64,7 @@ describe('i18n language settings', () => {
 
     render(<TopBar onSettings={vi.fn()} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: '대상 변경' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '대상 변경' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
     expect(screen.getByText('대상을 선택하세요')).toBeInTheDocument()
   })

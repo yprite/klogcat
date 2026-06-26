@@ -4,9 +4,11 @@ import { useKubeStore, scopeKey } from './stores/kubeStore'
 import { useLogStore } from './stores/logStore'
 import { subscribeLogEvents } from './commands/tauriLogEvents'
 import { startLogStream } from './commands/tauriLogs'
-import type { LogStreamExitEvent } from './types/log'
+import type { ActiveStreamMeta, LogStreamExitEvent } from './types/log'
 import { buildScloudLogPath } from './utils/logPath'
 import { findFallbackPod } from './utils/podFallback'
+import { activateConfiguredKlogcatExtensions } from './extensions/logViewerExtensionLoader'
+import { configuredLogViewerExtensions } from './extensions/configuredLogViewerExtensions'
 
 function nextReconnectStreamId(oldStreamId: string) {
   return `${oldStreamId}-retry-${crypto.randomUUID()}`
@@ -26,20 +28,51 @@ function replaceSelectedPod(context: string, namespace: string, stalePod: string
   }))
 }
 
-async function retryWithFallbackPod(e: LogStreamExitEvent) {
-  const store = useLogStore.getState()
-  const meta = e.streamId ? store.activeStreamMetas[e.streamId] : undefined
-  if (!meta || e.requestedStop) return false
-  const stderr = store.stderrByStream[e.streamId] ?? []
-  if (!stderr.some(isPodNotFoundLine)) return false
+type FallbackMeta = ActiveStreamMeta & { context: string; namespace: string; pod: string }
 
-  const key = scopeKey(meta.context ?? '', meta.namespace)
-  if (!meta.context || !meta.namespace || !meta.pod || !key) return false
+function streamMetaForExit(e: LogStreamExitEvent) {
+  return e.streamId ? useLogStore.getState().activeStreamMetas[e.streamId] : undefined
+}
+
+function streamStderrForExit(e: LogStreamExitEvent) {
+  return e.streamId ? useLogStore.getState().stderrByStream[e.streamId] ?? [] : []
+}
+
+function fallbackScopeKey(meta?: ActiveStreamMeta) {
+  return meta?.context && meta.namespace ? scopeKey(meta.context, meta.namespace) : ''
+}
+
+function canRetryPodFallback(e: LogStreamExitEvent, meta: ActiveStreamMeta | undefined, stderr: string[], key: string) {
+  return Boolean(meta && !e.requestedStop && stderr.some(isPodNotFoundLine) && meta.context && meta.namespace && meta.pod && key)
+}
+
+function fallbackRetryContext(e: LogStreamExitEvent) {
+  const store = useLogStore.getState()
+  const meta = streamMetaForExit(e)
+  const stderr = streamStderrForExit(e)
+  const key = fallbackScopeKey(meta)
+  if (!canRetryPodFallback(e, meta, stderr, key)) return undefined
+  return { store, meta: meta as FallbackMeta, stderr, key }
+}
+
+function fallbackStalePod(meta: NonNullable<ReturnType<typeof fallbackRetryContext>>['meta']) {
+  return { name: meta.pod, namespace: meta.namespace, phase: 'Running' as const, containers: [meta.container].filter(Boolean) }
+}
+
+function startFallbackStream(nextMeta: NonNullable<ReturnType<typeof fallbackRetryContext>>['meta']) {
+  void startLogStream({ streamId: nextMeta.streamId, context: nextMeta.context, namespace: nextMeta.namespace, pod: nextMeta.pod, container: nextMeta.container, sourceType: nextMeta.sourceType, filePath: nextMeta.filePath, initialTailLines: nextMeta.initialTailLines ?? 50 })
+    .then(() => useLogStore.getState().markRunning(nextMeta.streamId))
+    .catch((error) => useLogStore.getState().markError(nextMeta.streamId, error instanceof Error ? error.message : String(error)))
+}
+
+async function retryWithFallbackPod(e: LogStreamExitEvent) {
+  const context = fallbackRetryContext(e)
+  if (!context) return false
+  const { store, meta, stderr, key } = context
   store.recordActionDebug(`Pod not found on stream exit: ${meta.context}/${meta.namespace}/${meta.pod}; refreshing pods`)
   await useKubeStore.getState().refreshPodsForSelections()
   const refreshedPods = useKubeStore.getState().podsByScope[key] ?? []
-  const stalePod = { name: meta.pod, namespace: meta.namespace, phase: 'Running' as const, containers: [meta.container].filter(Boolean) }
-  const fallbackPod = findFallbackPod(stalePod, refreshedPods, meta.container)
+  const fallbackPod = findFallbackPod(fallbackStalePod(meta), refreshedPods, meta.container)
   if (!fallbackPod) {
     store.markError(e.streamId, stderr.at(-1) ?? `stream exited with code ${e.exitCode}`)
     return true
@@ -52,9 +85,7 @@ async function retryWithFallbackPod(e: LogStreamExitEvent) {
   const nextMeta = { ...meta, streamId, sourceId, pod: fallbackPod.name, filePath }
   store.replaceStreamForReconnect(meta.streamId, nextMeta)
   store.recordActionDebug(`Pod fallback on exit: ${meta.context}/${meta.namespace}/${meta.pod} -> ${fallbackPod.name}`)
-  void startLogStream({ streamId, context: nextMeta.context, namespace: nextMeta.namespace, pod: nextMeta.pod, container: nextMeta.container, sourceType: nextMeta.sourceType, filePath: nextMeta.filePath, initialTailLines: nextMeta.initialTailLines ?? 50 })
-    .then(() => useLogStore.getState().markRunning(streamId))
-    .catch((error) => useLogStore.getState().markError(streamId, error instanceof Error ? error.message : String(error)))
+  startFallbackStream(nextMeta)
   return true
 }
 
@@ -108,6 +139,12 @@ export function handleLogExit(e: LogStreamExitEvent) {
 
 export default function App() {
   const [eventError, setEventError] = useState<string>()
+  const [extensionError, setExtensionError] = useState<string>()
+  useEffect(() => {
+    const activation = activateConfiguredKlogcatExtensions(configuredLogViewerExtensions)
+    setExtensionError(activation.errors.length ? `Extension load failed: ${activation.errors.map((error) => `${error.id}: ${error.message}`).join('; ')}` : undefined)
+    return () => activation.cleanup()
+  }, [])
   useEffect(() => {
     let cleanup: undefined | (() => void)
     subscribeLogEvents({
@@ -126,5 +163,5 @@ export default function App() {
     }).then((fn) => { cleanup = fn }).catch((e) => setEventError(String(e)))
     return () => { cleanup?.() }
   }, [])
-  return <AppShell eventError={eventError} />
+  return <AppShell eventError={eventError || extensionError} />
 }

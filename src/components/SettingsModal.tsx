@@ -6,15 +6,10 @@ import { useKubeStore } from '../stores/kubeStore'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
-import type { SourceLogType } from '../types/log'
-import { supportedLanguages } from '../utils/i18n'
-import { sourceLabelsForActivePolicy } from '../utils/sourceLabels'
+import { t } from '../utils/i18n'
 import {
   assertValidLogPolicy,
   buildLogPathFromPolicy,
-  buildLogPathTemplateFromPolicy,
-  builtinLogPolicyOptions,
-  defaultLogPolicy,
   getLogPolicy,
   logPathTemplateTokens,
   logPolicyForBuiltinId,
@@ -22,8 +17,7 @@ import {
   type LogPolicy,
   type LogPolicySelectionId,
 } from '../utils/logPolicy'
-
-type TestPathResult = { sourceType: SourceLogType; label: string; path: string; ok: boolean; message: string }
+import { AdvancedSection, LogSourceSection, MaintenanceSection, RuntimeSection, SettingsFooter, SettingsNav, StatusMessages, type TestPathResult } from './SettingsModalSections'
 
 const knownPathTokens = new Set<string>(logPathTemplateTokens.map((item) => item.token))
 
@@ -47,37 +41,12 @@ function pathWarnings(pattern: string) {
   return warnings
 }
 
-function policyWithPathPattern(policy: LogPolicy, pathPattern: string) {
-  const next = clonePolicy(policy)
-  next.pathTemplate = pathPattern
-  next.sources = Object.fromEntries(Object.entries(next.sources).map(([key, source]) => [key, { ...source, pathTemplate: undefined }])) as LogPolicy['sources']
-  return next
-}
-
-function policyWithSourceSuffix(policy: LogPolicy, sourceType: SourceLogType, suffix: string) {
-  const next = clonePolicy(policy)
-  next.sources[sourceType] = { ...next.sources[sourceType], pathSuffix: suffix }
-  return next
-}
-
-function policyWithSourcePath(policy: LogPolicy, sourceType: SourceLogType, pathTemplate: string) {
-  const next = clonePolicy(policy)
-  next.sources[sourceType] = { ...next.sources[sourceType], pathTemplate }
-  return next
-}
-
-function stripSourcePathOverrides(policy: LogPolicy) {
-  const next = clonePolicy(policy)
-  next.pathTemplate = defaultLogPolicy.pathTemplate
-  next.sources = Object.fromEntries(Object.entries(defaultLogPolicy.sources).map(([key, source]) => [key, { ...next.sources[key as SourceLogType], pathSuffix: source.pathSuffix, pathTemplate: undefined }])) as LogPolicy['sources']
-  return next
-}
-
 export function SettingsModal({ open, onClose, onRestart = () => window.location.reload() }: { open: boolean; onClose: () => void; onRestart?: () => void }) {
   const { settings, saveSettings, resetSettings, error, loading } = useSettingsStore()
   const recordActionDebug = useLogStore((s) => s.recordActionDebug)
   const clearCachedTargets = useKubeStore((s) => s.clearCachedTargets)
   const [draft, setDraft] = useState<PersistedSettings>(settings ?? defaultSettings)
+  const language = draft.language ?? settings?.language ?? 'en'
   const [selectedPolicyId, setSelectedPolicyId] = useState<LogPolicySelectionId>((settings ?? defaultSettings).logPolicyId ?? 'scloud')
   const [policyText, setPolicyText] = useState(() => JSON.stringify((settings ?? defaultSettings).logPolicy ?? getLogPolicy(), null, 2))
   const [showPathOverrides, setShowPathOverrides] = useState(false)
@@ -119,19 +88,13 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const policyError = selectedPolicyId === 'custom' ? parsedCustomPolicy.error : undefined
   const previewPolicy = policyDraft ?? getLogPolicy()
   const sourceTypes = sourceTypesFromPolicy(previewPolicy)
-  const sourceLabels = sourceLabelsForActivePolicy()
   const activeTarget = useKubeStore.getState().getSelectedPodTargets()[0]
-  const exampleNamespace = activeTarget?.namespace ?? 'example-namespace'
-  const examplePod = activeTarget?.pod.name ?? 'example-pod'
   const warnings = pathWarnings(previewPolicy.pathTemplate)
   const errors = [...validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy }), ...(policyError ? [{ field: 'logPolicy', message: policyError }] : [])]
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
-  const setLanguage = (language: PersistedSettings['language']) => {
-    setNotice(undefined)
-    setDraft({ ...draft, language })
-  }
-  const setCustomPolicy = (policy: LogPolicy, message = 'Profile: Custom, based on SCloud') => {
+  const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
+  const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
     setSelectedPolicyId('custom')
     setPolicyText(JSON.stringify(policy, null, 2))
@@ -157,7 +120,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       setDraft(saved)
       setSelectedPolicyId(saved.logPolicyId ?? 'scloud')
       setPolicyText(JSON.stringify(saved.logPolicy ?? getLogPolicy(), null, 2))
-      setNotice('Settings reset to defaults')
+      setNotice(t(language, 'Settings reset to defaults'))
     }
   }
   const handleSave = async () => {
@@ -170,15 +133,20 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const handleClearTargetCache = () => {
     recordActionDebug('Clear target cache clicked')
     clearCachedTargets()
-    setNotice('Target cache cleared. Restart to reload fresh Kubernetes targets.')
+    setNotice(t(language, 'Target cache cleared. Restart to reload fresh Kubernetes targets.'))
   }
   const handleRestart = () => {
     recordActionDebug('Restart app clicked')
     onRestart()
   }
+  const handleRawPolicyTextChange = (value: string) => {
+    setNotice(undefined)
+    setSelectedPolicyId('custom')
+    setPolicyText(value)
+  }
   const handleTestPaths = async () => {
     if (!activeTarget) {
-      setNotice('Select a namespace and pod before testing paths.')
+      setNotice(t(language, 'Select a namespace and pod before testing paths.'))
       return
     }
     setTestingPaths(true)
@@ -203,135 +171,29 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
     <div aria-labelledby="settings-title" aria-modal="true" role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
-        <h2 className="text-lg font-bold" id="settings-title">Settings</h2>
+        <h2 className="text-lg font-bold" id="settings-title">{t(language, 'Settings')}</h2>
         <button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[12rem_minmax(0,1fr)] overflow-hidden">
-        <nav aria-label="Settings sections" className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sections</p>
-          <a className="mt-3 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-runtime">Runtime</a>
-          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-appearance">Appearance</a>
-          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-log-source">Log source</a>
-          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-advanced">Advanced</a>
-          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-maintenance">Maintenance</a>
-        </nav>
+        <SettingsNav />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-        <section id="settings-runtime" className="rounded border border-slate-700 bg-slate-950/60 p-3">
-          <h3 className="text-sm font-semibold text-white">Runtime</h3>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <label className="block text-sm">Initial tail lines <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
-            <label className="block text-sm">Buffer limit <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
-          </div>
-        </section>
-
-        <section id="settings-appearance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
-          <h3 className="text-sm font-semibold text-white">Appearance</h3>
-          <p className="mt-1 text-xs text-slate-400">Choose the UI language used by top-level navigation and future localized labels.</p>
-          <label className="mt-3 block text-sm" htmlFor="language-select">Language</label>
-          <select id="language-select" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={draft.language} onChange={(e) => setLanguage(e.target.value as PersistedSettings['language'])}>
-            {supportedLanguages.map((language) => <option key={language.code} value={language.code}>{language.nativeLabel} / {language.label}</option>)}
-          </select>
-          {draft.language === 'ko' && <p className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100">한국어 UI 미리보기: 저장하면 상단 내비게이션부터 한국어로 표시됩니다.</p>}
-        </section>
-
-        <section id="settings-log-source" className="rounded border border-slate-700 bg-slate-950/60 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-semibold text-white">Log Source Profile</h3>
-              <p className="mt-1 text-xs text-slate-400">내 Kubernetes 로그 경로가 어떻게 만들어지는지 미리 보고, 검증하고, 안전하게 저장해.</p>
-            </div>
-            <span className="rounded bg-indigo-500/20 px-2 py-1 text-xs text-indigo-100">{selectedPolicyId === 'custom' ? 'Custom, based on SCloud' : 'SCloud default'}</span>
-          </div>
-
-          <label className="mt-3 block text-sm" htmlFor="log-profile-select">Profile / Log policy</label>
-          <select id="log-profile-select" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={selectedPolicyId} onChange={(e) => handlePolicySelect(e.target.value as LogPolicySelectionId)}>
-            {builtinLogPolicyOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-            <option value="custom">Custom profile</option>
-          </select>
-
-          <label className="mt-3 block text-sm" htmlFor="path-pattern">Path pattern</label>
-          <input id="path-pattern" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" value={previewPolicy.pathTemplate} onChange={(e) => setCustomPolicy(policyWithPathPattern(previewPolicy, e.target.value))} />
-
-          <div className="mt-3 rounded border border-slate-800 bg-slate-900/70 p-2">
-            <p className="text-xs font-semibold text-slate-200">Available variables — click to insert into Path pattern</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {logPathTemplateTokens.map((item) => <button className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 hover:border-slate-400" key={item.token} title={item.description} onClick={() => setCustomPolicy(policyWithPathPattern(previewPolicy, `${previewPolicy.pathTemplate}${item.token}`))}>{item.token}</button>)}
-            </div>
-          </div>
-
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {sourceTypes.map((type) => <label className="block rounded border border-slate-700 p-2" key={type}>
-              <span className="text-xs font-semibold text-white">{previewPolicy.sources[type]?.label ?? sourceLabels[type]} suffix</span>
-              <input aria-label={`${previewPolicy.sources[type]?.label ?? sourceLabels[type]} suffix`} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" value={previewPolicy.sources[type]?.pathSuffix ?? ''} onChange={(e) => setCustomPolicy(policyWithSourceSuffix(previewPolicy, type, e.target.value))} />
-            </label>)}
-          </div>
-
-          {warnings.length > 0 && <ul className="mt-3 rounded border border-yellow-500/40 bg-yellow-500/10 p-2 text-xs text-yellow-100">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-
-          <div className="mt-3 rounded border border-slate-800 bg-slate-900/70 p-2">
-            <p className="text-xs font-semibold text-slate-200">Preview using {activeTarget ? 'current target' : 'example target'}</p>
-            <p className="mt-1 text-xs text-slate-400">Namespace: {exampleNamespace} · Pod: {examplePod}</p>
-            <div className="mt-2 space-y-1 text-xs">
-              {sourceTypes.map((type) => {
-                const path = buildLogPathFromPolicy(previewPolicy, exampleNamespace, examplePod, type)
-                return <p className="font-mono text-slate-200" key={type}>{previewPolicy.sources[type]?.label ?? type} → <span>{path}</span></p>
-              })}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" disabled={testingPaths} onClick={handleTestPaths}>{testingPaths ? 'Testing paths…' : 'Test paths'}</button>
-              <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setCustomPolicy(stripSourcePathOverrides(previewPolicy), 'Log paths reset to SCloud defaults')}>Reset log paths to SCloud defaults</button>
-            </div>
-            {testResults.length > 0 && <ul className="mt-2 space-y-1 text-xs">{testResults.map((result) => <li className={result.ok ? 'text-green-300' : 'text-red-300'} key={result.sourceType}>{result.label} {result.message}: <span className="font-mono">{result.path}</span></li>)}</ul>}
-          </div>
-        </section>
-
-        <section id="settings-advanced" className="rounded border border-slate-700 bg-slate-950/60 p-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-semibold text-white">Advanced</h3>
-              <p className="mt-1 text-xs text-slate-400">Path overrides and raw policy JSON are isolated from the normal setup flow.</p>
-            </div>
-            <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowPathOverrides((value) => !value)}>{showPathOverrides ? 'Hide path overrides' : 'Advanced path overrides'}</button>
-          </div>
-
-          {showPathOverrides && <div className="mt-3 rounded border border-slate-700 p-2">
-            <p className="text-xs font-semibold text-slate-200">Advanced: customize each log type path</p>
-            <div className="mt-2 space-y-2">
-              {sourceTypes.map((type) => <label className="block" key={type}>
-                <span className="text-sm font-semibold text-white">{previewPolicy.sources[type]?.label ?? sourceLabels[type]} path template</span>
-                <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" value={buildLogPathTemplateFromPolicy(previewPolicy, type)} onChange={(e) => setCustomPolicy(policyWithSourcePath(previewPolicy, type, e.target.value))} />
-              </label>)}
-            </div>
-          </div>}
-
-          <div className="mt-3">
-            <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-700" onClick={() => setShowRawJson((value) => !value)}>{showRawJson ? 'Hide advanced raw JSON' : 'Advanced raw JSON'}</button>
-          </div>
-
-          {showRawJson && <div className="mt-3 rounded border border-slate-700 p-2">
-            <p className="text-xs text-slate-400">Only edit raw JSON if you need parser fields, query suggestions, severity, grouping, export/import, or a future preset.</p>
-            <label className="mt-2 block text-sm" htmlFor="log-policy-json">Custom policy JSON</label>
-            <textarea id="log-policy-json" className="mt-1 h-64 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" spellCheck={false} value={policyText} onChange={(e) => { setNotice(undefined); setSelectedPolicyId('custom'); setPolicyText(e.target.value) }} />
-          </div>}
-        </section>
-
-        {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map((e, index) => <li key={`${e.field}-${index}`}>{e.field}: {e.message}</li>)}</ul>}
-        {notice && <p className="text-green-300">{notice}</p>}
-        {error && <p className="text-red-300">{error.message}</p>}
-        <section id="settings-maintenance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
-          <h3 className="text-sm font-semibold text-white">Target cache</h3>
-          <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button className="rounded border border-yellow-500 px-3 py-1 text-sm text-yellow-100 hover:bg-yellow-500/10" disabled={loading} onClick={handleClearTargetCache}>Clear Target Cache</button>
-            <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>Restart App</button>
-          </div>
-        </section>
+          <RuntimeSection draft={draft} setNum={setNum} />
+          <section id="settings-appearance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+            <h3 className="text-sm font-semibold text-white">{t(language, 'Appearance')}</h3>
+            <p className="mt-1 text-xs text-slate-400">{t(language, 'Choose the UI language used by top-level navigation and future localized labels.')}</p>
+            <label className="mt-2 block text-sm" htmlFor="settings-language">{t(language, 'Language')}</label>
+            <select id="settings-language" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={draft.language ?? 'en'} onChange={(e) => setLanguage(e.target.value as PersistedSettings['language'])}>
+              <option value="en">English / {t(language, 'English')}</option>
+              <option value="ko">한국어 / {t(language, 'Korean')}</option>
+            </select>
+          </section>
+          <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />
+          <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />
+          <StatusMessages error={error} errors={errors} notice={notice} />
+          <MaintenanceSection handleClearTargetCache={handleClearTargetCache} handleRestart={handleRestart} loading={loading} />
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-700 bg-slate-900 p-4">
-        <button aria-label="Reset" className="rounded border border-red-500/70 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleReset}>Reset all settings</button>
-        <button className="rounded border border-yellow-400 bg-yellow-300 px-4 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200" disabled={loading} onClick={handleSave}>Save</button>
-      </div>
+      <SettingsFooter handleReset={handleReset} handleSave={handleSave} loading={loading} />
     </div>
   </div>
 }
