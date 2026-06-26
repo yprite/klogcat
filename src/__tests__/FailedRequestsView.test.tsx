@@ -36,4 +36,23 @@ describe('FailedRequestsView', () => {
     expect(screen.getByText((_content, element) => element?.textContent === 'Raw rows: 2')).toBeInTheDocument()
     expect(screen.queryByText('ok-1')).not.toBeInTheDocument()
   })
+
+  it('keeps full correlated evidence when the query only leaves one row visible', () => {
+    const accessFailure: ParsedLogLine = { ...row, id: 1, raw: 'access raw', summary: 'GET /api/orders 503', sourceType: 'access', sourceId: 'src-a', status: '503', method: 'GET', url: '/api/orders', elapsed: 87 }
+    const errorFailure: ParsedLogLine = { ...row, id: 2, raw: 'error raw boom', summary: 'IllegalStateException boom', sourceType: 'error', sourceId: 'src-e', errorMethod: 'GET', errorPath: '/api/orders', errorReason: 'db timeout' }
+    const unrelatedFailure: ParsedLogLine = { ...row, id: 3, trId: 'trx-2', raw: 'other access raw', summary: 'POST /api/pay 500', sourceType: 'access', sourceId: 'src-other', status: '500', method: 'POST', url: '/api/pay' }
+
+    useLogStore.setState({
+      rows: [accessFailure, errorFailure, unrelatedFailure],
+      visibleRows: [errorFailure],
+      grepQuery: 'boom',
+    })
+    render(<FailedRequestsView />)
+
+    expect(screen.getByText('trx-1')).toBeInTheDocument()
+    expect(screen.getByText('GET /api/orders')).toBeInTheDocument()
+    expect(screen.getByText('503')).toBeInTheDocument()
+    expect(screen.getByText((_content, element) => element?.textContent === 'Raw rows: 2')).toBeInTheDocument()
+    expect(screen.queryByText('trx-2')).not.toBeInTheDocument()
+  })
 })

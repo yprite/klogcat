@@ -169,19 +169,44 @@ function evalExpr(row: ParsedLogLine, expr: Expr, policy: LogPolicy): boolean {
 
 export function validateLogQuery(query: string): QueryValidation {
   const tokens = tokenize(query.trim())
+  let depth = 0
+  let expectingOperand = true
   for (const token of tokens) {
+    if (token.type === 'and' || token.type === 'or') {
+      if (expectingOperand) return { ok: false, message: 'incomplete query expression' }
+      expectingOperand = true
+      continue
+    }
+    if (token.type === 'not') {
+      expectingOperand = true
+      continue
+    }
+    if (token.type === 'lparen') {
+      depth += 1
+      expectingOperand = true
+      continue
+    }
+    if (token.type === 'rparen') {
+      depth -= 1
+      if (depth < 0) return { ok: false, message: 'unbalanced parentheses' }
+      if (expectingOperand) return { ok: false, message: 'incomplete query expression' }
+      expectingOperand = false
+      continue
+    }
     if (token.type !== 'word') continue
     const expr = parseTermWord(token.value)
     const field = expr.type === 'not' ? expr.expr : expr
     if (field.type === 'field' && field.regex && field.value && !compileGrepRegex(field.value)) return { ok: false, message: `invalid regex: ${field.key}~:${field.value}` }
+    expectingOperand = false
   }
-  const balance = tokens.reduce((count, token) => count + (token.type === 'lparen' ? 1 : token.type === 'rparen' ? -1 : 0), 0)
-  return balance === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
+  if (tokens.length > 0 && expectingOperand) return { ok: false, message: 'incomplete query expression' }
+  return depth === 0 ? { ok: true } : { ok: false, message: 'unbalanced parentheses' }
 }
 
 export function matchesLogQuery(row: ParsedLogLine, query: string, policy: LogPolicy = getLogPolicy()): boolean {
   const trimmed = query.trim()
   if (!trimmed) return true
+  if (!validateLogQuery(trimmed).ok) return false
   const tokens = tokenize(trimmed)
   const expr = parse(tokens)
   return expr ? evalExpr(row, expr, policy) : true

@@ -122,6 +122,30 @@ describe('button actions', () => {
     expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })
 
+  it('rejects Start for a Running pod when no container information is available', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'default',
+      pods: [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: [] }],
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['default'] },
+      podsByScope: {
+        'ctx\u0000default': [{ name: 'pod-1', namespace: 'default', phase: 'Running', containers: [] }],
+      },
+      selectedPods: { 'ctx\u0000default': ['pod-1'] },
+    })
+    render(<LogToolbar sourceType="info" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/container/i))
+    expect(startLogStream).not.toHaveBeenCalled()
+  })
+
   it('records visible action debug when Start is clicked', () => {
     useKubeStore.setState({
       selectedNamespace: 'default',

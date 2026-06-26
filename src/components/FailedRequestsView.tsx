@@ -17,10 +17,16 @@ function reasonLabel(group: ReturnType<typeof groupFailedRequestsFromPolicy>[num
 }
 
 export function FailedRequestsView() {
-  const { visibleRows } = useLogStore()
+  const { rows, visibleRows, grepQuery } = useLogStore()
   const policy = getLogPolicy()
-  const failedRequests = useMemo(() => groupFailedRequestsFromPolicy(visibleRows, policy), [visibleRows, policy])
+  const visibleRowIds = useMemo(() => new Set(visibleRows.map((row) => row.id)), [visibleRows])
+  const failedRequests = useMemo(() => {
+    const groups = groupFailedRequestsFromPolicy(rows, policy)
+    if (!grepQuery.trim()) return groups
+    return groups.filter((group) => group.rawRows.some((row) => visibleRowIds.has(row.id)))
+  }, [grepQuery, policy, rows, visibleRowIds])
   const correlationLabel = policy.grouping.correlationFields.join(' → ')
+  const sourceRowLabel = grepQuery.trim() ? `${visibleRows.length}/${rows.length}` : String(rows.length)
 
   return <section data-testid="failed-requests-view" className="min-h-0 flex-1 overflow-auto rounded border border-slate-800 bg-slate-950 p-4">
     <div className="mb-4 border-b border-slate-800 pb-3">
@@ -33,7 +39,7 @@ export function FailedRequestsView() {
     <div className="grid gap-3 md:grid-cols-4">
       <div className="rounded border border-slate-800 bg-slate-900 p-3">
         <p className="text-xs uppercase text-slate-500">Source rows available</p>
-        <p className="mt-1 text-2xl font-semibold text-white">{visibleRows.length}</p>
+        <p className="mt-1 text-2xl font-semibold text-white">{sourceRowLabel}</p>
       </div>
       <div className="rounded border border-slate-800 bg-slate-900 p-3">
         <p className="text-xs uppercase text-slate-500">Failed request groups</p>
