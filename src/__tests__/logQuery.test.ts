@@ -11,9 +11,18 @@ describe('matchesLogQuery', () => {
     expect(matchesLogQuery(row, 'namespace:dev')).toBe(false)
   })
 
+  it('matches direct field aliases through the query field reader', () => {
+    const richRow: ParsedLogLine = { ...row, raw: 'raw timeout body', summary: 'summary timeout', namespace: 'prod', pod: 'api-1', container: 'app', logger: 'gateway', service: 'billing' }
+
+    expect(matchesLogQuery(richRow, 'line:raw message:timeout raw:body')).toBe(true)
+    expect(matchesLogQuery(richRow, 'summary:summary ns:prod pod:api-1 container:app')).toBe(true)
+    expect(matchesLogQuery(richRow, 'tag:gateway package:billing')).toBe(true)
+  })
+
   it('supports negation, regex fields, or and parentheses', () => {
     expect(matchesLogQuery(row, '(status:200 | status:500) & -pod:worker')).toBe(true)
     expect(matchesLogQuery(row, 'url~:/api/.+ & method:POST')).toBe(true)
+    expect(matchesLogQuery(row, '! status:200')).toBe(true)
   })
 
   it('supports severity and stacktrace predicates', () => {
@@ -23,6 +32,7 @@ describe('matchesLogQuery', () => {
 
   it('uses failure and severity policy for query predicates', () => {
     const statusFailure: ParsedLogLine = { ...row, level: undefined, status: '503', exceptionName: undefined, sourceType: 'access' }
+    expect(matchesLogQuery(statusFailure, 'is:crash')).toBe(true)
     expect(matchesLogQuery(statusFailure, 'is:error')).toBe(true)
 
     const policy = {

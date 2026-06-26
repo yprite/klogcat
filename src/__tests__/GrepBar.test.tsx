@@ -50,6 +50,16 @@ describe('QueryBar', () => {
 
     expect(useLogStore.getState().grepQuery).toBe('package:')
   })
+
+  it('leaves suggestions open for unhandled keys', () => {
+    render(<GrepBar />)
+
+    const input = screen.getByLabelText('Query')
+    fireEvent.keyDown(input, { code: 'Space', ctrlKey: true })
+    fireEvent.keyDown(input, { key: 'a' })
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
 })
 
 describe('query suggestion helpers', () => {

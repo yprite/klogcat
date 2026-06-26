@@ -292,6 +292,17 @@ export type LogPolicyLoadResult = {
 
 export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy {
   if (!isRecord(value)) throw new Error('log policy must be an object')
+  assertPolicyHeader(value)
+  assertPolicySources(value.sources)
+  assertPolicyColumns(value.columns)
+  assertPolicyQuery(value.query)
+  assertPolicySeverity(value.severity)
+  assertPolicyFailure(value.failure)
+  assertPolicyGrouping(value.grouping)
+  assertPolicyParser(value.parser)
+}
+
+function assertPolicyHeader(value: Record<string, unknown>) {
   if (value.version !== 1) throw new Error('log policy version must be 1')
   assertString(value.pathTemplate, 'pathTemplate')
   const pathTemplate = value.pathTemplate
@@ -299,8 +310,9 @@ export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy
   assertString(value.defaultContainer, 'defaultContainer')
   const defaultContainer = value.defaultContainer
   if (defaultContainer.trim() === '') throw new Error('log policy defaultContainer is required')
+}
 
-  const sources = value.sources
+function assertPolicySources(sources: unknown) {
   if (!isRecord(sources)) throw new Error('log policy sources must be an object')
   const sourceKeys = Object.keys(defaultLogPolicy.sources)
   for (const key of sourceKeys) {
@@ -311,14 +323,16 @@ export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy
     if (source.pathTemplate !== undefined) assertString(source.pathTemplate, `sources.${key}.pathTemplate`)
     assertStringArray(source.columns, `sources.${key}.columns`)
   }
+}
 
-  const columns = value.columns
+function assertPolicyColumns(columns: unknown) {
   if (!isRecord(columns)) throw new Error('log policy columns must be an object')
   if (!isRecord(columns.labels)) throw new Error('log policy columns.labels must be an object')
   for (const [key, label] of Object.entries(columns.labels)) assertString(label, `columns.labels.${key}`)
   assertStringArray(columns.defaultVisiblePriority, 'columns.defaultVisiblePriority')
+}
 
-  const query = value.query
+function assertPolicyQuery(query: unknown) {
   if (!isRecord(query)) throw new Error('log policy query must be an object')
   assertStringArray(query.sourceAliases, 'query.sourceAliases')
   assertStringArray(query.correlationFields, 'query.correlationFields')
@@ -329,28 +343,32 @@ export function assertValidLogPolicy(value: unknown): asserts value is LogPolicy
     assertString(suggestion.label, `query.suggestions.${index}.label`)
     assertString(suggestion.description, `query.suggestions.${index}.description`)
   })
+}
 
-  const severity = value.severity
+function assertPolicySeverity(severity: unknown) {
   if (!isRecord(severity)) throw new Error('log policy severity must be an object')
   assertNumberRecord(severity.levelRanks, 'severity.levelRanks')
   if (!isRecord(severity.fallbackLevelBySource)) throw new Error('log policy severity.fallbackLevelBySource must be an object')
   for (const [key, level] of Object.entries(severity.fallbackLevelBySource)) if (level !== undefined) assertString(level, `severity.fallbackLevelBySource.${key}`)
   assertString(severity.exceptionLevel, 'severity.exceptionLevel')
   assertString(severity.errorLevel, 'severity.errorLevel')
+}
 
-  const failure = value.failure
+function assertPolicyFailure(failure: unknown) {
   if (!isRecord(failure)) throw new Error('log policy failure must be an object')
   assertStringArray(failure.sourceTypes, 'failure.sourceTypes')
   if (typeof failure.minimumStatus !== 'number' || !Number.isFinite(failure.minimumStatus)) throw new Error('log policy failure.minimumStatus must be a number')
   assertStringArray(failure.exceptionFields, 'failure.exceptionFields')
+}
 
-  const grouping = value.grouping
+function assertPolicyGrouping(grouping: unknown) {
   if (!isRecord(grouping)) throw new Error('log policy grouping must be an object')
   assertStringArray(grouping.correlationFields, 'grouping.correlationFields')
   assertStringArray(grouping.accessSourceTypes, 'grouping.accessSourceTypes')
   assertStringArray(grouping.errorSourceTypes, 'grouping.errorSourceTypes')
+}
 
-  const parser = value.parser
+function assertPolicyParser(parser: unknown) {
   if (!isRecord(parser)) throw new Error('log policy parser must be an object')
   const parserSections = ['base', 'access', 'error', 'info'] as const
   for (const sectionName of parserSections) {

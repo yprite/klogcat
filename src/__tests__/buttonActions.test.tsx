@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogToolbar } from '../components/LogToolbar'
 import { SettingsModal } from '../components/SettingsModal'
+import { selectedStreamIds, stopStreams } from '../components/logToolbarActions'
 import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
@@ -95,6 +96,15 @@ describe('button actions', () => {
     expect(stop).toHaveAttribute('title', expect.stringMatching(/no active stream/i))
   })
 
+  it('reports empty stop attempts through the shared stream action helper', async () => {
+    const log = useLogStore.getState()
+
+    expect(selectedStreamIds({ ...log, activeStreamId: 'legacy-stream', activeStreamIds: [] })).toEqual(['legacy-stream'])
+    await stopStreams(log, [], true)
+
+    expect(useLogStore.getState().errorMessage).toMatch(/no active stream/i)
+  })
+
   it('auto-selects the pod container internally without showing a container picker', () => {
     useKubeStore.setState({
       selectedContext: 'cluster-a',
@@ -122,7 +132,7 @@ describe('button actions', () => {
     expect(screen.getByText(/Start: enabled/)).toBeInTheDocument()
   })
 
-  it('rejects Start for a Running pod when no container information is available', async () => {
+  it('keeps Start disabled for a Running pod when no container information is available', async () => {
     const { startLogStream } = await import('../commands/tauriLogs')
     vi.mocked(listPods).mockResolvedValueOnce({
       context: 'ctx',
@@ -140,9 +150,10 @@ describe('button actions', () => {
     })
     render(<LogToolbar sourceType="info" />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    const start = screen.getByRole('button', { name: 'Start' })
 
-    await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/container/i))
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/container/i))
     expect(startLogStream).not.toHaveBeenCalled()
   })
 
@@ -267,6 +278,10 @@ describe('button actions', () => {
     await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/no live pod/i))
     expect(startLogStream).not.toHaveBeenCalled()
   })
+})
+
+describe('button action settings and stream batches', () => {
+  beforeEach(() => { vi.clearAllMocks(); resetStores() })
 
   it('clears Kubernetes target cache from settings and exposes restart', () => {
     const restart = vi.fn()

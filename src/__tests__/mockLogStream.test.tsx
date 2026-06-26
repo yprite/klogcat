@@ -48,6 +48,20 @@ describe('mock log stream generator', () => {
     expect(first.every((line) => line.sourceType === 'access')).toBe(true)
   })
 
+  it('generates info and error payload shapes for output tests', () => {
+    const info = generateMockLogStreamEvents({ streamId: 'mock-info', sourceType: 'info', count: 1, seed: 3 })[0]
+    const error = generateMockLogStreamEvents({ streamId: 'mock-error', sourceType: 'error', count: 1, seed: 3 })[0]
+    const infoPayload = JSON.parse(info.raw)
+    const errorPayload = JSON.parse(error.raw)
+
+    expect(infoPayload.logType).toBe('INFO')
+    expect(infoPayload.message).toMatch(/mock stream line 0/)
+    expect(infoPayload.body.sequence).toBe(0)
+    expect(errorPayload.logType).toBe('ERR')
+    expect(errorPayload.body.errorDetails.path).toMatch(/\/0$/)
+    expect(errorPayload.body.errorDetails.errors[0].reason).toMatch(/random mock error/)
+  })
+
   it('prints a generated mock batch through the log store and renders the streamed rows', async () => {
     const streamId = 'mock-access-stream'
     const batch = generateMockLogStreamBatch({ streamId, sourceType: 'access', count: 8, seed: 7 })

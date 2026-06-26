@@ -226,6 +226,30 @@ describe('TopBar target picker', () => {
     await waitFor(() => expect(useKubeStore.getState().loadingNamespaces).toBe(false))
   })
 
+  it('shows namespace pod loading state for selected namespaces without loaded pods', () => {
+    useKubeStore.setState({
+      podsByScope: { [scopeKey('ctx', 'default')]: [] },
+      selectedPods: {},
+      loadingPods: true,
+    })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByRole('status', { name: /loading pods for default/i })).toHaveTextContent(/loading pods/i)
+  })
+
+  it('renders legacy selected pod values without scoped separators', () => {
+    useKubeStore.setState({ selectedPods: { legacy: ['legacy-pod'] } })
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+
+    expect(within(dialog).getByText(/legacy-pod/)).toBeInTheDocument()
+  })
+
   it('animates cache refresh progress in the top bar', () => {
     useKubeStore.setState({ cacheRefreshing: true })
     render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)

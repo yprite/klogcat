@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-25T05:29:10.105Z",
+  "generatedAt": "2026-06-26T01:37:09.272Z",
   "thresholds": {
     "cyclomaticComplexity": 10,
     "cognitiveComplexity": 15,
@@ -9,15 +9,31 @@
     "coupling": 12,
     "maintainability": 60
   },
+  "staticQuality": {
+    "policy": {
+      "version": 1,
+      "northStarScore": 900,
+      "minimumGateScore": 600,
+      "complexFunctionBudget": 5,
+      "averageMaintainabilityTarget": 75,
+      "averageCouplingTarget": 6
+    },
+    "score": 721.4,
+    "phase": "architecture-improvement-700"
+  },
   "repository": {
-    "fileCount": 74,
-    "functionCount": 259,
-    "maxCyclomaticComplexity": 96,
-    "maxCognitiveComplexity": 419,
-    "maxFunctionLines": 703,
-    "maxFileLines": 943,
+    "fileCount": 98,
+    "functionCount": 499,
+    "maxCyclomaticComplexity": 15,
+    "maxCognitiveComplexity": 19,
+    "maxFunctionLines": 313,
+    "maxFileLines": 625,
     "maxCoupling": 13,
-    "minMaintainability": 0,
+    "minMaintainability": 54.74,
+    "avgMaintainability": 86.5,
+    "avgCoupling": 2.4,
+    "overComplexFunctionCount": 19,
+    "lowMaintainabilityFileCount": 3,
     "cycleCount": 0,
     "architectureViolationCount": 0
   }
