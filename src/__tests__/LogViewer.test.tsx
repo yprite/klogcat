@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogRow } from '../components/LogRow'
-import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, mergeColumnSettingsWithAvailable, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
+import { columnWidthsForRows, defaultVisibleColumnsFor, exportRowsAsJsonl, forceScrollToBottom, LogViewer, LOG_VIEWER_COLUMN_SETTINGS_STORAGE_KEY, measureLogRowElement, mergeColumnSettingsWithAvailable, moveColumnInOrder, nextVisibleColumnsForToggle, reorderColumnByDrop } from '../components/LogViewer'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import type { ParsedLogLine } from '../types/log'
@@ -370,6 +370,13 @@ describe('LogViewer', () => {
     forceScrollToBottom(element)
 
     expect(element.scrollTop).toBe(2400)
+  })
+
+  it('measures rendered row height for the virtual log list', () => {
+    const element = document.createElement('div')
+    element.getBoundingClientRect = () => ({ height: 52 }) as DOMRect
+
+    expect(measureLogRowElement(element)).toBe(52)
   })
 
   it('serializes exported rows as JSONL', () => {

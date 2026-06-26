@@ -96,6 +96,10 @@ export function forceScrollToBottom(element: HTMLElement | null) {
   element.scrollTop = element.scrollHeight
 }
 
+export function measureLogRowElement(element: Element) {
+  return element.getBoundingClientRect().height
+}
+
 export function textWidthCh(value: string) {
   return Array.from(value).length
 }
@@ -204,7 +208,7 @@ export function LogViewer() {
     count: filteredRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
-    measureElement: (element) => element.getBoundingClientRect().height,
+    measureElement: measureLogRowElement,
     overscan: 10,
   })
   useEffect(() => {
