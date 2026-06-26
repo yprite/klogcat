@@ -140,9 +140,11 @@ describe('button actions', () => {
     })
     render(<LogToolbar sourceType="info" />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    const start = screen.getByRole('button', { name: 'Start' })
 
-    await waitFor(() => expect(useLogStore.getState().errorMessage).toMatch(/container/i))
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/container/i))
+    expect(screen.getByText(/Start: unavailable \(Every selected pod must be Running and have a container\)/)).toBeInTheDocument()
     expect(startLogStream).not.toHaveBeenCalled()
   })
 

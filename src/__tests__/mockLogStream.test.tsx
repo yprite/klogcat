@@ -40,12 +40,16 @@ describe('mock log stream generator', () => {
   it('generates deterministic random-looking stream events for output tests', () => {
     const first = generateMockLogStreamEvents({ streamId: 'mock-stream', sourceType: 'access', count: 4, seed: 42 })
     const second = generateMockLogStreamEvents({ streamId: 'mock-stream', sourceType: 'access', count: 4, seed: 42 })
+    const info = generateMockLogStreamEvents({ streamId: 'mock-info', sourceType: 'info', count: 1, seed: 3 })
+    const error = generateMockLogStreamEvents({ streamId: 'mock-error', sourceType: 'error', count: 1, seed: 4 })
 
     expect(second).toEqual(first)
     expect(first).toHaveLength(4)
     expect(first.map((line) => line.streamId)).toEqual(['mock-stream', 'mock-stream', 'mock-stream', 'mock-stream'])
     expect(new Set(first.map((line) => JSON.parse(line.raw).url)).size).toBeGreaterThan(1)
     expect(first.every((line) => line.sourceType === 'access')).toBe(true)
+    expect(JSON.parse(info[0].raw)).toMatchObject({ logType: 'INFO', service: 'klogcat-mock', message: expect.stringContaining('mock stream line 0') })
+    expect(JSON.parse(error[0].raw)).toMatchObject({ logType: 'ERR', level: 'ERROR', body: { errorDetails: { traceId: 'mock-trace-0' } } })
   })
 
   it('prints a generated mock batch through the log store and renders the streamed rows', async () => {
