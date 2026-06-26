@@ -8,7 +8,7 @@ import { assertValidLogPolicy, getLogPolicy, setActiveLogPolicy } from '../utils
 import { useLogStore } from './logStore'
 
 function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
-  return { ...settings, logPolicyId: settings.logPolicyId ?? 'scloud', logPolicy: settings.logPolicy ?? getLogPolicy() }
+  return { ...settings, language: settings.language ?? 'en', logPolicyId: settings.logPolicyId ?? 'scloud', logPolicy: settings.logPolicy ?? getLogPolicy() }
 }
 
 function applySettingsLogPolicy(settings: PersistedSettings) {

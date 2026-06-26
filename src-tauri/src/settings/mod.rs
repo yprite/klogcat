@@ -7,6 +7,8 @@ use tauri::Manager;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PersistedSettings {
     pub schema_version: u8,
+    #[serde(default = "default_language")]
+    pub language: String,
     pub default_namespace: Option<String>,
     pub initial_tail_lines: u32,
     pub buffer_limit: u32,
@@ -36,9 +38,14 @@ pub struct GetSettingsResponse {
     pub warning: Option<SettingsWarning>,
 }
 
+fn default_language() -> String {
+    "en".into()
+}
+
 pub fn default_settings() -> PersistedSettings {
     PersistedSettings {
         schema_version: 1,
+        language: default_language(),
         default_namespace: None,
         initial_tail_lines: 200,
         buffer_limit: 50_000,
@@ -78,6 +85,9 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     let mut e = Vec::new();
     if s.schema_version != 1 {
         e.push(err("schemaVersion", "schemaVersion must be 1"));
+    }
+    if s.language != "en" && s.language != "ko" {
+        e.push(err("language", "language must be en or ko"));
     }
     if s.initial_tail_lines > 100000 {
         e.push(err(

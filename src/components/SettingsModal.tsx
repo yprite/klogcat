@@ -7,6 +7,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
 import type { SourceLogType } from '../types/log'
+import { supportedLanguages } from '../utils/i18n'
 import { sourceLabelsForActivePolicy } from '../utils/sourceLabels'
 import {
   assertValidLogPolicy,
@@ -126,6 +127,10 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const errors = [...validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy }), ...(policyError ? [{ field: 'logPolicy', message: policyError }] : [])]
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
+  const setLanguage = (language: PersistedSettings['language']) => {
+    setNotice(undefined)
+    setDraft({ ...draft, language })
+  }
   const setCustomPolicy = (policy: LogPolicy, message = 'Profile: Custom, based on SCloud') => {
     setNotice(message)
     setSelectedPolicyId('custom')
@@ -205,6 +210,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
         <nav aria-label="Settings sections" className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sections</p>
           <a className="mt-3 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-runtime">Runtime</a>
+          <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-appearance">Appearance</a>
           <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-log-source">Log source</a>
           <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-advanced">Advanced</a>
           <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-maintenance">Maintenance</a>
@@ -216,6 +222,16 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
             <label className="block text-sm">Initial tail lines <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
             <label className="block text-sm">Buffer limit <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
           </div>
+        </section>
+
+        <section id="settings-appearance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+          <h3 className="text-sm font-semibold text-white">Appearance</h3>
+          <p className="mt-1 text-xs text-slate-400">Choose the UI language used by top-level navigation and future localized labels.</p>
+          <label className="mt-3 block text-sm" htmlFor="language-select">Language</label>
+          <select id="language-select" className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={draft.language} onChange={(e) => setLanguage(e.target.value as PersistedSettings['language'])}>
+            {supportedLanguages.map((language) => <option key={language.code} value={language.code}>{language.nativeLabel} / {language.label}</option>)}
+          </select>
+          {draft.language === 'ko' && <p className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100">한국어 UI 미리보기: 저장하면 상단 내비게이션부터 한국어로 표시됩니다.</p>}
         </section>
 
         <section id="settings-log-source" className="rounded border border-slate-700 bg-slate-950/60 p-3">
