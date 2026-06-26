@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "push": "scripts/strict-push.sh",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
