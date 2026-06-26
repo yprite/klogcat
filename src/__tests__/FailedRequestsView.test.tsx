@@ -1,32 +1,63 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { FailedRequestsView } from '../components/FailedRequestsView'
-import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
-import type { ParsedLogLine } from '../types/log'
+import { FailedRequestsExtensionView } from '../extensions/examples/FailedRequestsExtension'
+import type { LogViewerExtensionHostApi, LogViewerExtensionSnapshot, SdkLogRow } from '../sdk/log-viewer'
 
-const row: ParsedLogLine = { id: 1, streamId: 's', sourceId: 'src', sourceType: 'access', namespace: 'ns', pod: 'p', container: 'c', filePath: '/x', raw: '{}', parseStatus: 'parsed', receivedAt: 1, summary: 'raw', trId: 'trx-1' }
+const row: SdkLogRow = {
+  id: 1,
+  sourceId: 'src',
+  sourceType: 'access',
+  raw: '{}',
+  parseStatus: 'parsed',
+  receivedAt: 1,
+  summary: 'raw',
+  target: { namespace: 'ns', pod: 'p', container: 'c' },
+  correlationIds: { trId: 'trx-1' },
+  fields: { trId: 'trx-1' },
+}
+
+function snapshot(rows: SdkLogRow[]): LogViewerExtensionSnapshot {
+  return {
+    rows,
+    visibleRows: rows,
+    totalRowCount: rows.length,
+    visibleRowCount: rows.length,
+    rowLimit: 50000,
+    grepQuery: '',
+    grepMode: 'substring',
+    viewerPaused: false,
+    autoScrollEnabled: true,
+    streamStatus: 'running',
+    selectedTargetCount: 1,
+  }
+}
+
+const sdk = {
+  protocol: { name: 'klogcat.logViewer', version: 1 },
+  getSnapshot: () => snapshot([]),
+  subscribe: () => () => undefined,
+  grep: { setQuery: () => undefined, setMode: () => undefined },
+  viewer: { pause: () => undefined, resume: () => undefined, clear: () => undefined, setAutoScrollEnabled: () => undefined },
+  export: { rowsAsJsonl: () => '' },
+} satisfies LogViewerExtensionHostApi
 
 describe('FailedRequestsView', () => {
-  beforeEach(() => resetLogStoreForTests())
-
   it('introduces the request-centric layer without replacing raw logs', () => {
-    useLogStore.setState({ rows: [row], visibleRows: [row] })
-    render(<FailedRequestsView />)
+    render(<FailedRequestsExtensionView sdk={sdk} snapshot={snapshot([row])} />)
 
     expect(screen.getByTestId('failed-requests-view')).toBeInTheDocument()
     expect(screen.getByText('Request-centric investigation layer')).toBeInTheDocument()
-    expect(screen.getByText('trId → traceId')).toBeInTheDocument()
+    expect(screen.getByText('trId -> traceId')).toBeInTheDocument()
     expect(screen.getByText('Preserved as source of truth')).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
   })
 
   it('groups failed access and error rows into request cards without dropping raw rows', () => {
-    const accessFailure: ParsedLogLine = { ...row, id: 1, raw: 'access raw', summary: 'GET /api/orders 503', sourceType: 'access', sourceId: 'src-a', status: '503', method: 'GET', url: '/api/orders', elapsed: 87 }
-    const errorFailure: ParsedLogLine = { ...row, id: 2, raw: 'error raw', summary: 'IllegalStateException', sourceType: 'error', sourceId: 'src-e', errorMethod: 'GET', errorPath: '/api/orders', errorReason: 'db timeout' }
-    const successfulRequest: ParsedLogLine = { ...row, id: 3, trId: 'ok-1', raw: 'ok raw', summary: 'GET /health 200', status: '200' }
+    const accessFailure: SdkLogRow = { ...row, id: 1, raw: 'access raw', summary: 'GET /api/orders 503', sourceType: 'access', sourceId: 'src-a', request: { status: '503', method: 'GET', url: '/api/orders', elapsed: 87 }, fields: { trId: 'trx-1', status: '503', method: 'GET', url: '/api/orders' } }
+    const errorFailure: SdkLogRow = { ...row, id: 2, raw: 'error raw', summary: 'IllegalStateException', sourceType: 'error', sourceId: 'src-e', error: { method: 'GET', path: '/api/orders', reason: 'db timeout' }, fields: { trId: 'trx-1', errorMethod: 'GET', errorPath: '/api/orders', errorReason: 'db timeout' } }
+    const successfulRequest: SdkLogRow = { ...row, id: 3, correlationIds: { trId: 'ok-1' }, raw: 'ok raw', summary: 'GET /health 200', request: { status: '200' }, fields: { trId: 'ok-1', status: '200' } }
 
-    useLogStore.setState({ rows: [accessFailure, errorFailure, successfulRequest], visibleRows: [accessFailure, errorFailure, successfulRequest] })
-    render(<FailedRequestsView />)
+    render(<FailedRequestsExtensionView sdk={sdk} snapshot={snapshot([accessFailure, errorFailure, successfulRequest])} />)
 
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('trx-1')).toBeInTheDocument()

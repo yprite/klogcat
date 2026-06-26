@@ -57,6 +57,8 @@ type KubeState = {
   getSelectedPodTargets(): SelectedPodTarget[]
 }
 
+export type KubeStoreState = KubeState
+
 const first = <T,>(items: T[]) => items[0]
 const KUBE_REFRESH_CONCURRENCY = 6
 

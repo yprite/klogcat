@@ -55,4 +55,17 @@ export default tseslint.config(
       globals: testGlobals,
     },
   },
+  {
+    files: ['src/extensions/examples/**/*.{ts,tsx}', 'src/__tests__/fixtures/external-extensions/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['../../stores/**', '../../components/**', '../../utils/**', '../../types/**', '../../../stores/**', '../../../components/**', '../../../utils/**', '../../../types/**'],
+            message: 'Extensions and external fixtures must use the public SDK boundary instead of klogcat internals.',
+          },
+        ],
+      }],
+    },
+  },
 )

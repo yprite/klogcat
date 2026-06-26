@@ -5,8 +5,10 @@ import { defaultSettings } from '../../config/defaultSettings'
 import { scopeKey, useKubeStore } from '../../stores/kubeStore'
 import { resetLogStoreForTests, useLogStore } from '../../stores/logStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import type { ActiveStreamMeta } from '../../types/log'
+import type { ActiveStreamMeta, ParsedLogLine } from '../../types/log'
 import { stopLogStream } from '../../commands/tauriLogs'
+import { registerLogViewerExtension, resetLogViewerExtensionsForTests } from '../../extensions/logViewerExtensions'
+import type { LogViewerExtensionProps } from '../../sdk/log-viewer'
 
 const settingsResponse = vi.hoisted(() => ({
   defaultNamespace: 'missing',
@@ -50,6 +52,26 @@ const meta: ActiveStreamMeta = {
   filePath: '/scloud/foo/logs/api-1/foo.log',
 }
 
+const pluginRow: ParsedLogLine = {
+  ...meta,
+  id: 1,
+  raw: '{"message":"plugin"}',
+  parseStatus: 'parsed',
+  receivedAt: Date.UTC(2026, 0, 1),
+  summary: 'plugin row',
+}
+
+function ThirdPartyViewer({ sdk, snapshot }: LogViewerExtensionProps) {
+  return <section data-testid="third-party-viewer">
+    Vendor rows: {snapshot.visibleRows.length}; protocol: {sdk.protocol.name}@{sdk.protocol.version}
+  </section>
+}
+
+function BrokenThirdPartyViewer() {
+  throw new Error('broken extension render')
+  return null
+}
+
 function installLocalStorageMock() {
   let store: Record<string, string> = {}
   Object.defineProperty(window, 'localStorage', {
@@ -69,6 +91,7 @@ describe('app shell selection scenario', () => {
     settingsResponse.warningMessage = 'settings warning'
     installLocalStorageMock()
     window.localStorage.clear()
+    resetLogViewerExtensionsForTests()
     resetLogStoreForTests()
     useSettingsStore.setState({ settings: defaultSettings, warning: undefined, loading: false, error: undefined })
     useKubeStore.setState({
@@ -122,5 +145,48 @@ describe('app shell selection scenario', () => {
 
     await waitFor(() => expect(useKubeStore.getState().selectedNamespace).toBe('foo'))
     expect(screen.queryByText(/Default namespace/)).not.toBeInTheDocument()
+  })
+
+  it('shows a registered third-party log viewer as a selectable tab', async () => {
+    const unregister = registerLogViewerExtension({
+      id: 'vendor.latency',
+      ownerId: 'vendor',
+      label: 'Latency Map',
+      description: 'Vendor latency breakdown',
+      component: ThirdPartyViewer,
+      requestedCapabilities: ['logs.read'],
+      trustLevel: 'trusted-bundled',
+    })
+    useLogStore.setState({ rows: [pluginRow], visibleRows: [pluginRow] })
+
+    render(<AppShell />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Latency Map' }))
+
+    expect(await screen.findByTestId('third-party-viewer')).toHaveTextContent('Vendor rows: 1; protocol: klogcat.logViewer@1')
+    expect(screen.getByText('Vendor latency breakdown')).toBeInTheDocument()
+
+    unregister()
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true'))
+    expect(screen.queryByRole('tab', { name: 'Latency Map' })).not.toBeInTheDocument()
+  })
+
+  it('isolates a broken extension render to the active tab panel', async () => {
+    registerLogViewerExtension({
+      id: 'vendor.broken',
+      ownerId: 'vendor',
+      label: 'Broken',
+      description: 'Broken viewer',
+      component: BrokenThirdPartyViewer,
+      requestedCapabilities: ['logs.read'],
+      trustLevel: 'trusted-bundled',
+    })
+
+    render(<AppShell />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Broken' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Extension failed: Broken')
+    fireEvent.click(screen.getByRole('tab', { name: 'Raw Logs' }))
+    expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
   })
 })
