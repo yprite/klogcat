@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { AppShell } from '../../components/AppShell'
 import { defaultSettings } from '../../config/defaultSettings'
 import { useKubeStore, scopeKey } from '../../stores/kubeStore'
@@ -117,6 +117,15 @@ function arrangeReadyAppState() {
   })
 }
 
+function arrangeUnselectedAppState() {
+  arrangeReadyAppState()
+  useKubeStore.setState({
+    selectedPod: undefined,
+    selectedPods: {},
+  })
+  useLogStore.setState({ rows: [], visibleRows: [] })
+}
+
 describe('main investigation workflow scenario', () => {
   beforeEach(() => {
     installLocalStorageMock()
@@ -124,6 +133,38 @@ describe('main investigation workflow scenario', () => {
     vi.mocked(startLogStream).mockClear()
     vi.mocked(stopLogStream).mockClear()
     arrangeReadyAppState()
+  })
+
+  it('selects the first log target from the empty-state CTA and then verifies streamed logs', async () => {
+    arrangeUnselectedAppState()
+    render(<AppShell />)
+
+    expect(screen.getByText('No log target selected')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Change Targets' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Target' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /select log targets/i })
+    fireEvent.click(within(dialog).getByLabelText('ctx / demo / api-7d9c8f6b8d-x2abc'))
+    await waitFor(() => expect(screen.getByText('Targets: 1 selected')).toBeInTheDocument())
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({
+      context: 'ctx',
+      namespace: 'demo',
+      pod: targetPod.name,
+      sourceType: 'info',
+    })))
+
+    const streamId = useLogStore.getState().activeStreamIds[0]
+    await act(async () => {
+      useLogStore.getState().markRunning(streamId)
+      useLogStore.getState().appendLines([{ streamId, sourceType: 'info', raw: '{"message":"selected target log visible"}', receivedAt: Date.UTC(2026, 0, 1) }])
+    })
+
+    await waitFor(() => expect(screen.getAllByText('Rows: 1/1').length).toBeGreaterThan(0))
+    expect(useLogStore.getState().visibleRows[0]?.raw).toContain('selected target log visible')
+    expect(screen.getByRole('button', { name: 'Change Targets' })).toBeEnabled()
   })
 
   it('moves through target-ready stream controls, raw filtering, extension mode, and settings', async () => {

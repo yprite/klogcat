@@ -1,5 +1,7 @@
 import type { KeyboardEvent } from 'react'
 import type { LogViewerExtensionId, RegisteredLogViewerExtension } from '../extensions/logViewerExtensions'
+import { useSettingsStore } from '../stores/settingsStore'
+import { t } from '../utils/i18n'
 
 export type InvestigationMode = LogViewerExtensionId
 
@@ -18,6 +20,7 @@ export function logViewerPanelId(id: string) {
 }
 
 export function InvestigationModeSelector({ value, modes, onChange }: { value: InvestigationMode; modes: readonly InvestigationModeOption[]; onChange: (mode: InvestigationMode) => void }) {
+  const language = useSettingsStore((s) => s.settings?.language)
   const selectedMode = modes.find((mode) => mode.id === value) ?? modes[0]
   const selectedIndex = Math.max(0, modes.findIndex((mode) => mode.id === selectedMode?.id))
   const selectByIndex = (index: number) => {
@@ -40,8 +43,8 @@ export function InvestigationModeSelector({ value, modes, onChange }: { value: I
       selectByIndex(modes.length - 1)
     }
   }
-  return <div className="flex shrink-0 items-center justify-between gap-3 rounded border border-slate-800 bg-slate-950 px-2 py-1" aria-label="Investigation mode selector">
-    <div role="tablist" aria-label="Investigation mode" className="flex items-center gap-1" onKeyDown={handleKeyDown}>
+  return <div className="flex shrink-0 items-center justify-between gap-3 rounded border border-slate-800 bg-slate-950 px-2 py-1" aria-label={t(language, 'Investigation mode selector')}>
+    <div role="tablist" aria-label={t(language, 'Investigation mode')} className="flex items-center gap-1" onKeyDown={handleKeyDown}>
       {modes.map((mode) => {
         const selected = value === mode.id
         return <button
@@ -55,10 +58,10 @@ export function InvestigationModeSelector({ value, modes, onChange }: { value: I
           className={`rounded px-3 py-1 text-xs font-semibold transition ${selected ? 'bg-yellow-300 text-slate-950' : 'border border-slate-700 bg-slate-900 text-slate-200 hover:border-yellow-300 hover:text-yellow-200'}`}
           onClick={() => onChange(mode.id)}
         >
-          {mode.label}
+          {t(language, mode.label)}
         </button>
       })}
     </div>
-    <span className="hidden text-[11px] text-slate-400 sm:inline">{selectedMode?.description}</span>
+    <span className="hidden text-[11px] text-slate-400 sm:inline">{t(language, selectedMode?.description ?? '')}</span>
   </div>
 }

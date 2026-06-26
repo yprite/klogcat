@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
 import { useKubeStore } from '../stores/kubeStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { t } from '../utils/i18n'
 import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
 import { LogRow } from './LogRow'
@@ -127,6 +129,7 @@ async function copyText(text: string) {
 }
 
 export function LogViewer() {
+  const language = useSettingsStore((s) => s.settings?.language)
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
   const kube = useKubeStore()
   const selectedTargetCount = kube.getSelectedPodTargets().length
@@ -190,11 +193,11 @@ export function LogViewer() {
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleColumns, visibleRows])
   const emptyState = useMemo(() => {
-    if (rows.length === 0 && selectedTargetCount === 0) return { title: 'No log target selected', detail: 'Use Change Targets to choose a running pod, then start a stream.' }
-    if (rows.length === 0) return { title: 'Ready to stream logs', detail: `Targets selected: ${selectedTargetCount}. Press Start to begin tailing logs.` }
-    if (visibleRows.length === 0 || filteredRows.length === 0) return { title: 'No rows match current filters', detail: 'Adjust Query or column filters to bring rows back into view.' }
+    if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Choose Target to choose a running pod, then start a stream.') }
+    if (rows.length === 0) return { title: t(language, 'Ready to stream logs'), detail: t(language, 'Targets selected: {count}. Press Start to begin tailing logs.', { count: selectedTargetCount }) }
+    if (visibleRows.length === 0 || filteredRows.length === 0) return { title: t(language, 'No rows match current filters'), detail: t(language, 'Adjust Query or column filters to bring rows back into view.') }
     return undefined
-  }, [filteredRows.length, rows.length, selectedTargetCount, visibleRows.length])
+  }, [filteredRows.length, rows.length, selectedTargetCount, visibleRows.length, language])
   const selectedRow = filteredRows.find((row) => row.id === selectedRowId)
   const columnWidths = useMemo(() => columnWidthsForRows(filteredRows, columnOrder), [columnOrder, filteredRows])
   const virtualizer = useVirtualizer({ count: filteredRows.length, getScrollElement: () => parentRef.current, estimateSize: () => 44, overscan: 10 })
@@ -282,42 +285,42 @@ export function LogViewer() {
   const headerHeight = availableColumns.length ? 72 : 0
   return <>
   {availableColumns.length > 0 && <div className="relative flex shrink-0 flex-wrap items-center gap-2 border border-slate-800 bg-slate-900 px-2 py-1 text-xs">
-    <span className="font-semibold uppercase text-slate-300">Columns</span>
-    <span className="rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-yellow-200">{headerColumns.length}/{availableColumns.length} shown</span>
-    {hiddenColumnCount > 0 && <span className="text-slate-400">{hiddenColumnCount} hidden</span>}
-    <button type="button" onClick={showDefaultColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">Essentials</button>
-    <button type="button" onClick={showAllColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">All</button>
-    <button type="button" onClick={clearColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">None</button>
-    <button type="button" aria-expanded={columnManagerOpen} aria-controls="column-manager" onClick={() => setColumnManagerOpen((open) => !open)} className="rounded border border-yellow-500/70 bg-yellow-300 px-2 py-0.5 font-semibold text-black">Manage columns</button>
-    {columnManagerOpen && <div id="column-manager" role="group" aria-label="Column visibility" className="absolute left-2 top-full z-30 mt-1 grid max-h-80 w-[min(56rem,calc(100vw-2rem))] grid-cols-2 gap-2 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 shadow-2xl md:grid-cols-3 lg:grid-cols-4">
+    <span className="font-semibold uppercase text-slate-300">{t(language, 'Columns')}</span>
+    <span className="rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-yellow-200">{headerColumns.length}/{availableColumns.length} {t(language, 'shown')}</span>
+    {hiddenColumnCount > 0 && <span className="text-slate-400">{hiddenColumnCount} {t(language, 'hidden')}</span>}
+    <button type="button" onClick={showDefaultColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">{t(language, 'Essentials')}</button>
+    <button type="button" onClick={showAllColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">{t(language, 'All')}</button>
+    <button type="button" onClick={clearColumns} className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800">{t(language, 'None')}</button>
+    <button type="button" aria-expanded={columnManagerOpen} aria-controls="column-manager" onClick={() => setColumnManagerOpen((open) => !open)} className="rounded border border-yellow-500/70 bg-yellow-300 px-2 py-0.5 font-semibold text-black">{t(language, 'Manage columns')}</button>
+    {columnManagerOpen && <div id="column-manager" role="group" aria-label={t(language, 'Column visibility')} className="absolute left-2 top-full z-30 mt-1 grid max-h-80 w-[min(56rem,calc(100vw-2rem))] grid-cols-2 gap-2 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 shadow-2xl md:grid-cols-3 lg:grid-cols-4">
       {columnOrder.map((key) => {
         const label = labelForColumn(key)
         const checked = visibleColumns.includes(key)
         return <label key={key} className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-[11px] ${checked ? 'border-yellow-500/60 bg-slate-900 text-white' : 'border-slate-800 bg-slate-950 text-slate-500'}`}>
           <span className="truncate font-mono" title={label}>{label}</span>
-          <input type="checkbox" aria-label={`Show ${label}`} checked={checked} onChange={(e) => toggleColumn(key, e.target.checked)} />
+          <input type="checkbox" aria-label={`${t(language, 'Show')} ${label}`} checked={checked} onChange={(e) => toggleColumn(key, e.target.checked)} />
         </label>
       })}
     </div>}
   </div>}
   <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
-      {availableColumns.length > 0 && <div role="row" aria-label="Visible column filters" className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
+      {availableColumns.length > 0 && <div role="row" aria-label={t(language, 'Visible column filters')} className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
         <span className="inline-block min-w-28 text-[10px] uppercase text-slate-400">time/source</span>
         <span className="inline-block min-w-24 text-[10px] uppercase text-slate-400">namespace/pod</span>
-        <span className="inline-block min-w-24 text-[10px] uppercase text-yellow-300">Rows: {filteredRows.length}/{visibleRows.length}</span>
-        {headerColumns.length === 0 && <span className="inline-block min-w-72 text-[10px] uppercase text-slate-500">No data columns selected — use Manage columns or Essentials</span>}
+        <span className="inline-block min-w-24 text-[10px] uppercase text-yellow-300">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span>
+        {headerColumns.length === 0 && <span className="inline-block min-w-72 text-[10px] uppercase text-slate-500">{t(language, 'No data columns selected — use Manage columns or Essentials')}</span>}
         {headerColumns.map((key) => {
           const label = labelForColumn(key)
           const orderIndex = columnOrder.indexOf(key)
           return <span key={key} data-testid="column-control" data-column-key={key} draggable aria-grabbed={draggedColumn === key} onDragStart={(event) => startColumnDrag(key, event)} onDragEnter={(event) => allowColumnDrop(key, event)} onDragOver={(event) => allowColumnDrop(key, event)} onDrop={() => dropColumnOn(key)} onDragEnd={() => { setDraggedColumn(null); setDragOverColumn(null) }} style={{ width: `${columnWidths[key] ?? minColumnWidthCh}ch` }} className={`inline-block cursor-grab border-l border-slate-700 pl-2 pr-2 align-top active:cursor-grabbing ${draggedColumn === key ? 'bg-slate-800 ring-1 ring-yellow-300' : ''} ${dragOverColumn === key && draggedColumn !== key ? 'border-yellow-300 bg-slate-800/70' : ''}`}>
             <span className="mb-0.5 flex gap-1">
-              <button type="button" aria-label={`Move ${label} left`} disabled={orderIndex === 0} onClick={() => moveColumn(key, 'left')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">←</button>
-              <button type="button" aria-label={`Move ${label} right`} disabled={orderIndex === columnOrder.length - 1} onClick={() => moveColumn(key, 'right')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">→</button>
-              <button type="button" aria-label={`Hide ${label}`} onClick={() => toggleColumn(key, false)} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 hover:bg-slate-800">×</button>
+              <button type="button" aria-label={`${t(language, 'Move')} ${label} ${t(language, 'left')}`} disabled={orderIndex === 0} onClick={() => moveColumn(key, 'left')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">←</button>
+              <button type="button" aria-label={`${t(language, 'Move')} ${label} ${t(language, 'right')}`} disabled={orderIndex === columnOrder.length - 1} onClick={() => moveColumn(key, 'right')} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 disabled:cursor-not-allowed disabled:opacity-30">→</button>
+              <button type="button" aria-label={`${t(language, 'Hide')} ${label}`} onClick={() => toggleColumn(key, false)} className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 hover:bg-slate-800">×</button>
             </span>
             <span className="block whitespace-nowrap text-[10px] uppercase text-slate-300">{label}</span>
-            <input aria-label={`Filter ${label}`} className="mt-1 w-full min-w-20 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] text-white placeholder:text-slate-600" placeholder="filter" value={columnFilters[key] ?? ''} onChange={(e)=>setColumnFilter(key, e.target.value)} />
+            <input aria-label={`${t(language, 'Filter')} ${label}`} className="mt-1 w-full min-w-20 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] text-white placeholder:text-slate-600" placeholder={t(language, 'filter')} value={columnFilters[key] ?? ''} onChange={(e)=>setColumnFilter(key, e.target.value)} />
           </span>
         })}
       </div>}
@@ -325,21 +328,21 @@ export function LogViewer() {
         <div className="w-[36rem] max-w-full rounded border border-dashed border-slate-700 bg-slate-900/80 p-5 text-center shadow-lg shadow-black/20">
           <p className="text-base font-semibold text-slate-100">{emptyState.title}</p>
           <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
-          <p className="mt-3 text-xs text-slate-500">Stream status: {streamStatus}</p>
-          {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">Choose Target</button>}
+          <p className="mt-3 text-xs text-slate-500">{t(language, 'Stream status')}: {t(language, streamStatus)}</p>
+          {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">{t(language, 'Choose Target')}</button>}
         </div>
       </div>}
       {virtualizer.getVirtualItems().map(v => <div key={v.key} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
   <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
-    <span className="text-slate-400">Rows: {filteredRows.length}/{visibleRows.length}</span>
-    <button type="button" disabled={filteredRows.length === 0} onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>Copy filtered</button>
-    <button type="button" disabled={filteredRows.length === 0} onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>Export filtered JSONL</button>
-    <span className="text-slate-400">Selected: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : 'none'}</span>
+    <span className="text-slate-400">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>{t(language, 'Copy filtered')}</button>
+    <button type="button" disabled={filteredRows.length === 0} onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>{t(language, 'Export filtered JSONL')}</button>
+    <span className="text-slate-400">{t(language, 'Selected')}: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : t(language, 'none')}</span>
   </div>
-  {selectedRow && <aside aria-label="Log row detail" className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">
-    <div className="mb-2 flex gap-2"><strong>Row #{selectedRow.id}</strong><button type="button" onClick={() => void copyText(selectedRow.raw)}>Copy raw</button><button type="button" onClick={() => void copyText(JSON.stringify(selectedRow, null, 2))}>Copy JSON</button><button type="button" onClick={() => setSelectedRowId(null)}>Close</button></div>
+  {selectedRow && <aside aria-label={t(language, 'Log row detail')} className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">
+    <div className="mb-2 flex gap-2"><strong>{t(language, 'Row')} #{selectedRow.id}</strong><button type="button" onClick={() => void copyText(selectedRow.raw)}>{t(language, 'Copy raw')}</button><button type="button" onClick={() => void copyText(JSON.stringify(selectedRow, null, 2))}>{t(language, 'Copy JSON')}</button><button type="button" onClick={() => setSelectedRowId(null)}>{t(language, 'Close')}</button></div>
     <pre className="whitespace-pre-wrap text-slate-200">{JSON.stringify(selectedRow, null, 2)}</pre>
   </aside>}
   </>
