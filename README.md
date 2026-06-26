@@ -139,6 +139,33 @@ npm install
 npm run tauri dev
 ```
 
+## Live kubectl stream e2e
+
+The default `test:e2e` suite is deterministic and does not require a Kubernetes cluster. To verify the real pod-file stream path, run the opt-in live harness:
+
+```bash
+KLOGCAT_LIVE_KUBECTL_E2E=1 npm run test:e2e:live-kubectl
+```
+
+The harness creates a temporary pod, drives the real target-selection and Start controls in the browser UI, tails the configured file through a Tauri-compatible event bridge, appends dummy lines with `kubectl exec`, and asserts those exact lines appear in the log viewer. It writes artifacts under `.harness/e2e-artifacts/*-live-kubectl/`, including screenshots, console logs, kubectl logs, and a WebM recording.
+
+**Safety:** this test creates and deletes Kubernetes resources in the selected context/namespace. Run it only against a disposable namespace or cluster. If `KLOGCAT_LIVE_POD` names an existing pod, the harness fails rather than reusing or deleting it.
+
+Useful options:
+
+```bash
+KLOGCAT_LIVE_CONTEXT=<context>          # optional; defaults to current kubectl context
+KLOGCAT_LIVE_NAMESPACE=klogcat-e2e      # default namespace
+KLOGCAT_LIVE_POD=<unique-pod-name>       # optional; must not already exist
+KLOGCAT_LIVE_CONTAINER=app              # default container name
+KLOGCAT_LIVE_IMAGE=alpine:3.20          # pod image
+KLOGCAT_LIVE_LOG_PATH=/tmp/klogcat-live-e2e/INFO.log
+KLOGCAT_LIVE_KEEP=1                     # keep pod/namespace for debugging
+KLOGCAT_LIVE_DRY_RUN=1                  # validate the harness plan without kubectl/cluster access
+```
+
+Without `KLOGCAT_LIVE_KUBECTL_E2E=1`, the command exits successfully with `status=skipped` so routine local/CI gates stay deterministic.
+
 ## Quality gates
 
 ```bash
