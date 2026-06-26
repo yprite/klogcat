@@ -92,7 +92,7 @@ export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestP
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
         <h3 className="text-sm font-semibold text-white">{t(language, 'Log Source Profile')}</h3>
-        <p className="mt-1 text-xs text-slate-400">내 Kubernetes 로그 경로가 어떻게 만들어지는지 미리 보고, 검증하고, 안전하게 저장해.</p>
+        <p className="mt-1 text-xs text-slate-400">{t(language, 'Preview, validate, and safely save how Kubernetes log paths are built.')}</p>
       </div>
       <span className="rounded bg-indigo-500/20 px-2 py-1 text-xs text-indigo-100">{t(language, selectedPolicyId === 'custom' ? 'Custom, based on SCloud' : 'SCloud default')}</span>
     </div>
@@ -201,7 +201,7 @@ export function MaintenanceSection({ handleClearTargetCache, handleRestart, load
   const language = useSettingsStore((s) => s.settings?.language)
   return <section id="settings-maintenance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <h3 className="text-sm font-semibold text-white">{t(language, 'Target cache')}</h3>
-    <p className="mt-1 text-xs text-slate-400">캐시된 cluster/namespace/pod 목록을 지워 stale pod 선택 문제를 정리해.</p>
+    <p className="mt-1 text-xs text-slate-400">{t(language, 'Clear cached cluster, namespace, and pod lists to resolve stale pod selections.')}</p>
     <div className="mt-2 flex flex-wrap gap-2">
       <button className="rounded border border-yellow-500 px-3 py-1 text-sm text-yellow-100 hover:bg-yellow-500/10" disabled={loading} onClick={handleClearTargetCache}>{t(language, 'Clear Target Cache')}</button>
       <button className="rounded border border-red-500 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleRestart}>{t(language, 'Restart App')}</button>

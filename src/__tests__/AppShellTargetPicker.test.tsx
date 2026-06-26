@@ -83,4 +83,14 @@ describe('AppShell target picker entry points', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
   })
+
+  it('does not expose internal action debug logs in the user UI', async () => {
+    render(<AppShell />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+
+    expect(screen.queryByText('Action debug')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Settings clicked/)).not.toBeInTheDocument()
+  })
 })
