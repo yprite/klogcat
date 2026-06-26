@@ -92,6 +92,7 @@ function buildCommandResults(logs) {
 function buildTestResults(logs) {
   const unitFrontend = parseVitestLayerOutput(logs['test-unit']?.output ?? '', 'unit')
   const scenario = parseVitestLayerOutput(logs['test-scenario']?.output ?? '', 'scenario')
+  const stress = parseVitestLayerOutput(logs['test-stress']?.output ?? '', 'stress')
   const e2e = parseE2eOutput(logs['test-e2e']?.output ?? '')
   const rust = parseRustTestOutput(logs['rust-test']?.output ?? '')
 
@@ -104,6 +105,7 @@ function buildTestResults(logs) {
       testsTotal: (unitFrontend.testsTotal ?? 0) + rust.passed + rust.failed,
     },
     scenario,
+    stress,
     e2e,
     rust,
   }
@@ -288,72 +290,74 @@ function renderSummaryMarkdown(summary, metrics) {
   const quality = summary.qualityMetrics
   const unit = summary.testResults.unit
   const scenario = summary.testResults.scenario
+  const stress = summary.testResults.stress
   const e2e = summary.testResults.e2e
   const build = summary.buildResults.frontendBuild
 
-  return `# klogcat pre-push report
+  return `# klogcat pre-push 보고서
 
-| Field | Value |
+| 항목 | 값 |
 | --- | --- |
-| Report ID | \`${summary.id}\` |
-| Status | \`${summary.status}\` |
-| Generated at | \`${summary.generatedAt}\` |
-| Branch | \`${summary.git.branch ?? '(detached)'}\` |
+| 보고서 ID | \`${summary.id}\` |
+| 상태 | \`${summary.status}\` |
+| 생성 시각 | \`${summary.generatedAt}\` |
+| 브랜치 | \`${summary.git.branch ?? '(detached)'}\` |
 | HEAD | \`${summary.git.shortHead}\` |
-| Release gate | \`${summary.releaseGate ? 'enabled' : 'skipped'}\` |
+| 릴리스 게이트 | \`${summary.releaseGate ? 'enabled' : 'skipped'}\` |
 
-## Software quality static metrics
+## 소프트웨어 품질 정적 지표
 
-| Metric | Value |
+| 지표 | 값 |
 | --- | ---: |
-| Source files | ${quality?.fileCount ?? 'n/a'} |
-| Functions | ${quality?.functionCount ?? 'n/a'} |
-| Max cyclomatic complexity | ${quality?.maxCyclomaticComplexity ?? 'n/a'} |
-| Max cognitive complexity | ${quality?.maxCognitiveComplexity ?? 'n/a'} |
-| Max function lines | ${quality?.maxFunctionLines ?? 'n/a'} |
-| Max file lines | ${quality?.maxFileLines ?? 'n/a'} |
-| Max coupling | ${quality?.maxCoupling ?? 'n/a'} |
-| Min maintainability | ${quality?.minMaintainability ?? 'n/a'} |
-| Circular dependencies | ${quality?.cycleCount ?? 'n/a'} |
-| Architecture violations | ${quality?.architectureViolationCount ?? 'n/a'} |
-| Violations | ${metrics?.violations?.length ?? 'n/a'} |
+| 소스 파일 | ${quality?.fileCount ?? 'n/a'} |
+| 함수 | ${quality?.functionCount ?? 'n/a'} |
+| 최대 순환 복잡도 | ${quality?.maxCyclomaticComplexity ?? 'n/a'} |
+| 최대 인지 복잡도 | ${quality?.maxCognitiveComplexity ?? 'n/a'} |
+| 최대 함수 라인 수 | ${quality?.maxFunctionLines ?? 'n/a'} |
+| 최대 파일 라인 수 | ${quality?.maxFileLines ?? 'n/a'} |
+| 최대 결합도 | ${quality?.maxCoupling ?? 'n/a'} |
+| 최소 유지보수성 | ${quality?.minMaintainability ?? 'n/a'} |
+| 순환 의존성 | ${quality?.cycleCount ?? 'n/a'} |
+| 아키텍처 위반 | ${quality?.architectureViolationCount ?? 'n/a'} |
+| 위반 항목 | ${metrics?.violations?.length ?? 'n/a'} |
 
-## Test metrics
+## 테스트 지표
 
-| Layer | Status | Passed | Total | Notes |
+| 계층 | 상태 | 통과 | 전체 | 비고 |
 | --- | --- | ---: | ---: | --- |
-| Unit | \`${unit.status}\` | ${unit.testsPassed ?? 'n/a'} | ${unit.testsTotal ?? 'n/a'} | frontend + Rust cargo tests |
-| Scenario | \`${scenario.status}\` | ${scenario.testsPassed ?? 'n/a'} | ${scenario.testsTotal ?? 'n/a'} | ${scenario.reason ?? ''} |
-| E2E | \`${e2e.status}\` | ${e2e.testsPassed ?? 'n/a'} | ${e2e.testsTotal ?? 'n/a'} | vitest + browser + desktop |
+| 단위 | \`${unit.status}\` | ${unit.testsPassed ?? 'n/a'} | ${unit.testsTotal ?? 'n/a'} | 프론트엔드 + Rust cargo 테스트 |
+| 시나리오 | \`${scenario.status}\` | ${scenario.testsPassed ?? 'n/a'} | ${scenario.testsTotal ?? 'n/a'} | ${scenario.reason ?? scenario.duration ?? ''} |
+| 스트레스 | \`${stress.status}\` | ${stress.testsPassed ?? 'n/a'} | ${stress.testsTotal ?? 'n/a'} | ${stress.reason ?? stress.duration ?? ''} |
+| E2E | \`${e2e.status}\` | ${e2e.testsPassed ?? 'n/a'} | ${e2e.testsTotal ?? 'n/a'} | vitest + 브라우저 + 데스크톱 |
 
-## E2E subchecks
+## E2E 세부 검사
 
-| Check | Status | Passed | Total | Artifacts |
+| 검사 | 상태 | 통과 | 전체 | 산출물 |
 | --- | --- | ---: | ---: | --- |
-| Vitest contract | \`${e2e.subchecks?.vitest?.status ?? 'n/a'}\` | ${e2e.subchecks?.vitest?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.vitest?.testsTotal ?? 'n/a'} | n/a |
-| Real browser | \`${e2e.subchecks?.browser?.status ?? 'n/a'}\` | ${e2e.subchecks?.browser?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.browser?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.browser?.artifacts)} |
-| Desktop binary | \`${e2e.subchecks?.desktop?.status ?? 'n/a'}\` | ${e2e.subchecks?.desktop?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.desktop?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.desktop?.artifacts)} |
+| Vitest 계약 | \`${e2e.subchecks?.vitest?.status ?? 'n/a'}\` | ${e2e.subchecks?.vitest?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.vitest?.testsTotal ?? 'n/a'} | n/a |
+| 실제 브라우저 | \`${e2e.subchecks?.browser?.status ?? 'n/a'}\` | ${e2e.subchecks?.browser?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.browser?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.browser?.artifacts)} |
+| 데스크톱 바이너리 | \`${e2e.subchecks?.desktop?.status ?? 'n/a'}\` | ${e2e.subchecks?.desktop?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.desktop?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.desktop?.artifacts)} |
 
-## Build and static checks
+## 빌드 및 정적 검사
 
-| Check | Status |
+| 검사 | 상태 |
 | --- | --- |
 | ESLint | \`${summary.buildResults.lint.status}\` |
-| TypeScript typecheck | \`${summary.buildResults.typecheck.status}\` |
-| Coverage line gate | \`${summary.buildResults.coverage.status}\`${summary.buildResults.coverage.lines !== undefined ? ` (${summary.buildResults.coverage.lines}% lines)` : ''} |
-| Frontend build | \`${build.status}\` |
+| TypeScript 타입 검사 | \`${summary.buildResults.typecheck.status}\` |
+| 커버리지 라인 게이트 | \`${summary.buildResults.coverage.status}\`${summary.buildResults.coverage.lines !== undefined ? ` (${summary.buildResults.coverage.lines}% lines)` : ''} |
+| 프론트엔드 빌드 | \`${build.status}\` |
 | Rust fmt | \`${summary.buildResults.rustFmt.status}\` |
 | Rust clippy | \`${summary.buildResults.rustClippy.status}\` |
-| Security/license | \`${summary.buildResults.securityLicense.status}\` |
-| Tauri build | \`${summary.buildResults.tauriBuild.status}\` |
+| 보안/라이선스 | \`${summary.buildResults.securityLicense.status}\` |
+| Tauri 빌드 | \`${summary.buildResults.tauriBuild.status}\` |
 
-## Frontend build assets
+## 프론트엔드 빌드 산출물
 
-| Asset | Size kB | Gzip kB |
+| 산출물 | 크기 kB | Gzip kB |
 | --- | ---: | ---: |
 ${build.assets.map((asset) => `| \`${asset.path}\` | ${asset.sizeKb} | ${asset.gzipKb ?? 'n/a'} |`).join('\n') || '| n/a | n/a | n/a |'}
 
-## Logs
+## 로그
 
 ${Object.entries(summary.commandResults).map(([name, result]) => {
     const logLink = `logs/${path.basename(result.log)}`
