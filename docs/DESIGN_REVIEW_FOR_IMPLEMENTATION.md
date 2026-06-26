@@ -1,7 +1,7 @@
 # klogcat 설계문서 구현 관점 리뷰
 
 > 리뷰 대상: `/Users/yprite/klogcat/docs/DESIGN.md`  
-> 목적: 설계문서를 구현문서(`docs/plans/v0.1-implementation.md`)로 전환할 수 있는 수준까지 보완하기 위한 독립 리뷰
+> 목적: 설계문서를 구현문서(별도 구현 계획 문서)로 전환할 수 있는 수준까지 보완하기 위한 독립 리뷰
 
 ---
 
@@ -347,7 +347,7 @@ v0.1은 Settings modal을 제공한다.
 
 ### 2.12 구현 단계별 milestone이 없음
 
-`docs/plans/v0.1-implementation.md`로 전환하려면 최소한 milestone이 있어야 한다.
+별도 구현 계획 문서로 전환하려면 최소한 milestone이 있어야 한다.
 
 필요 milestone:
 
@@ -510,7 +510,7 @@ v0.1은 현재 kube context만 사용한다.
 
 ## 4. 제안 구현 계획 개요
 
-`docs/plans/v0.1-implementation.md`는 아래 구조가 적절하다.
+별도 구현 계획 문서는 아래 구조가 적절하다.
 
 ```md
 # klogcat v0.1 Implementation Plan
@@ -1135,7 +1135,7 @@ Not ready yet.
 2. v0.1 user flow와 Tauri command/event contract 확정
 3. settings strategy 확정
 4. parser/search/ring buffer 테스트 기준 추가
-5. 그 후 `docs/plans/v0.1-implementation.md` 작성
+5. 그 후 별도 구현 계획 문서 작성
 
 ---
 
