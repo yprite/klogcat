@@ -60,6 +60,9 @@ rm -f /tmp/klogcat-blocked-tracked.$$
 run_capture typecheck npm run typecheck
 run_capture lint npm run lint
 run_capture metrics-prepush npm run metrics:prepush
+# Coverage includes product-quality checks that assert the production asset bundle exists.
+# Build before coverage so a clean CI checkout behaves like a local pre-push after build.
+run_capture frontend-build npm run build
 run_capture coverage npm run test:coverage
 run_capture security-license npm run security:license
 run_capture test-unit npm run test:unit
@@ -67,7 +70,6 @@ run_capture test-kube-live npm run test:kube:live
 run_capture test-scenario npm run test:scenario
 run_capture test-stress npm run test:stress
 run_capture test-e2e npm run test:e2e
-run_capture frontend-build npm run build
 run_capture rust-fmt bash -lc 'cd src-tauri && cargo fmt --check'
 run_capture rust-clippy bash -lc 'cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings'
 run_capture rust-test bash -lc 'cd src-tauri && cargo test --all-targets'
