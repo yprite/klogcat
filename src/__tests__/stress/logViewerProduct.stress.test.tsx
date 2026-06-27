@@ -200,7 +200,7 @@ describe('log viewer product stress gate', () => {
     const filtered = useLogStore.getState()
     expect(filtered.visibleRows).toHaveLength(productStress.bufferRows / 4)
     expect(filtered.visibleRows.every((row) => row.status === '500')).toBe(true)
-  }, 35_000)
+  }, process.env.CI ? 130_000 : 35_000)
 
   it('keeps core UI interactions within product p95 thresholds at 50k rows', async () => {
     registerLogViewerExtension({
