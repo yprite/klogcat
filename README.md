@@ -7,6 +7,14 @@ viewer tabs through a small public extension protocol.
 
 The app is built with Tauri, React, TypeScript, Rust, and Vite.
 
+## Documentation map
+
+Use this README as the product and developer entry point: what klogcat is, how
+to install it, how to run it, and where the code is organized. The GitHub Wiki
+is intentionally different: it is an operations ledger for release reports,
+quality scores, command logs, and audit artifacts. Long-form design and policy
+documents live under `docs/`.
+
 ## Why klogcat?
 
 Kubernetes logs are often easy to tail and hard to investigate. `kubectl logs`

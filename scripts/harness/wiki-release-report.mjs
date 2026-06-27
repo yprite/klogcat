@@ -142,71 +142,58 @@ function upsertHome(dir) {
 
 function renderHomePage() {
   return `<!-- klogcat:managed-home -->
-# klogcat
+# klogcat 운영 Wiki
 
-Kubernetes pod 안의 로그 파일을 빠르게 선택하고 실시간으로 tail 하는 Tauri + React 데스크톱 로그 뷰어입니다.
+이 Wiki는 제품 소개나 설치 가이드가 아니라 **릴리즈 운영 기록과 품질 검증 증거**를 보관하는 공간입니다.
+제품 개요, 설치, 개발 방법, SDK 설명은 저장소의 README와 docs를 기준으로 확인합니다.
 
 ## 메뉴
 
-- [릴리즈 보고서](Release-Reports) — 릴리즈마다 생성된 테스트/스트레스/품질 검증 보고서
-- [설치](#설치) — GitHub에서 설치하고 처음 실행하기
-- [사용 흐름](#사용-흐름) — context, namespace, pod, container, file path 선택 후 로그 스트리밍
-- [문제 해결](#문제-해결) — 로그가 안 보이거나 버튼 동작이 막힐 때 확인할 것
+- [릴리즈 보고서](Release-Reports) — 태그/릴리즈별 검증 결과 색인
+- [최근 검증 산출물](Release-Reports) — summary, test-results, command-results, 원본 로그 링크
+- [운영 기준](#운영-기준) — 릴리즈를 통과로 판단하는 기준
+- [보고서 읽는 법](#보고서-읽는-법) — 품질 점수와 테스트 계층 해석
 
-## 주요 기능
+## README와 Wiki 역할 분리
 
-- Kubernetes context/namespace/pod/container 선택
-- pod 내부 파일 경로를 \`tail -F\`로 실시간 스트리밍
-- grep 필터와 일시정지로 로그 탐색
-- Start/Stop/Reset 버튼의 명확한 상태 피드백
-- 터미널 진단 모드로 실제 \`kubectl exec ... tail -F ...\` 명령 확인
+- **README**: 처음 보는 사용자를 위한 제품 설명, 설치, 실행, 개발 진입점
+- **docs/**: 기능 설계, 설치 세부사항, 확장 SDK, harness 정책 같은 장기 문서
+- **Wiki**: 릴리즈마다 생성되는 검증 결과, 품질 점수, 로그 산출물의 감사 trail
 
-## 설치
+Wiki에는 설치 절차나 기본 사용법을 반복하지 않습니다. 운영자가 특정 릴리즈가 충분히 검증됐는지 확인할 때 필요한 정보만 둡니다.
 
-Debian/Ubuntu Linux에서 처음 빌드한다면 native dependency를 먼저 설치하세요.
+## 운영 기준
 
-\`\`\`bash
-sudo apt-get update
-sudo apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
-\`\`\`
+릴리즈 보고서는 pre-push/release harness가 만든 산출물을 그대로 보존합니다.
+릴리즈 판단 시 우선 확인할 항목은 다음입니다.
 
-그 다음 GitHub에서 설치합니다.
+- 전체 상태가 \`passed\`인지
+- 소프트웨어 품질 정적 지표의 총점과 품질 단계
+- unit, scenario, stress, E2E 계층별 통과 수
+- lint, typecheck, coverage, build, Rust 검사 상태
+- 실패나 skip이 있으면 원본 command log의 이유
 
-\`\`\`bash
-npm install -g git+ssh://git@github.com/yprite/klogcat.git
-klogcat
-\`\`\`
+## 보고서 읽는 법
 
-처음 실행하면 로컬에서 Tauri native binary를 빌드한 뒤 앱을 실행합니다.
+각 릴리즈 페이지는 다음 순서로 봅니다.
 
-## 사용 흐름
+1. 상단의 태그, 커밋, 생성 시각 확인
+2. **소프트웨어 품질 정적 지표**에서 총점과 품질 단계 확인
+3. **테스트 지표**에서 stress/E2E 포함 여부 확인
+4. **빌드 및 정적 검사**에서 release gate 누락 여부 확인
+5. 필요한 경우 \`artifacts/<tag>/logs/\`의 원본 로그로 재현 근거 확인
 
-1. \`klogcat\` 실행
-2. Kubernetes context 선택
-3. namespace, pod, container 선택
-4. 로그 파일 경로 입력
-5. **Start**로 스트리밍 시작
-6. 필요하면 grep 필터, pause, reset 사용
+## 산출물 보존 정책
 
-## 문제 해결
+각 보고서에는 사람이 읽는 Markdown과 기계가 다시 파싱할 수 있는 JSON을 함께 보관합니다.
 
-앱은 열리지만 로그가 보이지 않으면 진단 모드로 실행하세요.
+- \`summary.md\`: 릴리즈 검증 요약
+- \`summary.json\`: 전체 상태, git 정보, 품질 점수, 테스트/빌드 결과
+- \`test-results.json\`: 테스트 계층별 구조화 결과
+- \`command-results.json\`: 실행된 command와 로그 위치
+- \`logs/\`: harness 원본 출력
 
-\`\`\`bash
-klogcat --debug
-\`\`\`
-
-진단 모드에서는 터미널에 다음 정보가 출력됩니다.
-
-- 실제 \`kubectl exec ... tail -F ...\` 명령
-- pod 파일에서 받은 stdout 라인
-- \`kubectl\` / \`tail\` stderr
-- stream 종료 코드 또는 signal
-
-## 운영/품질 리포팅
-
-릴리즈가 발행될 때마다 Wiki의 [릴리즈 보고서](Release-Reports)에 검증 결과가 자동으로 추가됩니다.
-각 보고서에는 요약 Markdown, JSON 결과, command 결과, 원본 로그 artifact 링크가 포함됩니다.
+제품 사용법이나 개발 작업은 README에서 시작하고, 릴리즈 승인/감사는 이 Wiki에서 확인합니다.
 `
 }
 
