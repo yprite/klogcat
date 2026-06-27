@@ -309,34 +309,34 @@ function renderSummaryMarkdown(summary, metrics) {
 
 | 지표 | 값 |
 | --- | ---: |
-| 소스 파일 | ${quality?.fileCount ?? 'n/a'} |
-| 함수 | ${quality?.functionCount ?? 'n/a'} |
-| 최대 순환 복잡도 | ${quality?.maxCyclomaticComplexity ?? 'n/a'} |
-| 최대 인지 복잡도 | ${quality?.maxCognitiveComplexity ?? 'n/a'} |
-| 최대 함수 라인 수 | ${quality?.maxFunctionLines ?? 'n/a'} |
-| 최대 파일 라인 수 | ${quality?.maxFileLines ?? 'n/a'} |
-| 최대 결합도 | ${quality?.maxCoupling ?? 'n/a'} |
-| 최소 유지보수성 | ${quality?.minMaintainability ?? 'n/a'} |
-| 순환 의존성 | ${quality?.cycleCount ?? 'n/a'} |
-| 아키텍처 위반 | ${quality?.architectureViolationCount ?? 'n/a'} |
-| 위반 항목 | ${metrics?.violations?.length ?? 'n/a'} |
+| 소스 파일 | ${reportValue(quality?.fileCount)} |
+| 함수 | ${reportValue(quality?.functionCount)} |
+| 최대 순환 복잡도 | ${reportValue(quality?.maxCyclomaticComplexity)} |
+| 최대 인지 복잡도 | ${reportValue(quality?.maxCognitiveComplexity)} |
+| 최대 함수 라인 수 | ${reportValue(quality?.maxFunctionLines)} |
+| 최대 파일 라인 수 | ${reportValue(quality?.maxFileLines)} |
+| 최대 결합도 | ${reportValue(quality?.maxCoupling)} |
+| 최소 유지보수성 | ${reportValue(quality?.minMaintainability)} |
+| 순환 의존성 | ${reportValue(quality?.cycleCount)} |
+| 아키텍처 위반 | ${reportValue(quality?.architectureViolationCount)} |
+| 위반 항목 | ${reportValue(metrics?.violations?.length)} |
 
 ## 테스트 지표
 
 | 계층 | 상태 | 통과 | 전체 | 비고 |
 | --- | --- | ---: | ---: | --- |
-| 단위 | \`${unit.status}\` | ${unit.testsPassed ?? 'n/a'} | ${unit.testsTotal ?? 'n/a'} | 프론트엔드 + Rust cargo 테스트 |
-| 시나리오 | \`${scenario.status}\` | ${scenario.testsPassed ?? 'n/a'} | ${scenario.testsTotal ?? 'n/a'} | ${scenario.reason ?? scenario.duration ?? ''} |
-| 스트레스 | \`${stress.status}\` | ${stress.testsPassed ?? 'n/a'} | ${stress.testsTotal ?? 'n/a'} | ${stress.reason ?? stress.duration ?? ''} |
-| E2E | \`${e2e.status}\` | ${e2e.testsPassed ?? 'n/a'} | ${e2e.testsTotal ?? 'n/a'} | vitest + 브라우저 + 데스크톱 |
+| 단위 | \`${unit.status}\` | ${reportValue(unit.testsPassed)} | ${reportValue(unit.testsTotal)} | 프론트엔드 + Rust cargo 테스트 |
+| 시나리오 | \`${scenario.status}\` | ${reportValue(scenario.testsPassed)} | ${reportValue(scenario.testsTotal)} | ${reportNote(scenario.reason ?? scenario.duration)} |
+| 스트레스 | \`${stress.status}\` | ${reportValue(stress.testsPassed)} | ${reportValue(stress.testsTotal)} | ${reportNote(stress.reason ?? stress.duration)} |
+| E2E | \`${e2e.status}\` | ${reportValue(e2e.testsPassed)} | ${reportValue(e2e.testsTotal)} | vitest + 브라우저 + 데스크톱 |
 
 ## E2E 세부 검사
 
 | 검사 | 상태 | 통과 | 전체 | 산출물 |
 | --- | --- | ---: | ---: | --- |
-| Vitest 계약 | \`${e2e.subchecks?.vitest?.status ?? 'n/a'}\` | ${e2e.subchecks?.vitest?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.vitest?.testsTotal ?? 'n/a'} | n/a |
-| 실제 브라우저 | \`${e2e.subchecks?.browser?.status ?? 'n/a'}\` | ${e2e.subchecks?.browser?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.browser?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.browser?.artifacts)} |
-| 데스크톱 바이너리 | \`${e2e.subchecks?.desktop?.status ?? 'n/a'}\` | ${e2e.subchecks?.desktop?.testsPassed ?? 'n/a'} | ${e2e.subchecks?.desktop?.testsTotal ?? 'n/a'} | ${artifactCell(e2e.subchecks?.desktop?.artifacts)} |
+| Vitest 계약 | \`${e2e.subchecks?.vitest?.status ?? 'not-run'}\` | ${reportValue(e2e.subchecks?.vitest?.testsPassed)} | ${reportValue(e2e.subchecks?.vitest?.testsTotal)} | 자체 로그 |
+| 실제 브라우저 | \`${e2e.subchecks?.browser?.status ?? 'not-run'}\` | ${reportValue(e2e.subchecks?.browser?.testsPassed)} | ${reportValue(e2e.subchecks?.browser?.testsTotal)} | ${artifactCell(e2e.subchecks?.browser?.artifacts)} |
+| 데스크톱 바이너리 | \`${e2e.subchecks?.desktop?.status ?? 'not-run'}\` | ${reportValue(e2e.subchecks?.desktop?.testsPassed)} | ${reportValue(e2e.subchecks?.desktop?.testsTotal)} | ${artifactCell(e2e.subchecks?.desktop?.artifacts)} |
 
 ## 빌드 및 정적 검사
 
@@ -355,7 +355,7 @@ function renderSummaryMarkdown(summary, metrics) {
 
 | 산출물 | 크기 kB | Gzip kB |
 | --- | ---: | ---: |
-${build.assets.map((asset) => `| \`${asset.path}\` | ${asset.sizeKb} | ${asset.gzipKb ?? 'n/a'} |`).join('\n') || '| n/a | n/a | n/a |'}
+${buildAssetRows(build.assets)}
 
 ## 로그
 
@@ -366,8 +366,21 @@ ${Object.entries(summary.commandResults).map(([name, result]) => {
 `
 }
 
+function reportValue(value) {
+  return value ?? '미수집'
+}
+
+function reportNote(value) {
+  return value || '특이사항 없음'
+}
+
+function buildAssetRows(assets) {
+  if (assets.length === 0) return '| 빌드 산출물 없음 | 미수집 | 미수집 |'
+  return assets.map((asset) => `| \`${asset.path}\` | ${asset.sizeKb} | ${reportValue(asset.gzipKb)} |`).join('\n')
+}
+
 function artifactCell(artifactPath) {
-  if (!artifactPath) return 'n/a'
+  if (!artifactPath) return '산출물 없음'
   const base = path.basename(artifactPath)
   return `[\`${base}\`](e2e-artifacts/${base})`
 }

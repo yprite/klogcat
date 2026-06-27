@@ -57,6 +57,7 @@ describe('pre-push report generator', () => {
       expect(summaryMarkdown).toContain('| 스트레스 | `passed` | 5 | 5 | 6.44s |')
       expect(summaryMarkdown).toContain('## 빌드 및 정적 검사')
       expect(summaryMarkdown).toContain('## 로그')
+      expect(summaryMarkdown.toLowerCase()).not.toContain('n/a')
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     }
