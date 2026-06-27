@@ -9,11 +9,21 @@ aggregate logs centrally, or tail many pods well. klogcat should win the local
 investigation loop after a service, workload, pod, or incident has been
 identified.
 
-**End image:** An engineer can select a workload, stream the relevant pod file
-logs, follow pod replacements, pivot through structured fields, bookmark
-evidence, run specialized analysis tabs, and export a reproducible
-investigation bundle. Third-party extensions can add domain-specific or AI
-analysis without depending on klogcat internals.
+**End image:** An engineer can select a workload, validate the log sources,
+stream the relevant pod file logs, follow pod replacements, see the first
+failed/slow/error suspects in under 60 seconds on an incident fixture, preserve
+evidence, and share a redacted incident summary. Third-party extensions can add
+domain-specific or AI analysis without depending on klogcat internals.
+
+**Last-hope persona:** The product must work for an on-call engineer during an
+active production incident, when normal terminal tailing is too noisy or too
+fragmented and klogcat is the last practical tool before rollback, escalation,
+or blind guessing. This persona judges the product by time to first credible
+signal, clarity of next action, trust that no source is silently missing, and
+ability to preserve evidence.
+
+Related review: `docs/plans/log-investigation-workbench-last-hope-premortem.md`
+captures the persona-driven pre-mortem that produced the P0.5 requirements.
 
 **Implementation-readiness verdict:** This roadmap is a vNext product plan, not
 yet an implementation specification. A slice is not ready to build until it
@@ -69,8 +79,13 @@ Kubernetes pod file logs -> local investigation workspace -> structured findings
 That means the product must optimize for:
 
 - selecting the right workload and keeping up with pod changes
+- validating that the selected containers and file paths actually contain the
+  intended logs
 - reducing raw log volume into meaningful slices
+- showing failed, slow, restart, event, and permission suspects before users
+  write custom filters
 - preserving investigation context and evidence
+- making degraded Kubernetes permissions and stream failures recoverable
 - allowing specialized tabs to turn raw rows into domain-specific insight
 - supporting AI analysis with explicit privacy and context boundaries
 
@@ -111,6 +126,7 @@ Every slice-specific implementation plan must include all of these sections:
 | Compatibility | States whether it preserves or supersedes relevant `docs/DESIGN.md` rules. |
 | User surfaces | Names the exact app surface, normal state, empty state, loading state, partial-success state, permission-denied state, stale-resource state, and fatal error state. |
 | Kubernetes contract | Lists exact `kubectl` commands, object fields read, required RBAC verbs, polling/watch strategy, and denied-permission fallback. |
+| Log source contract | Defines how container/source/file-path choices are discovered, validated, persisted, and diagnosed when missing or wrong. |
 | Data contract | Defines DTOs for every persisted, exported, SDK-visible, or cross-process object. |
 | Performance budget | Names row count, stream count, p95 latency, memory ceiling, and degradation behavior. |
 | Privacy and security | Defines redaction, persistence, export, secret, network, and extension trust rules before data leaves memory. |
@@ -144,6 +160,10 @@ A slice is ready for implementation only when all are true:
 - It has DTOs for all new state.
 - It has explicit degraded behavior for missing RBAC, missing fields, stale
   Kubernetes objects, too many streams, parser failures, and extension failures.
+- It has an explicit first-five-minutes path when the slice affects incident
+  investigation.
+- It tells the user what to do next when permissions, source paths, parser
+  fields, or stream limits prevent the normal path.
 - It states which existing tests should fail before implementation and pass
   after implementation.
 - It defines manual/live validation against a disposable namespace.
@@ -222,6 +242,10 @@ Stream limits:
   confirmation.
 - If selected workload resolves above the hard limit, block start and show the
   selector/pod count.
+- A hard-limit block must include a narrowing workflow, not only an error. The
+  UI must offer at least pod list inspection and selector refinement, and should
+  offer top recent restarts, not-ready pods, newest pods, or node-based
+  narrowing when those fields are available.
 ```
 
 Partial success:
@@ -231,6 +255,31 @@ Partial success:
 - Successful streams continue when some pods fail RBAC, container lookup, or
   file-path validation.
 - Per-target failures must be visible and exportable in diagnostics.
+```
+
+Source validation:
+
+```text
+- Each stream group must validate container/source/file-path choices before or
+  during start.
+- Validation state must distinguish missing container, missing file path,
+  permission denied, command failure, no rows yet, parser mismatch, and healthy.
+- Source choices may come from user input, saved presets, repo/workspace
+  defaults, or extension-provided presets, but the slice RFC must define which
+  source is supported first.
+- Validation errors must include copyable diagnostics and must not silently
+  fall back to another source family.
+```
+
+Permission repair:
+
+```text
+- Permission-denied states must show the denied verb, resource, namespace, and
+  affected feature when that information can be inferred from kubectl output or
+  the attempted command.
+- The UI must provide copyable repair text for a platform administrator,
+  including the minimum required RBAC for the blocked feature.
+- Permission gaps must be included in diagnostics and incident summaries.
 ```
 
 ### 4.2 Data Contracts
@@ -264,6 +313,43 @@ type StreamTarget = {
   errorCode?: string
 }
 
+type SourceValidationState = {
+  streamId: string
+  status:
+    | 'unvalidated'
+    | 'validating'
+    | 'healthy'
+    | 'missing_container'
+    | 'missing_file_path'
+    | 'permission_denied'
+    | 'command_failed'
+    | 'no_rows_yet'
+    | 'parser_mismatch'
+  diagnosticCommand?: string
+  message: string
+}
+
+type PermissionGap = {
+  feature: 'workloadTarget' | 'contextPanel' | 'events' | 'execTail'
+  context: string
+  namespace?: string
+  verb: string
+  resource: string
+  repairText: string
+}
+
+type InvestigationHealth = {
+  groupId: string
+  activeTargets: number
+  failedTargets: number
+  droppedRowCount: number
+  parserFailureCount: number
+  permissionGapCount: number
+  lastRowAt?: string
+  receivedAt?: string
+  state: 'healthy' | 'degraded' | 'stale' | 'failed'
+}
+
 type TimelineRowIdentity = {
   rowId: string
   streamId: string
@@ -279,6 +365,22 @@ type InvestigationFinding = {
   summary: string
   suggestedNextChecks: string[]
   confidence?: number
+}
+
+type IncidentSummary = {
+  target: LogTargetRef
+  timeWindow: { from: string; to: string }
+  findingIds: string[]
+  activeFilters: string[]
+  redactionPolicyId: string
+  blindSpots: Array<
+    | 'missing_source'
+    | 'missing_parser_fields'
+    | 'permission_gap'
+    | 'stream_failure'
+    | 'dropped_rows'
+    | 'partial_results'
+  >
 }
 ```
 
@@ -300,9 +402,13 @@ Session/export DTOs must include:
 - createdAt
 - appVersion
 - target refs and resolved stream targets
+- source validation states
+- investigation health snapshot
 - active filters/facets
 - bookmarked row ids and notes
 - findings
+- incident summary
+- permission gaps
 - redaction policy id and redaction summary
 - exported row file references
 ```
@@ -366,11 +472,16 @@ the slice plan:
 | Surface | Required states |
 | --- | --- |
 | Target picker | direct pod, workload, label selector, loading, empty namespace, unsupported selector, too many pods, RBAC denied |
+| Source validation | unvalidated, validating, healthy, missing container, missing file path, permission denied, command failed, no rows yet, parser mismatch |
 | Stream group status | all running, running with errors, starting, stopping, ended, failed |
 | Kubernetes context panel | loaded, loading, stale, partial, no permission, events unavailable |
+| Permission repair kit | no gaps, partial gaps, blocked feature, copy repair request, copy failed |
+| Investigation health | healthy, degraded, stale, dropped rows, parser failures, stream failures, clock skew suspected |
 | Facets/filter panel | no rows, counts loading, parse error, selected filters, reset |
+| Finding rail | no findings, calculating, findings present, partial findings, stale evidence, finding copy failed |
 | Analysis tabs | empty, calculating, ready, partial, extension error, export unavailable |
 | Investigation timeline | no bookmarks, bookmarks present, stale row reference, note edit error |
+| Incident summary | no findings, preview, redaction warning, copy success, copy failure |
 | Export dialog | redaction preview, redaction warning, file write success, file write failure |
 | Extension manager | installed, disabled, incompatible protocol, capability denied, activation failed |
 
@@ -427,8 +538,12 @@ Required live Kubernetes validation for workload features:
 - disposable namespace is created and deleted
 - deployment with two pods is tailed through file-tail mode
 - replacement pod is followed after deleting one pod
+- valid source path starts cleanly and invalid source path produces a specific
+  source validation error
 - RBAC-denied events path degrades the context panel without stopping streams
-- too-many-pods selector blocks at the documented hard limit
+- RBAC-denied paths provide copyable permission repair text
+- too-many-pods selector blocks at the documented hard limit and offers a
+  narrowing workflow
 ```
 
 Performance budgets for P0/P1:
@@ -441,6 +556,10 @@ Performance budgets for P0/P1:
 - detail/open row p95 < 150ms.
 - stream group status update p95 < 250ms at 20 active streams.
 - facet recompute p95 < 500ms at 50k rows.
+- first actionable failed/slow/error finding appears in < 60 seconds on the
+  disposable incident fixture.
+- investigation health updates p95 < 250ms when stream, parser, dropped-row, or
+  permission state changes.
 ```
 
 ---
@@ -451,6 +570,7 @@ Use these priority labels:
 
 ```text
 P0 = Required to make the workbench position true.
+P0.5 = Required to make the product usable as a last-hope incident tool.
 P1 = Required for a compelling first public product.
 P2 = Differentiators that make klogcat hard to replace.
 P3 = Ecosystem and polish once the core loop is credible.
@@ -488,11 +608,17 @@ Ship:
    - Start one stream per matched pod/container/source.
    - Keep a shared ordered timeline.
    - Surface per-pod stream status.
+   - Validate source/container/file-path state per target.
 3. Pod replacement follow:
    - Watch/refresh matching pods.
    - Auto-start streams for new matching pods.
    - Mark old pod streams as ended without losing rows.
-4. Explicit previous-log non-goal for MVP:
+4. Selector narrowing:
+   - If a selector exceeds the hard stream limit, show pod count and matching
+     pods instead of only blocking.
+   - Offer selector refinement and available narrowing dimensions such as
+     restart count, readiness, newest pods, or node.
+5. Explicit previous-log non-goal for MVP:
    - Do not use `kubectl logs --previous` in the workload-follow MVP.
    - If previous stdout/stderr logs become necessary, write a separate RFC that
      labels them as a different source family from pod-internal file logs.
@@ -503,8 +629,12 @@ Completion gates:
 - User can select a Deployment and stream logs from all matching pods.
 - When a pod disappears and a replacement appears, klogcat follows the new pod.
 - Timeline rows keep target context visible.
+- Source validation distinguishes missing container, missing file path,
+  permission denied, no rows yet, parser mismatch, and healthy targets.
 - Tests cover direct pod mode, workload mode, and pod replacement.
 - RBAC-denied workload/event paths degrade without blocking direct pod mode.
+- Too-many-pods selectors provide a narrowing path before the user falls back to
+  manual kubectl commands.
 - The implementation passes the Kubernetes command/RBAC matrix above.
 ```
 
@@ -540,6 +670,10 @@ Ship:
    - copy stream command
    - copy `kubectl describe pod`
    - copy `kubectl get events`
+4. Permission repair kit:
+   - show the denied verb/resource/namespace where available
+   - copy a minimum RBAC request for the blocked feature
+   - include permission gaps in diagnostics and incident summaries
 
 Completion gates:
 
@@ -547,6 +681,8 @@ Completion gates:
 - User can explain whether errors correlate with restarts, scheduling, image,
   or readiness state without leaving klogcat.
 - Context panel failures are recoverable and do not block raw logs.
+- Permission-denied context/event/workload paths provide copyable repair text,
+  not only warning banners.
 - Context DTOs and event fallback behavior are documented before code changes.
 ```
 
@@ -555,6 +691,73 @@ Why first:
 ```text
 K9s and Lens win on Kubernetes context. klogcat does not need their full command
 surface, but it must bring the context that makes logs interpretable.
+```
+
+### P0.5. Incident Triage Loop
+
+Current gap:
+
+```text
+The roadmap has collection, context, filters, analysis, and exports, but the
+last-hope user needs one continuous path from target selection to the first
+credible suspect and shareable evidence.
+```
+
+Ship:
+
+1. First-five-minutes incident path:
+   - select workload or label selector
+   - validate source/container/file-path choices
+   - start stream group
+   - show stream health and blind spots
+   - show first failed/slow/error suspects
+   - copy a redacted incident summary
+2. Investigation health panel:
+   - active context and namespace
+   - target count and stream state
+   - failed stream count
+   - dropped row count
+   - parser failure count
+   - last row time
+   - permission gaps
+   - clock-skew suspicion when row time and receive time diverge
+3. Minimal bundled findings:
+   - Failed Requests for parsed `status >= 500` or error reason fields
+   - Slow Requests for parsed elapsed/duration fields
+   - evidence rows referenced by stable row ids
+   - explicit "unavailable because parser fields are missing" state
+4. Finding rail:
+   - top suspects across bundled analysis tabs
+   - severity, title, evidence count, affected target, and time range
+   - stale evidence and partial-results states
+5. Copy incident summary:
+   - target/context/namespace
+   - time window
+   - top findings and evidence row ids
+   - active filters
+   - stream/source/parser/permission blind spots
+   - redaction status
+
+Completion gates:
+
+```text
+- On the disposable incident fixture, a user can go from empty app to first
+  failed/slow/error finding in under 60 seconds.
+- If no finding appears, the UI explains whether the cause is no matching rows,
+  missing parser fields, missing permissions, stream failures, source-path
+  problems, or healthy logs.
+- The user can copy an incident summary without using the full export bundle.
+- Investigation health is always visible while a stream group is active.
+- Findings are emitted through `InvestigationFinding` so P1 analysis tabs,
+  exports, AI, and third-party extensions reuse the same contract.
+```
+
+Why before P1:
+
+```text
+This is the bridge from "log viewer with roadmap" to "tool an engineer can trust
+during an active incident." Without it, the strongest value remains distributed
+across separate future features.
 ```
 
 ### P1. Structured Investigation Controls
@@ -613,8 +816,9 @@ extensions better inputs.
 Current gap:
 
 ```text
-Raw Logs and SDK prove the platform direction, but users need a default
-analysis experience before third-party tabs matter.
+The P0.5 triage loop proves minimal failed/slow findings. P1 turns those
+incident findings into full bundled analysis tabs that prove the SDK and make
+third-party tabs worth copying.
 ```
 
 Ship as bundled extensions, not core viewer logic:
@@ -638,12 +842,14 @@ Ship as bundled extensions, not core viewer logic:
    - all analysis tabs emit `InvestigationFinding`
    - finding evidence references stable row ids
    - findings can be exported before AI work begins
+   - top findings appear in the shared finding rail, not only inside tab-local
+     UI
 
 Completion gates:
 
 ```text
 - At least Failed Requests and Slow Requests ship as extensions using only the
-  public SDK.
+  public SDK, extending the minimal P0.5 findings rather than replacing them.
 - Each tab has an empty state, loading/error boundary, and export path.
 - Raw Logs remains first and is not coupled to analysis tab internals.
 - Findings are produced through a shared contract that can later be reused by AI
@@ -685,10 +891,15 @@ Ship:
 4. Local session persistence:
    - resume the last investigation
    - clear session explicitly
+5. Incident summary continuity:
+   - full bundle must include any copied incident summary fields
+   - export must preserve investigation health, permission gaps, source
+     validation state, and known blind spots
 
 Completion gates:
 
 ```text
+- P0.5 "copy incident summary" remains available without requiring full export.
 - User can export an investigation bundle and reproduce what was visible.
 - Bundle excludes host-only or sensitive fields unless explicitly allowed.
 - Extension findings can be included through a public result contract.
@@ -727,6 +938,8 @@ Ship:
    - explicit API key storage model
    - no SDK access to secrets by default
    - host-mediated network calls for untrusted extensions
+   - visible local-only/no-network state when an analyzer cannot or should not
+     send data
 4. Finding result contract:
    - title
    - severity
@@ -742,6 +955,8 @@ Ship:
 Completion gates:
 
 ```text
+- User can see what data would leave the machine before enabling or running an
+  AI analyzer.
 - A sample AI analyzer extension can produce findings without importing host
   internals.
 - Redacted context can be inspected before network submission.
@@ -876,10 +1091,45 @@ Acceptance criteria:
 | --- | --- | --- | --- | --- |
 | Deployment follow | A deployment has two running pods and APP file logs | User starts a workload stream | Two stream targets run in one timeline | scenario + live-kube |
 | Pod replacement | One selected workload pod is deleted | Replacement pod appears | New pod stream starts automatically | live-kube |
+| Source validation | One matching pod has the requested file path and another does not | User starts workload stream | Healthy target runs and failed target shows source validation error | unit + scenario |
 | RBAC denied | Workloads are denied but pods are listable | User opens target picker | Direct pod mode remains available with warning | unit + scenario |
-| Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count | unit + browser e2e |
+| Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count and narrowing options | unit + browser e2e |
 
-### Slice B: Investigation Filters MVP
+### Slice B: Incident Triage Loop
+
+Priority: P0.5
+
+Scope:
+
+- source validation
+- investigation health panel
+- minimal Failed Requests and Slow Requests findings
+- shared finding rail
+- copy incident summary
+- permission repair kit
+- selector narrowing for too-many-pods
+
+Success metric:
+
+```text
+An on-call engineer can go from empty app to first credible failed/slow/error
+suspect in under 60 seconds on the disposable incident fixture, or understand
+which source, parser, permission, or stream gap prevents that result.
+```
+
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| First finding | Incident fixture has failing and slow rows | User selects workload and starts triage | First finding appears under 60 seconds | scenario + stress + e2e |
+| Missing source | Selected source path does not exist in one pod | Stream group starts | Target shows missing file path and healthy targets continue | unit + scenario |
+| Parser gap | Rows are unstructured or missing status/elapsed fields | Triage runs | UI explains findings are unavailable because parser fields are missing | unit + scenario |
+| Permission repair | Events are RBAC denied | User opens repair kit | Denied scope and copyable RBAC request are shown | unit + live-kube |
+| Too many pods | Selector resolves above hard limit | User starts stream | Narrowing workflow offers selector refinement before blocking | unit + browser e2e |
+| Copy summary | Findings and blind spots exist | User copies summary | Redacted summary includes target, time window, findings, and gaps | unit + e2e |
+| Health trust | Streams drop rows or parser failures occur | User watches investigation health | Degraded state and counters update within budget | stress + browser e2e |
+
+### Slice C: Investigation Filters MVP
 
 Priority: P1
 
@@ -906,7 +1156,7 @@ Acceptance criteria:
 | Invalid filter | User enters malformed query | Query is submitted | Previous results remain and parse error is shown | unit + browser e2e |
 | Facet count | 50k mixed rows are buffered | Facets render | Counts match filtered row base within budget | stress |
 
-### Slice C: First Analysis Tabs
+### Slice D: First Analysis Tabs
 
 Priority: P1
 
@@ -932,7 +1182,7 @@ Acceptance criteria:
 | Slow Requests | Rows include elapsed values | User sets threshold | p50/p95/p99 and route groups update | unit + scenario |
 | Finding export | Analysis tab has findings | User exports | Findings reference stable row ids | unit + e2e |
 
-### Slice D: Investigation Bundle
+### Slice E: Investigation Bundle
 
 Priority: P1
 
@@ -959,7 +1209,7 @@ Acceptance criteria:
 | Redaction | Rows contain tokens/emails/IPs | Export preview opens | Redacted output is shown before write | unit + scenario |
 | Resume | Local session exists | App restarts | User can resume or clear explicitly | unit + e2e |
 
-### Slice E: AI Analyzer Readiness
+### Slice F: AI Analyzer Readiness
 
 Priority: P2
 
@@ -985,7 +1235,7 @@ Acceptance criteria:
 | Async lifecycle | Analyzer runs slowly | User observes tab | queued/running/succeeded or failed state is visible | unit + browser e2e |
 | Finding result | Analyzer returns finding | Finding renders | Evidence row ids point to existing rows | unit |
 
-### Slice F: Third-Party Runtime Extensions
+### Slice G: Third-Party Runtime Extensions
 
 Priority: P2
 
