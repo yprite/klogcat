@@ -15,6 +15,43 @@ evidence, run specialized analysis tabs, and export a reproducible
 investigation bundle. Third-party extensions can add domain-specific or AI
 analysis without depending on klogcat internals.
 
+**Implementation-readiness verdict:** This roadmap is a vNext product plan, not
+yet an implementation specification. A slice is not ready to build until it
+passes the readiness gates in this document.
+
+---
+
+## 0. Supersedes and Compatibility
+
+`docs/DESIGN.md` remains the source of truth for the current shipped product
+contract:
+
+```text
+- klogcat tails pod-internal APP/ACC/ERR files through kubectl exec tail -F.
+- Raw Logs is the source of truth.
+- The current product is not a kubectl logs stdout viewer.
+- The current product does not expose a structured query language or AI analysis.
+```
+
+This roadmap is a **vNext RFC**. It may propose changes that supersede the old
+v0.1/v0.2 constraints, but every implementation slice must explicitly state:
+
+```text
+1. Which current DESIGN.md rule it preserves.
+2. Which current DESIGN.md rule it intentionally supersedes.
+3. Which migration or compatibility behavior keeps existing Raw Logs workflows
+   working.
+4. Which SDK protocol version is required if extension-visible contracts change.
+```
+
+Hard rule:
+
+```text
+No implementation may use this roadmap alone as the engineering spec. Each
+slice needs a slice RFC or implementation plan that passes the readiness gates
+below before code changes start.
+```
+
 ---
 
 ## 1. Product Thesis
@@ -52,7 +89,7 @@ Comparison anchors:
 
 | Competitor class | What users already get | klogcat should not copy | klogcat gap to close |
 | --- | --- | --- | --- |
-| K9s | Fast terminal resource navigation, logs, exec, port-forward, restart, scale, metrics | Full cluster operations console | Need better workload context around logs: owner, labels, restarts, events, previous pod fallback |
+| K9s | Fast terminal resource navigation, logs, exec, port-forward, restart, scale, metrics | Full cluster operations console | Need better workload context around logs: owner, labels, restarts, events, pod replacement history/context |
 | Lens | GUI Kubernetes IDE, pod/container log views, cluster navigation | Broad Kubernetes IDE scope | Need a clearer desktop investigation flow once the relevant workload is selected |
 | Stern | Multi-pod and multi-container tailing, regex pod matching, new pod auto-follow | CLI-first output formatting | Need workload/label-selector stream targets and pod replacement follow |
 | Kubetail | Kubernetes log-focused live tail, multi-pod single timeline, browser/terminal modes | Full hosted log viewer product | Need stronger structured analysis, extension tabs, and investigation artifacts |
@@ -60,7 +97,355 @@ Comparison anchors:
 
 ---
 
-## 3. Prioritization Model
+## 3. Implementation-Readiness Standard
+
+This is the strict gate for turning any roadmap slice into engineering work.
+
+### 3.1 Required Spec Sections
+
+Every slice-specific implementation plan must include all of these sections:
+
+| Required section | Pass criteria |
+| --- | --- |
+| Scope | Explicit in-scope and out-of-scope bullets. |
+| Compatibility | States whether it preserves or supersedes relevant `docs/DESIGN.md` rules. |
+| User surfaces | Names the exact app surface, normal state, empty state, loading state, partial-success state, permission-denied state, stale-resource state, and fatal error state. |
+| Kubernetes contract | Lists exact `kubectl` commands, object fields read, required RBAC verbs, polling/watch strategy, and denied-permission fallback. |
+| Data contract | Defines DTOs for every persisted, exported, SDK-visible, or cross-process object. |
+| Performance budget | Names row count, stream count, p95 latency, memory ceiling, and degradation behavior. |
+| Privacy and security | Defines redaction, persistence, export, secret, network, and extension trust rules before data leaves memory. |
+| SDK impact | States whether `klogcat.logViewer@1` is unchanged or a new protocol is required. |
+| Tests | Maps acceptance criteria to named unit, scenario, stress, browser e2e, desktop e2e, and live Kubernetes commands. |
+| Rollout | Describes feature flag/default state, migration, and rollback behavior. |
+
+If any required section is missing, the slice is not implementation-ready.
+
+### 3.2 Acceptance Criteria Format
+
+Acceptance criteria must be written as testable Given/When/Then cases:
+
+```text
+Given <initial product and Kubernetes state>
+When <user action or backend event>
+Then <observable UI/state/output>
+And <automated or manual validation command>
+```
+
+Vague gates such as "works with workloads" or "exports investigation bundle" do
+not pass. A developer must be able to turn each criterion into a test without
+inventing hidden product behavior.
+
+### 3.3 Definition of Ready
+
+A slice is ready for implementation only when all are true:
+
+```text
+- It changes at most one major product surface at a time.
+- It has DTOs for all new state.
+- It has explicit degraded behavior for missing RBAC, missing fields, stale
+  Kubernetes objects, too many streams, parser failures, and extension failures.
+- It states which existing tests should fail before implementation and pass
+  after implementation.
+- It defines manual/live validation against a disposable namespace.
+- It does not require a later slice's undefined contract.
+```
+
+### 3.4 Definition of Done
+
+A slice is done only when:
+
+```text
+- The slice implementation plan is linked from this roadmap.
+- The code is implemented behind the documented product surface.
+- Existing Raw Logs behavior remains covered.
+- New unit/scenario/e2e/stress/live-kube tests pass.
+- `npm run push -- origin <branch>` passes.
+- Documentation for users and extension authors is updated when behavior is
+  visible to them.
+```
+
+---
+
+## 4. Baseline Contracts Required Before P0/P1 Work
+
+These contracts close the current implementation gaps. They can live here until
+they are split into slice-specific RFCs.
+
+### 4.1 Kubernetes Command and RBAC Matrix
+
+All workload features must remain file-tail first. The primary log collection
+command remains:
+
+```text
+kubectl exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>
+```
+
+Previous stdout/stderr logs from `kubectl logs --previous` are **not in scope**
+for the workload-follow MVP. If previous container output is needed later, it
+requires a separate RFC because it conflicts with the pod-internal file-tail
+model and must be labeled as a different source family.
+
+Required MVP commands:
+
+| Operation | Command shape | Required RBAC | Fallback |
+| --- | --- | --- | --- |
+| List contexts | `kubectl config get-contexts -o name` | local kubeconfig | Show no contexts and diagnostic error. |
+| List namespaces | `kubectl get namespaces -o json` | `list namespaces` | Show accessible context with namespace error. |
+| List pods by namespace | `kubectl get pods -n <namespace> -o json` | `list pods` | Disable pod/workload target mode for that namespace. |
+| List pods by selector | `kubectl get pods -n <namespace> -l <selector> -o json` | `list pods` | Show selector permission or syntax error. |
+| Get pod context | `kubectl get pod -n <namespace> <pod> -o json` | `get pods` | Stream can continue; context panel shows degraded state. |
+| List workloads | `kubectl get deploy,statefulset,daemonset,replicaset -n <namespace> -o json` | `list deployments,statefulsets,daemonsets,replicasets` | Keep direct pod mode available. |
+| Get related ReplicaSet | `kubectl get replicaset -n <namespace> <name> -o json` | `get replicasets` | Owner chain stops at ReplicaSet. |
+| List events | `kubectl get events -n <namespace> --field-selector involvedObject.name=<pod> -o json` | `list events` | Context panel shows events unavailable. |
+| Start file stream | `kubectl exec ... tail -F ...` | `create pods/exec` | Stream group records per-target start failure. |
+
+MVP workload selector rules:
+
+```text
+- Deployment, StatefulSet, DaemonSet, and ReplicaSet targets must resolve pods
+  through `.spec.selector.matchLabels`.
+- If a workload only uses `matchExpressions`, show `unsupported_selector` and do
+  not guess a selector.
+- Label-selector target mode accepts a Kubernetes selector string and passes it
+  directly to `kubectl get pods -l`.
+- Direct pod mode remains unchanged.
+- Watch is optional. The MVP must poll every 5 seconds by default and may use
+  watch later as an optimization.
+```
+
+Stream limits:
+
+```text
+- Default soft limit: 20 active stream targets per stream group.
+- Hard limit: 50 active stream targets.
+- If selected workload resolves above the soft limit, require explicit
+  confirmation.
+- If selected workload resolves above the hard limit, block start and show the
+  selector/pod count.
+```
+
+Partial success:
+
+```text
+- A stream group may be `running_with_errors`.
+- Successful streams continue when some pods fail RBAC, container lookup, or
+  file-path validation.
+- Per-target failures must be visible and exportable in diagnostics.
+```
+
+### 4.2 Data Contracts
+
+All new state must be represented by explicit DTOs before implementation.
+
+```ts
+type TargetMode = 'pod' | 'workload' | 'labelSelector'
+
+type WorkloadKind = 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'ReplicaSet'
+
+type LogTargetRef = {
+  context: string
+  namespace: string
+  mode: TargetMode
+  pod?: string
+  workload?: { kind: WorkloadKind; name: string; selector: string }
+  labelSelector?: string
+}
+
+type StreamTarget = {
+  streamId: string
+  groupId: string
+  context: string
+  namespace: string
+  pod: string
+  container: string
+  sourceType: 'app' | 'access' | 'error'
+  filePath: string
+  status: 'pending' | 'starting' | 'running' | 'ended' | 'failed'
+  errorCode?: string
+}
+
+type TimelineRowIdentity = {
+  rowId: string
+  streamId: string
+  sequence: number
+}
+
+type InvestigationFinding = {
+  id: string
+  source: 'firstParty' | 'extension' | 'ai'
+  title: string
+  severity: 'info' | 'warning' | 'error' | 'critical'
+  evidenceRowIds: string[]
+  summary: string
+  suggestedNextChecks: string[]
+  confidence?: number
+}
+```
+
+Timeline ordering contract:
+
+```text
+1. Prefer parsed log timestamp when available.
+2. Fall back to receivedAt.
+3. Break ties by streamId, then per-stream sequence.
+4. Late arrivals can be inserted inside the reorder window.
+5. Rows outside the reorder window append with a visible late-arrival marker.
+6. Dropped rows must increment per-stream droppedRowCount.
+```
+
+Session/export DTOs must include:
+
+```text
+- schemaVersion
+- createdAt
+- appVersion
+- target refs and resolved stream targets
+- active filters/facets
+- bookmarked row ids and notes
+- findings
+- redaction policy id and redaction summary
+- exported row file references
+```
+
+The first slice that implements export or persistence must define concrete JSON
+schemas for:
+
+```text
+- bundle manifest
+- redaction summary
+- row file references
+- finding serialization
+- bookmark/note serialization
+```
+
+### 4.3 Structured Filter Grammar
+
+Structured filters are not part of the current `DESIGN.md` contract. Before
+Slice B starts, a slice RFC must explicitly supersede that rule.
+
+MVP grammar:
+
+```text
+filter       := clause (WS "AND" WS clause)*
+clause       := field operator value | field ":" value
+operator     := "=" | "!=" | ">" | ">=" | "<" | "<="
+field        := [A-Za-z_][A-Za-z0-9_.-]*
+value        := quoted-string | number | bare-token
+```
+
+The Slice B RFC must define quoted-string escaping and whether the `AND`
+operator is case-sensitive before implementation starts.
+
+MVP exclusions:
+
+```text
+- No OR.
+- No NOT.
+- No parentheses.
+- No arbitrary JavaScript/regex in structured mode.
+- Regex remains only in the existing grep mode.
+```
+
+Field behavior:
+
+```text
+- Numeric comparisons only match numeric fields.
+- Missing fields do not match comparisons.
+- `field:value` is case-insensitive substring for strings and exact match for
+  numbers/booleans.
+- Invalid filters show a parse error and do not change the active result set.
+- Facet counts are computed from rows after time range and source/target
+  filters, but before that facet's own selected values.
+```
+
+### 4.4 Required Product Surfaces
+
+The roadmap is not implementation-ready unless these surfaces are specified in
+the slice plan:
+
+| Surface | Required states |
+| --- | --- |
+| Target picker | direct pod, workload, label selector, loading, empty namespace, unsupported selector, too many pods, RBAC denied |
+| Stream group status | all running, running with errors, starting, stopping, ended, failed |
+| Kubernetes context panel | loaded, loading, stale, partial, no permission, events unavailable |
+| Facets/filter panel | no rows, counts loading, parse error, selected filters, reset |
+| Analysis tabs | empty, calculating, ready, partial, extension error, export unavailable |
+| Investigation timeline | no bookmarks, bookmarks present, stale row reference, note edit error |
+| Export dialog | redaction preview, redaction warning, file write success, file write failure |
+| Extension manager | installed, disabled, incompatible protocol, capability denied, activation failed |
+
+### 4.5 Privacy and Redaction Baseline
+
+This baseline applies before exports, persisted sessions, AI analysis, or
+runtime extensions.
+
+Default redaction:
+
+```text
+- Authorization headers and bearer/basic tokens
+- cookies and session ids
+- API keys and secrets matching common key names
+- email addresses
+- IPv4/IPv6 addresses unless user disables IP redaction
+- fields explicitly marked private by parser or extension metadata
+```
+
+Hard rules:
+
+```text
+- Raw rows are never sent to a network destination by default.
+- Export and AI analysis must show a redaction preview before writing or
+  sending data.
+- Extensions cannot read host secrets through the log-viewer SDK.
+- Runtime extensions cannot get network, shell, filesystem, or Tauri command
+  access without a separate isolated capability RFC.
+```
+
+### 4.6 Test and Performance Gates
+
+Every slice must update tests at the correct layer.
+
+Required command gate:
+
+```bash
+npm run typecheck
+npm run lint
+npm run test:coverage
+npm run test:unit
+npm run test:scenario
+npm run test:stress
+npm run test:e2e
+npm run build
+cd src-tauri && cargo fmt -- --check
+cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
+cd src-tauri && cargo test --all-targets
+```
+
+Required live Kubernetes validation for workload features:
+
+```text
+- disposable namespace is created and deleted
+- deployment with two pods is tailed through file-tail mode
+- replacement pod is followed after deleting one pod
+- RBAC-denied events path degrades the context panel without stopping streams
+- too-many-pods selector blocks at the documented hard limit
+```
+
+Performance budgets for P0/P1:
+
+```text
+- 50k buffered rows remain supported.
+- 150k-row burst simulation remains supported.
+- query p95 < 500ms.
+- tab switch p95 < 200ms.
+- detail/open row p95 < 150ms.
+- stream group status update p95 < 250ms at 20 active streams.
+- facet recompute p95 < 500ms at 50k rows.
+```
+
+---
+
+## 5. Prioritization Model
 
 Use these priority labels:
 
@@ -82,7 +467,7 @@ Evaluation criteria:
 
 ---
 
-## 4. Priority Roadmap
+## 6. Priority Roadmap
 
 ### P0. Workload-Aware Log Collection
 
@@ -107,9 +492,10 @@ Ship:
    - Watch/refresh matching pods.
    - Auto-start streams for new matching pods.
    - Mark old pod streams as ended without losing rows.
-4. Previous container logs:
-   - Offer a previous-log mode for restarted containers when Kubernetes exposes it.
-   - Keep file-tail mode as the main path; previous logs should be explicit.
+4. Explicit previous-log non-goal for MVP:
+   - Do not use `kubectl logs --previous` in the workload-follow MVP.
+   - If previous stdout/stderr logs become necessary, write a separate RFC that
+     labels them as a different source family from pod-internal file logs.
 
 Completion gates:
 
@@ -118,6 +504,8 @@ Completion gates:
 - When a pod disappears and a replacement appears, klogcat follows the new pod.
 - Timeline rows keep target context visible.
 - Tests cover direct pod mode, workload mode, and pod replacement.
+- RBAC-denied workload/event paths degrade without blocking direct pod mode.
+- The implementation passes the Kubernetes command/RBAC matrix above.
 ```
 
 Why first:
@@ -159,6 +547,7 @@ Completion gates:
 - User can explain whether errors correlate with restarts, scheduling, image,
   or readiness state without leaving klogcat.
 - Context panel failures are recoverable and do not block raw logs.
+- Context DTOs and event fallback behavior are documented before code changes.
 ```
 
 Why first:
@@ -208,6 +597,8 @@ Completion gates:
 - User can find failed or slow requests without writing raw regex.
 - Filters update visible rows and extension snapshots consistently.
 - Facet counts remain responsive at the current stress-test row limits.
+- The structured filter grammar is implemented exactly as documented or the
+  slice RFC updates the grammar before implementation.
 ```
 
 Why second:
@@ -243,6 +634,10 @@ Ship as bundled extensions, not core viewer logic:
 4. Trace/Transaction View:
    - pivot by `trId` or `traceId`
    - show rows in request sequence
+5. Shared finding contract:
+   - all analysis tabs emit `InvestigationFinding`
+   - finding evidence references stable row ids
+   - findings can be exported before AI work begins
 
 Completion gates:
 
@@ -251,6 +646,8 @@ Completion gates:
   public SDK.
 - Each tab has an empty state, loading/error boundary, and export path.
 - Raw Logs remains first and is not coupled to analysis tab internals.
+- Findings are produced through a shared contract that can later be reused by AI
+  and third-party extensions.
 ```
 
 Why second:
@@ -295,6 +692,8 @@ Completion gates:
 - User can export an investigation bundle and reproduce what was visible.
 - Bundle excludes host-only or sensitive fields unless explicitly allowed.
 - Extension findings can be included through a public result contract.
+- Bundle schema, persistence location, retention rules, and redaction defaults
+  are documented before implementation.
 ```
 
 Why second:
@@ -450,7 +849,7 @@ feature gap.
 
 ---
 
-## 5. Suggested Release Slices
+## 7. Suggested Release Slices
 
 ### Slice A: Workload Follow MVP
 
@@ -471,6 +870,15 @@ An engineer investigating a deployment can start one stream group and keep
 following logs through pod replacement without manual reselection.
 ```
 
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Deployment follow | A deployment has two running pods and APP file logs | User starts a workload stream | Two stream targets run in one timeline | scenario + live-kube |
+| Pod replacement | One selected workload pod is deleted | Replacement pod appears | New pod stream starts automatically | live-kube |
+| RBAC denied | Workloads are denied but pods are listable | User opens target picker | Direct pod mode remains available with warning | unit + scenario |
+| Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count | unit + browser e2e |
+
 ### Slice B: Investigation Filters MVP
 
 Priority: P1
@@ -490,6 +898,14 @@ An engineer can reduce 50k rows to failed or slow request candidates in under
 the existing query p95 budget.
 ```
 
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Numeric filter | Rows include `status` and `elapsed` | User applies `status >= 500 AND elapsed > 1000` | Only matching rows remain | unit + scenario |
+| Invalid filter | User enters malformed query | Query is submitted | Previous results remain and parse error is shown | unit + browser e2e |
+| Facet count | 50k mixed rows are buffered | Facets render | Counts match filtered row base within budget | stress |
+
 ### Slice C: First Analysis Tabs
 
 Priority: P1
@@ -507,6 +923,14 @@ Success metric:
 The default product gives a useful answer before the user writes a custom
 extension.
 ```
+
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Failed Requests | ACC rows include 5xx responses | User opens Failed Requests | Top failing URLs and samples render | unit + scenario |
+| Slow Requests | Rows include elapsed values | User sets threshold | p50/p95/p99 and route groups update | unit + scenario |
+| Finding export | Analysis tab has findings | User exports | Findings reference stable row ids | unit + e2e |
 
 ### Slice D: Investigation Bundle
 
@@ -527,6 +951,14 @@ An investigation can be handed to another engineer with enough evidence to
 reproduce the path.
 ```
 
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Bookmark | User marks rows and adds notes | Session is exported | Notes and row ids appear in summary | unit + browser e2e |
+| Redaction | Rows contain tokens/emails/IPs | Export preview opens | Redacted output is shown before write | unit + scenario |
+| Resume | Local session exists | App restarts | User can resume or clear explicitly | unit + e2e |
+
 ### Slice E: AI Analyzer Readiness
 
 Priority: P2
@@ -544,6 +976,14 @@ Success metric:
 AI analysis produces structured findings with evidence row ids and no hidden
 data egress.
 ```
+
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Context selection | User selects bookmarked rows | AI analysis starts | Only selected redacted rows are sent | unit + scenario |
+| Async lifecycle | Analyzer runs slowly | User observes tab | queued/running/succeeded or failed state is visible | unit + browser e2e |
+| Finding result | Analyzer returns finding | Finding renders | Evidence row ids point to existing rows | unit |
 
 ### Slice F: Third-Party Runtime Extensions
 
@@ -564,9 +1004,17 @@ A third-party developer can build and load a viewer without changing klogcat
 source code.
 ```
 
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Local install | Extension directory has valid manifest | User enables extension | Tab appears without host source edit | e2e |
+| Incompatible protocol | Manifest requests unsupported version | App loads extension | Extension is rejected before execution | unit + e2e |
+| Broken extension | Extension throws during render | User opens tab | Raw Logs and other tabs remain usable | unit + browser e2e |
+
 ---
 
-## 6. Things Not To Build Yet
+## 8. Things Not To Build Yet
 
 Do not chase these until the workbench loop is strong:
 
@@ -588,7 +1036,7 @@ complement them, not dilute itself into a weaker clone.
 
 ---
 
-## 7. Decision Checklist Before Each Feature
+## 9. Decision Checklist Before Each Feature
 
 Before accepting a new feature into the roadmap, answer:
 
