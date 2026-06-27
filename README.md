@@ -35,14 +35,15 @@ klogcat keeps the core product narrow:
 - Run deterministic unit, scenario, stress, browser e2e, and Tauri gates before
   push.
 
-## Screenshots
+## Demo
 
-Screenshots are not committed yet. For now, run the app locally:
+The demo below is recorded from the deterministic browser e2e harness. It shows
+the app running with a mock log stream, visible raw rows, and query filtering.
 
-```bash
-npm install
-npm run klogcat:dev
-```
+<video src="docs/assets/klogcat-demo.webm" controls muted width="100%"></video>
+
+If your Markdown renderer does not play embedded WebM, open
+[docs/assets/klogcat-demo.webm](docs/assets/klogcat-demo.webm).
 
 ## Requirements
 
