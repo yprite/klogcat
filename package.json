@@ -16,6 +16,7 @@
     "test:scenario:coverage": "node scripts/harness/run-test-layer.mjs scenario --coverage",
     "test:coverage": "node scripts/harness/run-coverage.mjs",
     "test:e2e": "node scripts/harness/run-e2e.mjs",
+    "test:kube:live": "node scripts/harness/run-live-kube-smoke.mjs",
     "test:e2e:live-kubectl": "node scripts/harness/run-live-kubectl-e2e.mjs",
     "test:watch": "vitest",
     "tauri": "tauri",
