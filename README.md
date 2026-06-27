@@ -38,12 +38,13 @@ klogcat keeps the core product narrow:
 ## Demo
 
 The demo below is recorded from the deterministic browser e2e harness. It shows
-the app running with a mock log stream, visible raw rows, and query filtering.
+multi-cluster target selection, multi-pod streaming, visible raw rows, and
+stable parsed-data column alignment.
 
-<video src="docs/assets/klogcat-demo.webm" controls muted width="100%"></video>
+<video src="docs/assets/klogcat-demo.mp4" controls muted width="100%"></video>
 
-If your Markdown renderer does not play embedded WebM, open
-[docs/assets/klogcat-demo.webm](docs/assets/klogcat-demo.webm).
+If your Markdown renderer does not play embedded MP4, open
+[docs/assets/klogcat-demo.mp4](docs/assets/klogcat-demo.mp4).
 
 ## Requirements
 
