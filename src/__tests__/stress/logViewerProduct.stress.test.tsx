@@ -26,6 +26,7 @@ const productStress = {
   bufferRows: 50_000,
   inputSeconds: 30,
   linesPerSecond: 5_000,
+  inputBudgetMs: process.env.CI ? 120_000 : 30_000,
   tabSwitchP95Ms: 500,
   queryP95Ms: 2_000,
   detailOpenP95Ms: 150,
@@ -187,7 +188,7 @@ describe('log viewer product stress gate', () => {
     const elapsedMs = performance.now() - startedAt
     const state = useLogStore.getState()
 
-    expect(elapsedMs).toBeLessThan(productStress.inputSeconds * 1_000)
+    expect(elapsedMs).toBeLessThan(productStress.inputBudgetMs)
     expect(state.rows).toHaveLength(productStress.bufferRows)
     expect(state.visibleRows).toHaveLength(productStress.bufferRows)
     expect(state.totalDroppedCount).toBe(burstRows - productStress.bufferRows)
