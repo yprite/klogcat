@@ -1,188 +1,296 @@
 # klogcat
 
-Tauri + React desktop log tailer for Kubernetes pod log files.
+klogcat is a desktop log viewer for Kubernetes pod log files. It gives you a
+focused, local-first UI for selecting Kubernetes targets, streaming log files
+through `kubectl exec tail -F`, filtering raw output, and building specialized
+viewer tabs through a small public extension protocol.
 
-## Install from GitHub
+The app is built with Tauri, React, TypeScript, Rust, and Vite.
 
-Debian/Ubuntu Linux에서 처음 빌드한다면 먼저 native dependency를 설치하세요:
+## Why klogcat?
+
+Kubernetes logs are often easy to tail and hard to investigate. `kubectl logs`
+and ad-hoc terminal filters work well for a single stream, but become awkward
+when you need repeatable target selection, fast local filtering, multi-source
+inspection, and domain-specific views over the same raw data.
+
+klogcat keeps the core product narrow:
+
+- Raw log streaming stays the source of truth.
+- Kubernetes target selection is handled in the app instead of shell history.
+- Log filtering, pause, clear, copy, and export are first-class UI actions.
+- Non-core investigation views are added through the log-viewer extension SDK.
+- Local quality gates are treated as the release gate, not as optional cleanup.
+
+## Features
+
+- Tail pod file logs through `kubectl exec ... tail -F`.
+- Select Kubernetes context, namespace, pod, container, source type, and file
+  path from the desktop UI.
+- Stream multiple selected targets into a single ordered viewer.
+- Filter with the shared grep/query controls.
+- Pause, resume, clear, copy, and export visible rows.
+- Keep only a bounded in-memory row buffer for large log streams.
+- Use the public `klogcat.logViewer@1` SDK to register third-party viewer tabs.
+- Run deterministic unit, scenario, stress, browser e2e, and Tauri gates before
+  push.
+
+## Screenshots
+
+Screenshots are not committed yet. For now, run the app locally:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y pkg-config libdbus-1-dev libglib2.0-dev
+npm install
+npm run klogcat:dev
 ```
 
-`gio-sys` 에러가 `gio-2.0 >= 2.70`라면 Ubuntu 20.04 / Debian 11 계열은 GLib/GIO가 낮을 수 있습니다. Ubuntu 22.04+ / Debian 12+를 권장합니다.
+## Requirements
 
-그 다음:
+Runtime:
+
+- `kubectl`
+- Access to the Kubernetes context and namespace you want to inspect
+
+Development and local builds:
+
+- Node.js and npm
+- Rust and Cargo
+- Tauri platform dependencies
+
+For OS-specific native dependencies, see [docs/INSTALL.md](docs/INSTALL.md).
+
+## Install
+
+### Option A: install from GitHub
 
 ```bash
 npm install -g git+ssh://git@github.com/yprite/klogcat.git
 klogcat
 ```
 
-First launch builds the native Tauri binary locally.
-
-For full prerequisites and install alternatives, see [docs/INSTALL.md](docs/INSTALL.md).
-
-## Tauri build and runtime flow
-
-`klogcat` is distributed as an npm-style launcher, but the desktop app is still a native Tauri binary.
-
-- `npm install -g git+ssh://git@github.com/yprite/klogcat.git` installs the source package and the `klogcat` CLI wrapper.
-- First `klogcat` launch checks for `src-tauri/target/release/klogcat`.
-- If the binary is missing, the wrapper runs:
+The first launch builds the native Tauri binary locally. The launcher checks
+for `src-tauri/target/release/klogcat` and runs this command when the binary is
+missing:
 
 ```bash
 npm run tauri build -- --no-bundle
 ```
 
-- The production binary is then launched from:
-
-```text
-src-tauri/target/release/klogcat
-```
-
-Useful wrapper commands:
+### Option B: clone and run
 
 ```bash
-klogcat              # build if needed, then launch
-klogcat --build-only # build the Tauri binary and exit
-klogcat --force-build # rebuild the Tauri binary before launch
-klogcat --dev        # run Tauri dev mode with diagnostics enabled
-klogcat --no-build   # launch existing binary only
-klogcat --debug      # print stream diagnostics to the launching terminal
-klogcat --help       # show dependency/build notes
+git clone git@github.com:yprite/klogcat.git
+cd klogcat
+npm install
+npm run klogcat:build
+npm start
 ```
 
-## Debugging log streams and button actions
-
-If the app opens but button actions appear to do nothing, first make sure the native Tauri binary is not stale after `git pull`.
-
-As of `0.0.2`, Start/Stop/Reset actions should provide visible feedback instead of silently doing nothing:
-
-- **Start** remains clickable when namespace/pod/source settings are incomplete and shows the exact reason in the error banner.
-- **Context** dropdown lists `kubectl` contexts so clusters can be switched without changing the global current context.
-- **Container** dropdown uses the selected pod's real containers; if configured `app` is not present, the first pod container is selected instead of blocking with `Container app not in pod`.
-- **Stop** remains clickable when no stream is active and shows `No active stream to stop`.
-- **Reset** updates the settings draft and shows `Settings reset to defaults` when the reset succeeds.
-
-Then run with diagnostics enabled:
+### Option C: development mode
 
 ```bash
-npm start -- --force-build --debug
+npm install
+npm run klogcat:dev
 ```
 
-The wrapper normally rebuilds automatically when source files are newer than `src-tauri/target/release/klogcat`, but `--force-build` is useful when testing a fresh checkout or after manual file changes.
+## CLI
 
-If the app opens but no log lines appear, run it from a terminal with diagnostics enabled:
+The npm package exposes a `klogcat` launcher:
+
+```bash
+klogcat                # build if needed, then launch
+klogcat --build-only   # build the Tauri binary and exit
+klogcat --force-build  # rebuild before launch
+klogcat --dev          # run Tauri dev mode
+klogcat --no-build     # launch the existing binary only
+klogcat --debug        # print stream diagnostics to the terminal
+klogcat --help         # show dependency and build notes
+```
+
+## Using the App
+
+1. Open klogcat.
+2. Choose a Kubernetes target: context, namespace, pod, container, source type,
+   and file path.
+3. Press Start.
+4. Use grep/query controls to narrow the visible rows.
+5. Pause, copy, export, or clear the viewer as needed.
+
+If a stream does not start, launch with diagnostics:
 
 ```bash
 klogcat --debug
 ```
 
-Then press **Start** in the app. The terminal prints:
-
-- the exact `kubectl exec ... tail -F ...` command
-- stdout lines received from the pod file
-- stderr from `kubectl` / `tail`
-- stream exit code or signal
-
-You can also run the same command manually to isolate whether the problem is Kubernetes access, container selection, file path, or frontend rendering:
+The terminal prints the generated `kubectl exec` command, received stdout
+lines, stderr, and stream exit status. You can run the same command manually:
 
 ```bash
 kubectl exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>
 ```
 
-Common causes:
+Common causes of empty streams:
 
-- selected pod is not `Running`
-- configured container name is not in the pod
-- configured file path does not exist inside the container
-- `kubectl` context/permissions differ from the expected cluster
-- grep filter or paused viewer hides incoming lines
+- The selected pod is not `Running`.
+- The selected container is not present in the pod.
+- The configured file path does not exist inside the container.
+- The current `kubectl` context or permissions are not what you expect.
+- The viewer is paused or the active filter hides incoming rows.
 
-For development builds, this also enables diagnostics:
+## Log Viewer Extensions
 
-```bash
-npm run klogcat:dev
-# or
-KLOGCAT_DEBUG=1 npm run tauri dev
+klogcat ships `Raw Logs` as the core viewer. Other tabs should be added through
+the public log-viewer SDK instead of importing internal stores, components, or
+utilities.
+
+Current protocol:
+
+```ts
+import type {
+  KlogcatExtensionModule,
+  LogViewerExtensionProps,
+} from 'klogcat/sdk/log-viewer'
 ```
 
-## Tauri configuration
+A minimal extension module looks like this:
 
-Main Tauri settings live in [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json):
+```tsx
+import type {
+  KlogcatExtensionModule,
+  LogViewerExtensionProps,
+} from 'klogcat/sdk/log-viewer'
 
-- `productName`: `klogcat`
-- `version`: `0.0.2`
-- `identifier`: `com.klogcat.app`
-- `beforeDevCommand`: `npm run dev`
-- `devUrl`: `http://localhost:1420`
-- `beforeBuildCommand`: `npm run build`
-- `frontendDist`: `../dist`
-- Default window: `1200x800`, title `klogcat`
-- Bundle setting: `active: true`, `targets: all`
+function SlowRequests({ sdk, snapshot }: LogViewerExtensionProps) {
+  return (
+    <section>
+      <h2>Slow Requests</h2>
+      <p>Visible rows: {snapshot.visibleRows.length}</p>
+      <button type="button" onClick={() => sdk.grep.setQuery('elapsed > 1000')}>
+        Show slow rows
+      </button>
+    </section>
+  )
+}
 
-The npm scripts mirror this flow:
-
-```bash
-npm run tauri       # pass-through to Tauri CLI
-npm run klogcat:dev # node ./bin/klogcat.js --dev
-npm run klogcat:build # node ./bin/klogcat.js --build-only
-npm start           # node ./bin/klogcat.js
+export const klogcatExtension: KlogcatExtensionModule = {
+  manifest: {
+    id: 'vendor.slow-requests',
+    ownerId: 'vendor',
+    protocol: { name: 'klogcat.logViewer', version: 1 },
+    label: 'Slow Requests',
+    requestedCapabilities: ['logs.read', 'grep.write'],
+    trustLevel: 'trusted-bundled',
+  },
+  activate(host) {
+    return host.registerLogViewer({
+      id: 'vendor.slow-requests',
+      ownerId: 'vendor',
+      label: 'Slow Requests',
+      component: SlowRequests,
+      requestedCapabilities: ['logs.read', 'grep.write'],
+      trustLevel: 'trusted-bundled',
+      order: 100,
+    })
+  },
+}
 ```
+
+The v1 extension model is build-time registration for trusted bundled modules.
+Runtime loading of arbitrary local or remote plugins is intentionally out of
+scope until an isolated host is added.
+
+Read the full SDK contract in
+[docs/LOG_VIEWER_EXTENSIONS.md](docs/LOG_VIEWER_EXTENSIONS.md).
 
 ## Development
 
 ```bash
 npm install
-npm run tauri dev
+npm run typecheck
+npm run lint
+npm run test:unit
+npm run test:scenario
+npm run test:stress
+npm run test:e2e
+npm run build
 ```
 
-## Live kubectl stream e2e
+Native checks:
 
-The default `test:e2e` suite is deterministic and does not require a Kubernetes cluster. To verify the real pod-file stream path, run the opt-in live harness:
+```bash
+cd src-tauri
+cargo fmt -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
+```
+
+## Test Harness
+
+klogcat uses local Git hook harnesses as the authoritative quality gate:
+
+- `npm run harness:precommit` for fast commit-time checks.
+- `npm run harness:prepush` for the full release gate.
+- `npm run push -- origin <branch>` for policy-compliant pushes.
+
+The pre-push gate covers TypeScript, ESLint, coverage, unit tests, scenario
+tests, stress tests, e2e tests, security/license checks, frontend build, Rust
+formatting, Rust linting, Rust tests, and a Tauri no-bundle build.
+
+See [docs/HARNESS_GATES.md](docs/HARNESS_GATES.md) for the exact pass/fail
+criteria.
+
+## Live Kubernetes E2E
+
+The default e2e suite is deterministic and does not require a cluster. To test
+the real pod-file stream path, opt in explicitly:
 
 ```bash
 KLOGCAT_LIVE_KUBECTL_E2E=1 npm run test:e2e:live-kubectl
 ```
 
-The harness creates a temporary pod, drives the real target-selection and Start controls in the browser UI, tails the configured file through a Tauri-compatible event bridge, appends dummy lines with `kubectl exec`, and asserts those exact lines appear in the log viewer. It writes artifacts under `.harness/e2e-artifacts/*-live-kubectl/`, including screenshots, console logs, kubectl logs, and a WebM recording.
-
-**Safety:** this test creates and deletes Kubernetes resources in the selected context/namespace. Run it only against a disposable namespace or cluster. If `KLOGCAT_LIVE_POD` names an existing pod, the harness fails rather than reusing or deleting it.
+This harness creates and deletes Kubernetes resources in the selected
+context/namespace. Run it only against a disposable namespace or cluster.
 
 Useful options:
 
 ```bash
-KLOGCAT_LIVE_CONTEXT=<context>          # optional; defaults to current kubectl context
-KLOGCAT_LIVE_NAMESPACE=klogcat-e2e      # default namespace
-KLOGCAT_LIVE_POD=<unique-pod-name>       # optional; must not already exist
-KLOGCAT_LIVE_CONTAINER=app              # default container name
-KLOGCAT_LIVE_IMAGE=alpine:3.20          # pod image
+KLOGCAT_LIVE_CONTEXT=<context>
+KLOGCAT_LIVE_NAMESPACE=klogcat-e2e
+KLOGCAT_LIVE_POD=<unique-pod-name>
+KLOGCAT_LIVE_CONTAINER=app
+KLOGCAT_LIVE_IMAGE=alpine:3.20
 KLOGCAT_LIVE_LOG_PATH=/tmp/klogcat-live-e2e/INFO.log
-KLOGCAT_LIVE_KEEP=1                     # keep pod/namespace for debugging
-KLOGCAT_LIVE_DRY_RUN=1                  # validate the harness plan without kubectl/cluster access
+KLOGCAT_LIVE_KEEP=1
+KLOGCAT_LIVE_DRY_RUN=1
 ```
 
-Without `KLOGCAT_LIVE_KUBECTL_E2E=1`, the command exits successfully with `status=skipped` so routine local/CI gates stay deterministic.
+## Project Layout
 
-## Quality gates
-
-```bash
-npm test
-npm run build
-cd src-tauri && cargo fmt -- --check && cargo test && cargo check
+```text
+bin/                    npm launcher
+docs/                   installation, design, extension, and harness docs
+e2e/                    browser product e2e tests
+scripts/harness/        local quality gate implementation
+src/                    React app, stores, SDK, extensions, tests
+src-tauri/              Rust/Tauri shell and native commands
 ```
 
-## 팀 규칙: 푸시 정책
+## Contributing
 
-이 저장소는 품질 게이트를 우회하지 않습니다.
-`--no-verify` 사용은 금지합니다.
+1. Create a branch or worktree from `origin/main`.
+2. Keep changes scoped and follow the existing project structure.
+3. Add or update tests for behavior changes.
+4. Run the relevant local gates.
+5. Use `npm run push -- <remote> <branch>` instead of bypassing hooks.
 
-푸시는 아래 명령으로만 수행합니다.
+AI agents working in this repository must follow the worktree rule in
+[AGENTS.md](AGENTS.md).
 
-```bash
-npm run push
-```
+## Release Notes
 
-원격 브랜치로 직접 `git push --no-verify`를 실행하면 정책 위반으로 간주됩니다.
+See [RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+## License
+
+This repository is currently marked `UNLICENSED` in `package.json`. Choose and
+commit an open-source license before publishing it as an open-source project.
