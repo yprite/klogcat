@@ -156,7 +156,7 @@ describe('settings and toolbar scenario', () => {
     expect(window.localStorage.getItem('klogcat:kube-cache:v1')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /restart app/i }))
     expect(onRestart).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: '✕' }))
+    fireEvent.click(screen.getByRole('button', { name: /close settings/i }))
     expect(onClose).toHaveBeenCalledTimes(2)
     modal.unmount()
 

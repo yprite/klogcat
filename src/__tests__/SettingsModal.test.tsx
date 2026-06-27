@@ -141,6 +141,60 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByTestId('settings-scroll-panel')).toHaveClass('overflow-y-auto')
   })
 
+  it('links every visible settings section from the side navigation', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    expect(screen.getByRole('link', { name: /appearance/i })).toHaveAttribute('href', '#settings-appearance')
+    expect(document.getElementById('settings-appearance')).toBeInTheDocument()
+  })
+
+  it('closes with Escape and exposes an accessible close button', async () => {
+    const onClose = vi.fn()
+    render(<SettingsModal open onClose={onClose} onRestart={vi.fn()} />)
+
+    const closeButton = screen.getByRole('button', { name: /close settings/i })
+    await waitFor(() => expect(closeButton).toHaveFocus())
+
+    fireEvent.keyDown(screen.getByRole('dialog', { name: /settings/i }), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('keeps Settings modal labels in the draft language before save', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/language/i), { target: { value: 'ko' } })
+
+    expect(screen.getByRole('heading', { name: '런타임' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '로그 소스 프로필' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument()
+  })
+
+  it('disables Save and explains blocking path warnings', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/path pattern/i), { target: { value: '/logs/app.log' } })
+
+    expect(screen.getAllByText(/include \[namespace\]/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/include \[podname\] or \[pod\]/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('status')).toHaveTextContent(/fix validation errors before saving/i)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('blocks invalid advanced per-source path overrides', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
+    fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/logs/info.log' } })
+
+    expect(screen.getByText(/INFO: Include \[namespace\]/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(saveSettings).not.toHaveBeenCalled()
+  })
+
   it('presents a product-level log source profile builder with live preview and advanced controls', () => {
     seedSelectedTarget()
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
@@ -226,7 +280,7 @@ describe('SettingsModal log policy selection', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText(/language/i), { target: { value: 'ko' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
       language: 'ko',

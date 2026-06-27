@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { checkLogPath } from '../commands/tauriLogs'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLogStore } from '../stores/logStore'
@@ -25,19 +25,19 @@ function clonePolicy(policy: LogPolicy): LogPolicy {
   return JSON.parse(JSON.stringify(policy)) as LogPolicy
 }
 
-function pathWarnings(pattern: string) {
+function pathWarnings(pattern: string, language: PersistedSettings['language']) {
   const warnings: string[] = []
   const tokens = pattern.match(/\[[^\]]+\]/g) ?? []
   for (const token of tokens) {
     if (!knownPathTokens.has(token)) {
-      warnings.push(`Unknown variable: ${token}`)
-      if (token === '[namesapce]') warnings.push('Did you mean [namespace]?')
+      warnings.push(t(language, 'Unknown variable: {token}', { token }))
+      if (token === '[namesapce]') warnings.push(t(language, 'Did you mean [namespace]?'))
     }
   }
-  if (!pattern.trim()) warnings.push('Path pattern cannot be empty.')
-  if (!pattern.startsWith('/')) warnings.push('Path pattern should start with /.')
-  if (!pattern.includes('[namespace]')) warnings.push('Include [namespace] so namespaces resolve to separate paths.')
-  if (!pattern.includes('[podname]') && !pattern.includes('[pod]')) warnings.push('Include [podname] or [pod] so pods resolve to separate paths.')
+  if (!pattern.trim()) warnings.push(t(language, 'Path pattern cannot be empty.'))
+  if (!pattern.startsWith('/')) warnings.push(t(language, 'Path pattern should start with /.'))
+  if (!pattern.includes('[namespace]')) warnings.push(t(language, 'Include [namespace] so namespaces resolve to separate paths.'))
+  if (!pattern.includes('[podname]') && !pattern.includes('[pod]')) warnings.push(t(language, 'Include [podname] or [pod] so pods resolve to separate paths.'))
   return warnings
 }
 
@@ -54,6 +54,9 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const [notice, setNotice] = useState<string>()
   const [testResults, setTestResults] = useState<TestPathResult[]>([])
   const [testingPaths, setTestingPaths] = useState(false)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const next = settings ?? defaultSettings
@@ -65,6 +68,36 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setNotice(undefined)
     setTestResults([])
   }, [settings, open])
+
+  useEffect(() => {
+    if (!open) return
+    previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+    return () => {
+      previouslyFocusedElementRef.current?.focus()
+      previouslyFocusedElementRef.current = null
+    }
+  }, [open])
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      recordActionDebug('Settings escape pressed')
+      onClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   const parsedCustomPolicy = useMemo(() => {
     try {
@@ -89,8 +122,20 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const previewPolicy = policyDraft ?? getLogPolicy()
   const sourceTypes = sourceTypesFromPolicy(previewPolicy)
   const activeTarget = useKubeStore.getState().getSelectedPodTargets()[0]
-  const warnings = pathWarnings(previewPolicy.pathTemplate)
+  const warnings = [
+    ...pathWarnings(previewPolicy.pathTemplate, language),
+    ...sourceTypes.flatMap((sourceType) => {
+      const sourcePathTemplate = previewPolicy.sources[sourceType]?.pathTemplate
+      if (!sourcePathTemplate) return []
+      const label = previewPolicy.sources[sourceType]?.label ?? sourceType
+      return pathWarnings(sourcePathTemplate, language).map((warning) => `${label}: ${warning}`)
+    }),
+  ]
   const errors = [...validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy }), ...(policyError ? [{ field: 'logPolicy', message: policyError }] : [])]
+  const canSave = policyDraft !== undefined && errors.length === 0 && warnings.length === 0
+  const saveBlockedReason = !canSave
+    ? t(language, errors.length > 0 ? 'Fix validation errors before saving.' : 'Fix path warnings before saving.')
+    : undefined
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
   const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
@@ -127,7 +172,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     recordActionDebug(`Save clicked: validationErrors=${errors.length + warnings.length}`)
     setNotice(undefined)
     const nextDraft = { ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft }
-    const ok = policyDraft && errors.length === 0 && warnings.filter((warning) => warning.startsWith('Unknown') || warning.includes('cannot')).length === 0 ? await saveSettings(nextDraft) : false
+    const ok = canSave ? await saveSettings(nextDraft) : false
     if (ok) onClose()
   }
   const handleClearTargetCache = () => {
@@ -169,15 +214,15 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   }
 
   return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
-    <div aria-labelledby="settings-title" aria-modal="true" role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
+    <div aria-labelledby="settings-title" aria-modal="true" onKeyDown={handleDialogKeyDown} ref={dialogRef} role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
         <h2 className="text-lg font-bold" id="settings-title">{t(language, 'Settings')}</h2>
-        <button onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
+        <button aria-label={t(language, 'Close settings')} ref={closeButtonRef} onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[12rem_minmax(0,1fr)] overflow-hidden">
-        <SettingsNav />
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
+        <SettingsNav language={language} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <RuntimeSection draft={draft} setNum={setNum} />
+          <RuntimeSection draft={draft} language={language} setNum={setNum} />
           <section id="settings-appearance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
             <h3 className="text-sm font-semibold text-white">{t(language, 'Appearance')}</h3>
             <p className="mt-1 text-xs text-slate-400">{t(language, 'Choose the UI language used by top-level navigation and future localized labels.')}</p>
@@ -187,13 +232,13 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
               <option value="ko">한국어 / {t(language, 'Korean')}</option>
             </select>
           </section>
-          <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />
-          <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />
-          <StatusMessages error={error} errors={errors} notice={notice} />
-          <MaintenanceSection handleClearTargetCache={handleClearTargetCache} handleRestart={handleRestart} loading={loading} />
+          <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />
+          <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} language={language} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />
+          <StatusMessages error={error} errors={errors} language={language} notice={notice} />
+          <MaintenanceSection handleClearTargetCache={handleClearTargetCache} handleRestart={handleRestart} language={language} loading={loading} />
         </div>
       </div>
-      <SettingsFooter handleReset={handleReset} handleSave={handleSave} loading={loading} />
+      <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />
     </div>
   </div>
 }

@@ -53,7 +53,7 @@ describe('i18n language settings', () => {
 
     fireEvent.change(selector, { target: { value: 'ko' } })
     expect(selector).toHaveValue('ko')
-    expect(screen.getByText('화면 표시')).toBeInTheDocument()
+    expect(screen.getAllByText('화면 표시').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /Save|저장/ }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: 'ko' })))
