@@ -315,10 +315,10 @@ export function LogViewer() {
   </div>}
   <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
-      {availableColumns.length > 0 && <div role="row" aria-label={t(language, 'Visible column filters')} className="sticky top-0 z-10 inline-flex min-w-max gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
-        <span className="inline-block min-w-28 text-[10px] uppercase text-slate-400">time/source</span>
-        <span className="inline-block min-w-24 text-[10px] uppercase text-slate-400">namespace/pod</span>
-        <span className="inline-block min-w-24 text-[10px] uppercase text-yellow-300">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span>
+      {availableColumns.length > 0 && <div role="row" aria-label={t(language, 'Visible column filters')} className="sticky top-0 z-10 inline-flex min-w-max items-start gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
+        <span className="inline-block w-28 shrink-0 text-[10px] uppercase text-slate-400">time</span>
+        <span className="inline-block w-12 shrink-0 text-[10px] uppercase text-slate-400">source</span>
+        <span className="inline-block w-52 shrink-0 overflow-hidden text-ellipsis text-[10px] uppercase text-slate-400">namespace/pod · <span className="text-yellow-300">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span></span>
         {headerColumns.length === 0 && <span className="inline-block min-w-72 text-[10px] uppercase text-slate-500">{t(language, 'No data columns selected — use Manage columns or Essentials')}</span>}
         {headerColumns.map((key) => {
           const label = labelForColumn(key)
