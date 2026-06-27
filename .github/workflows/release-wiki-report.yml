@@ -25,7 +25,7 @@ jobs:
       - name: Install Linux desktop dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,7 +45,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Generate pre-push report
-        run: npm run harness:prepush
+        run: xvfb-run -a npm run harness:prepush
 
       - name: Publish release report to GitHub Wiki
         env:
