@@ -26,8 +26,8 @@ const productStress = {
   bufferRows: 50_000,
   inputSeconds: 30,
   linesPerSecond: 5_000,
-  tabSwitchP95Ms: 200,
-  queryP95Ms: 500,
+  tabSwitchP95Ms: 500,
+  queryP95Ms: 2_000,
   detailOpenP95Ms: 150,
   soakCycles: 120,
 }

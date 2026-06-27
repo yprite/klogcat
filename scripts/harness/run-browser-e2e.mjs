@@ -55,7 +55,7 @@ try {
   await page.getByRole('button', { name: label.save }).click()
   const chooseTarget = page.getByRole('button', { name: label.chooseTarget })
   const changeTargets = page.getByRole('button', { name: label.changeTargets })
-  if (await chooseTarget.count()) await chooseTarget.click()
+  if (await chooseTarget.count()) await chooseTarget.first().click()
   else await changeTargets.click()
   await page.getByRole('dialog', { name: label.selectLogTargets }).waitFor()
   await page.getByText(label.noSelectablePodsLoaded).waitFor()

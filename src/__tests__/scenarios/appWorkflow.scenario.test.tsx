@@ -141,7 +141,7 @@ describe('main investigation workflow scenario', () => {
 
     expect(screen.getByText('No log target selected')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change Targets' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Target' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' }).at(-1)!)
 
     const dialog = await screen.findByRole('dialog', { name: /select log targets/i })
     fireEvent.click(within(dialog).getByLabelText('ctx / demo / api-7d9c8f6b8d-x2abc'))

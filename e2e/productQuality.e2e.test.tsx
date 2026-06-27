@@ -208,7 +208,7 @@ describe('product quality e2e', () => {
     expect(getSettings).toHaveBeenCalled()
     expect(screen.getByText('loaded with fallback settings')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change Targets' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Choose Target' })).toBeEnabled()
+    expect(screen.getAllByRole('button', { name: 'Choose Target' })[0]).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('tab', { name: 'Failed Requests' })).not.toBeInTheDocument()
@@ -219,7 +219,7 @@ describe('product quality e2e', () => {
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute('title', expect.stringMatching(/Select namespace and pod/))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Target' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
     const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
     expect(within(targetDialog).getByText('No selectable pods loaded')).toBeInTheDocument()
     expect(within(targetDialog).getByText(/Check kubectl access/)).toBeInTheDocument()
@@ -240,7 +240,7 @@ describe('product quality e2e', () => {
     fakeBackend.settings = { ...defaultSettings, initialTailLines: 77 }
 
     await renderProductApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Target' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
     const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
     await waitFor(() => expect(within(targetDialog).getByText('api-7d9c8f6b8d-x2abc')).toBeInTheDocument())
 
