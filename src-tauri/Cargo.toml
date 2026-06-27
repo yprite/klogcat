@@ -1,6 +1,6 @@
 [package]
 name = "klogcat"
-version = "0.0.6"
+version = "0.0.7"
 description = "Kubernetes file-tail log viewer"
 authors = ["klogcat"]
 edition = "2021"
