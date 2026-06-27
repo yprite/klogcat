@@ -63,6 +63,7 @@ run_capture metrics-prepush npm run metrics:prepush
 run_capture coverage npm run test:coverage
 run_capture security-license npm run security:license
 run_capture test-unit npm run test:unit
+run_capture test-kube-live npm run test:kube:live
 run_capture test-scenario npm run test:scenario
 run_capture test-stress npm run test:stress
 run_capture test-e2e npm run test:e2e

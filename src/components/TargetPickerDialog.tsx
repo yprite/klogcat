@@ -353,7 +353,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
       <div className="flex shrink-0 items-center justify-between border-b border-slate-800 p-4">
         <div>
           <h2 id="target-picker-title" className="text-lg font-semibold">{t(language, 'Select Log Targets')}</h2>
-          <p className="text-xs text-slate-400">{t(language, 'Cluster → Namespace → Pod 구조로 선택해.')}</p>
+          <p className="text-xs text-slate-400">{t(language, 'Choose targets in Cluster → Namespace → Pod order.')}</p>
         </div>
         <button className="rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800" onClick={onClose}>{t(language, 'Close')}</button>
       </div>

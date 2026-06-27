@@ -4,7 +4,6 @@ import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { stopLogStream } from '../commands/tauriLogs'
-import { ActionDebugPanel } from './ActionDebugPanel'
 import { ErrorBanner } from './ErrorBanner'
 import { GrepBar } from './GrepBar'
 import { LogToolbar } from './LogToolbar'
@@ -56,7 +55,6 @@ export function AppShell({ eventError }: { eventError?: string }) {
       <LogViewerExtensionHost>
         <GrepBar />
         <LogToolbar sourceTypes={sourceTypes} onSourceTypesChange={changeSources} />
-        <ActionDebugPanel />
       </LogViewerExtensionHost>
     </main>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
