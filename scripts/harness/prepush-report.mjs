@@ -42,6 +42,7 @@ const summary = {
   releaseGate,
   git: gitInfo,
   qualityMetrics: metrics?.summary ?? null,
+  staticQuality: metrics?.staticQuality ?? null,
   testResults,
   e2eArtifacts,
   buildResults,
@@ -288,6 +289,7 @@ function parseViteBuildOutput(output) {
 
 function renderSummaryMarkdown(summary, metrics) {
   const quality = summary.qualityMetrics
+  const staticQuality = summary.staticQuality
   const unit = summary.testResults.unit
   const scenario = summary.testResults.scenario
   const stress = summary.testResults.stress
@@ -309,6 +311,8 @@ function renderSummaryMarkdown(summary, metrics) {
 
 | 지표 | 값 |
 | --- | ---: |
+| 총점 | ${staticQualityScoreCell(staticQuality)} |
+| 품질 단계 | ${reportValue(staticQuality?.phase)} |
 | 소스 파일 | ${reportValue(quality?.fileCount)} |
 | 함수 | ${reportValue(quality?.functionCount)} |
 | 최대 순환 복잡도 | ${reportValue(quality?.maxCyclomaticComplexity)} |
@@ -368,6 +372,11 @@ ${Object.entries(summary.commandResults).map(([name, result]) => {
 
 function reportValue(value) {
   return value ?? '미수집'
+}
+
+function staticQualityScoreCell(staticQuality) {
+  if (!staticQuality || staticQuality.score === undefined) return '미수집'
+  return `${staticQuality.score} / ${staticQuality.northStarScore ?? 900}`
 }
 
 function reportNote(value) {
