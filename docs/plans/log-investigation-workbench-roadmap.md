@@ -62,6 +62,32 @@ slice needs a slice RFC or implementation plan that passes the readiness gates
 below before code changes start.
 ```
 
+### Workbench MVP Launch Criteria
+
+The product must not be marketed as a Kubernetes log investigation workbench
+until all of these are true:
+
+```text
+- Slice A Workload Follow MVP is complete.
+- A Kubernetes Context MVP is complete or explicitly included in Slice A/B.
+- Slice B Incident Triage Loop is complete.
+- The first source discovery/setup mechanism is specified and implemented.
+- The first supported parser/log-schema contract is specified and covered by an
+  incident fixture.
+- A user can reach the first failed/slow/error finding in under 60 seconds on
+  the disposable incident fixture.
+- Copy incident summary works with default redaction and no hidden disk write.
+- Permission repair text is copyable for every degraded Kubernetes permission
+  that blocks a P0/P0.5 path.
+- Direct pod Raw Logs remains intact as the source-of-truth fallback.
+- The launch-trust minimum is met: license, checksumed release, HTTPS install
+  path, supported OS/kubectl/Kubernetes matrix, and privacy/security statement.
+```
+
+P1 analysis tabs, full export bundles, runtime extensions, and AI analyzers can
+make the product more compelling, but they do not substitute for this minimum
+last-hope incident loop.
+
 ---
 
 ## 1. Product Thesis
@@ -88,6 +114,11 @@ That means the product must optimize for:
 - making degraded Kubernetes permissions and stream failures recoverable
 - allowing specialized tabs to turn raw rows into domain-specific insight
 - supporting AI analysis with explicit privacy and context boundaries
+
+AI is optional acceleration, not the core trust mechanism. The default incident
+path must work through deterministic first-party findings, visible evidence row
+ids, explicit blind spots, and user-controlled summaries before any AI analyzer
+participates. Raw rows must never leave the machine by default.
 
 ---
 
@@ -126,13 +157,14 @@ Every slice-specific implementation plan must include all of these sections:
 | Compatibility | States whether it preserves or supersedes relevant `docs/DESIGN.md` rules. |
 | User surfaces | Names the exact app surface, normal state, empty state, loading state, partial-success state, permission-denied state, stale-resource state, and fatal error state. |
 | Kubernetes contract | Lists exact `kubectl` commands, object fields read, required RBAC verbs, polling/watch strategy, and denied-permission fallback. |
-| Log source contract | Defines how container/source/file-path choices are discovered, validated, persisted, and diagnosed when missing or wrong. |
-| Data contract | Defines DTOs for every persisted, exported, SDK-visible, or cross-process object. |
+| Log source contract | Defines how container/source/file-path choices are discovered, validated, persisted, and diagnosed when missing or wrong. The first supported source setup mechanism must be explicit; extension-provided presets cannot be a P0 dependency. |
+| Parser and fixture contract | Defines the first supported log format, required parsed fields, aliases, unstructured-row fallback, disposable incident fixture, and expected findings/no-finding states. Required before any slice claims failed/slow/error findings. |
+| Data contract | Defines DTOs for every persisted, exported, SDK-visible, or cross-process object. Raw Kubernetes objects must not cross persistence, export, or SDK boundaries unless the slice explicitly defines the shape and redaction rules. |
 | Performance budget | Names row count, stream count, p95 latency, memory ceiling, and degradation behavior. |
-| Privacy and security | Defines redaction, persistence, export, secret, network, and extension trust rules before data leaves memory. |
-| SDK impact | States whether `klogcat.logViewer@1` is unchanged or a new protocol is required. |
-| Tests | Maps acceptance criteria to named unit, scenario, stress, browser e2e, desktop e2e, and live Kubernetes commands. |
-| Rollout | Describes feature flag/default state, migration, and rollback behavior. |
+| Privacy and security | Defines redaction, persistence, export, secret, network, and extension trust rules before data leaves memory. Clipboard, disk, and network boundaries must be separate. |
+| SDK impact | States whether `klogcat.logViewer@1` is unchanged or a new protocol is required. Bundled extensions must not import host internals when the slice claims SDK coverage. |
+| Tests | Maps acceptance criteria to named unit, scenario, stress, browser e2e, desktop e2e, and live Kubernetes commands, including tests expected to fail before implementation. |
+| Rollout | Describes feature flag/default state, migration, rollback behavior, and Raw Logs fallback behavior. |
 
 If any required section is missing, the slice is not implementation-ready.
 
@@ -233,6 +265,26 @@ MVP workload selector rules:
   watch later as an optimization.
 ```
 
+Service targets are a deliberate MVP decision point. The roadmap can mention
+service-originated incidents, but a slice must choose one of these contracts
+before implementation starts:
+
+```text
+Option A, out of scope for Workbench MVP:
+- Service target selection is not supported. Users must choose direct pod,
+  workload, or label selector.
+- Service names pasted into the target picker show a clear unsupported target
+  message and suggest choosing the owning workload or selector.
+
+Option B, supported service target:
+- Add `service` to TargetMode.
+- Resolve pods through `kubectl get service -n <namespace> <name> -o json` and
+  `.spec.selector`.
+- Require `get services` RBAC.
+- Selectorless, ExternalName, and unsupported headless-service cases must show
+  `unsupported_service_target` and cannot guess pods from endpoints.
+```
+
 Stream limits:
 
 ```text
@@ -329,13 +381,78 @@ type SourceValidationState = {
   message: string
 }
 
+type SourcePreset = {
+  id: string
+  label: string
+  sourceType: 'app' | 'access' | 'error'
+  containerSelector?: string
+  filePath: string
+  scope: 'user' | 'workspace' | 'repo' | 'cluster'
+  origin: 'manual' | 'preset' | 'config' | 'extension'
+}
+
+type PermissionFeature =
+  | 'namespaceList'
+  | 'podList'
+  | 'podGet'
+  | 'workloadList'
+  | 'replicaSetGet'
+  | 'eventList'
+  | 'execTail'
+  | 'serviceGet'
+  | 'contextPanel'
+
 type PermissionGap = {
-  feature: 'workloadTarget' | 'contextPanel' | 'events' | 'execTail'
+  feature: PermissionFeature
   context: string
   namespace?: string
   verb: string
   resource: string
+  attemptedCommand?: string
+  kubectlExitCode?: number
+  stderrExcerpt?: string
+  repairConfidence: 'exact' | 'inferred' | 'unknown'
   repairText: string
+}
+
+type KubernetesEventSummary = {
+  reason: string
+  type: 'Normal' | 'Warning' | 'Unknown'
+  message: string
+  firstTimestamp?: string
+  lastTimestamp?: string
+  count?: number
+}
+
+type ContainerContext = {
+  name: string
+  image: string
+  imageId?: string
+  ready: boolean
+  restartCount: number
+}
+
+type KubernetesContextSnapshot = {
+  context: string
+  namespace: string
+  pod: string
+  podUid: string
+  observedAt: string
+  resourceVersion?: string
+  owner?: { kind: WorkloadKind | 'Pod' | 'Job' | 'Unknown'; name: string; uid?: string }
+  phase: string
+  nodeName?: string
+  labels: Record<string, string>
+  containers: ContainerContext[]
+  events: KubernetesEventSummary[]
+  eventsUnavailableReason?: string
+  state: 'loaded' | 'loading' | 'partial' | 'stale' | 'no_permission'
+}
+
+type DiagnosticCommand = {
+  label: string
+  command: string
+  redactionRequired: boolean
 }
 
 type InvestigationHealth = {
@@ -424,7 +541,45 @@ schemas for:
 - bookmark/note serialization
 ```
 
-### 4.3 Structured Filter Grammar
+### 4.3 Parser and Incident Fixture Contract
+
+P0.5 findings cannot start until the first log schema is explicit. The first
+slice that claims failed, slow, or error suspects must define:
+
+```text
+- the canonical disposable incident fixture namespace, deployment, container,
+  and pod-internal APP/ACC/ERR file paths
+- the sample log corpus used by unit, scenario, stress, browser e2e, and
+  live-kube validation
+- required parsed fields for Failed Requests
+- required parsed fields for Slow Requests
+- accepted field aliases such as status/statusCode, elapsed/elapsedMs/
+  durationMs/latencyMs, traceId/trId
+- expected findings, expected evidence row ids, and expected no-finding states
+- fallback behavior when rows are unstructured or required fields are missing
+```
+
+Minimum deterministic finding inputs:
+
+```text
+Failed Requests:
+- numeric status/statusCode >= 500, or
+- error rcode/reason field classified by the slice RFC.
+
+Slow Requests:
+- numeric elapsed, elapsedMs, durationMs, or latencyMs field, and
+- a threshold defined by the slice RFC.
+
+Correlation:
+- traceId or trId is optional for P0.5 but required before Trace/Transaction
+  View can be marked ready.
+```
+
+A fixture-only pass is not enough for launch. Before Workbench MVP launch, the
+parser contract must be exercised against at least one realistic sample corpus
+that was not authored solely for the happy-path test.
+
+### 4.4 Structured Filter Grammar
 
 Structured filters are not part of the current `DESIGN.md` contract. Before
 Slice B starts, a slice RFC must explicitly supersede that rule.
@@ -464,7 +619,7 @@ Field behavior:
   filters, but before that facet's own selected values.
 ```
 
-### 4.4 Required Product Surfaces
+### 4.5 Required Product Surfaces
 
 The roadmap is not implementation-ready unless these surfaces are specified in
 the slice plan:
@@ -485,7 +640,7 @@ the slice plan:
 | Export dialog | redaction preview, redaction warning, file write success, file write failure |
 | Extension manager | installed, disabled, incompatible protocol, capability denied, activation failed |
 
-### 4.5 Privacy and Redaction Baseline
+### 4.6 Privacy and Redaction Baseline
 
 This baseline applies before exports, persisted sessions, AI analysis, or
 runtime extensions.
@@ -505,6 +660,9 @@ Hard rules:
 
 ```text
 - Raw rows are never sent to a network destination by default.
+- Copy incident summary applies default redaction before clipboard write and
+  must not write the copied summary to disk unless a later slice explicitly adds
+  persistence with location, retention, and clear semantics.
 - Export and AI analysis must show a redaction preview before writing or
   sending data.
 - Extensions cannot read host secrets through the log-viewer SDK.
@@ -512,7 +670,7 @@ Hard rules:
   access without a separate isolated capability RFC.
 ```
 
-### 4.6 Test and Performance Gates
+### 4.7 Test and Performance Gates
 
 Every slice must update tests at the correct layer.
 
@@ -584,6 +742,25 @@ Evaluation criteria:
 | Positioning leverage | 25% | Does it make klogcat distinct from K9s/Lens/Stern? |
 | Implementation risk | 20% | Can it ship without destabilizing log streaming? |
 | Extension leverage | 15% | Does it improve third-party or AI analysis paths? |
+
+Product validation metrics for Workbench MVP:
+
+```text
+- time to first credible signal
+- time to explain a no-finding result
+- source misconfiguration recovery rate
+- copy incident summary success rate
+- percentage of investigations with visible blind spots
+- kubectl/K9s/Stern fallback rate during fixture-based usability trials
+```
+
+At least three fixture families should exist before public workbench launch:
+
+```text
+1. failing request incident
+2. slow request incident
+3. degraded incident with missing source, parser fields, or permission gaps
+```
 
 ---
 
@@ -707,6 +884,7 @@ Ship:
 
 1. First-five-minutes incident path:
    - select workload or label selector
+   - discover or choose a supported source preset/setup path
    - validate source/container/file-path choices
    - start stream group
    - show stream health and blind spots
@@ -724,6 +902,8 @@ Ship:
 3. Minimal bundled findings:
    - Failed Requests for parsed `status >= 500` or error reason fields
    - Slow Requests for parsed elapsed/duration fields
+   - parser/log-schema contract and disposable incident fixture defined before
+     implementation
    - evidence rows referenced by stable row ids
    - explicit "unavailable because parser fields are missing" state
 4. Finding rail:
@@ -736,6 +916,8 @@ Ship:
    - top findings and evidence row ids
    - active filters
    - stream/source/parser/permission blind spots
+   - default redaction before clipboard write
+   - no hidden disk write
    - redaction status
 
 Completion gates:
@@ -746,7 +928,8 @@ Completion gates:
 - If no finding appears, the UI explains whether the cause is no matching rows,
   missing parser fields, missing permissions, stream failures, source-path
   problems, or healthy logs.
-- The user can copy an incident summary without using the full export bundle.
+- The user can copy an incident summary without using the full export bundle,
+  after default redaction and without hidden disk persistence.
 - Investigation health is always visible while a stream group is active.
 - Findings are emitted through `InvestigationFinding` so P1 analysis tabs,
   exports, AI, and third-party extensions reuse the same contract.
@@ -1047,6 +1230,16 @@ Ship:
    - supported OSes
    - required `kubectl`
 
+Launch-trust minimum pulled earlier than full P3:
+
+```text
+Before any public Workbench MVP claim, klogcat needs license clarity, a
+checksumed release artifact, HTTPS install instructions, the OS/kubectl/
+Kubernetes compatibility matrix, and a short privacy/security statement.
+Homebrew Cask, contribution docs, issue templates, and broader community
+process can remain P3 polish.
+```
+
 Completion gates:
 
 ```text
@@ -1095,17 +1288,49 @@ Acceptance criteria:
 | RBAC denied | Workloads are denied but pods are listable | User opens target picker | Direct pod mode remains available with warning | unit + scenario |
 | Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count and narrowing options | unit + browser e2e |
 
+### Slice A2: Kubernetes Context MVP
+
+Priority: P0
+
+Scope:
+
+- selected target context panel
+- owner, image/tag, node, restart count, phase, and ready state
+- recent warning events when RBAC allows
+- copy diagnostic commands
+- permission repair kit for context/event/workload gaps
+- `KubernetesContextSnapshot`, `KubernetesEventSummary`, and
+  `DiagnosticCommand` DTOs
+
+Success metric:
+
+```text
+An engineer can explain whether visible log errors correlate with restarts,
+scheduling, image, readiness, or recent Kubernetes warning events without
+leaving klogcat.
+```
+
+Acceptance criteria:
+
+| Case | Given | When | Then | Required validation |
+| --- | --- | --- | --- | --- |
+| Pod context | A selected pod has owner, image, node, restart, and readiness data | Context panel loads | The normalized context snapshot renders without exposing raw Kubernetes JSON | unit + scenario |
+| Events available | Warning events exist for the selected pod | User opens context panel | Event reason, time, and message appear | unit + live-kube |
+| Events denied | Events are RBAC denied | User opens context panel | Logs continue and permission repair text is copyable | unit + live-kube |
+| Stale pod | Selected pod is replaced | Poll refresh sees replacement | Old context is marked stale and replacement context appears when matched | scenario + live-kube |
+
 ### Slice B: Incident Triage Loop
 
 Priority: P0.5
 
 Scope:
 
-- source validation
+- source discovery/setup baseline and source validation
+- parser/log-schema contract and disposable incident fixture
 - investigation health panel
 - minimal Failed Requests and Slow Requests findings
 - shared finding rail
-- copy incident summary
+- copy incident summary with default redaction and no hidden disk write
 - permission repair kit
 - selector narrowing for too-many-pods
 

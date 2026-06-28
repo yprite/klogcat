@@ -323,14 +323,33 @@ P0.5 Incident Triage Loop
 
 Scope:
 
-- source validation
+- source discovery/setup baseline and source validation
+- first parser/log-schema contract and disposable incident fixture
 - investigation health panel
 - minimal Failed Requests and Slow Requests findings
 - finding rail shared by bundled tabs
-- copy incident summary
+- copy incident summary with default redaction and no hidden disk write
 - permission repair kit
 - selector narrowing for too-many-pods
 
 This slice should be completed before marketing the product as a log
 investigation workbench. Without it, the roadmap is technically coherent but
 emotionally and operationally weak for the last-hope user.
+
+Follow-up hardening accepted after independent review:
+
+```text
+- P0/P0.5 implementation must not start from this roadmap alone; each slice
+  needs an implementation RFC with exact commands, DTOs, feature flags, tests,
+  rollout, and rollback.
+- The Workbench MVP launch line is P0 Workload Follow + Kubernetes Context MVP
+  + P0.5 Incident Triage Loop, not workload following alone.
+- Source discovery/setup and the first supported parser/log schema are
+  launch-blocking, not optional polish.
+- Service-originated incidents require an explicit product decision: unsupported
+  with a clear handoff, or supported through a Service target contract.
+- Copy incident summary must apply redaction before clipboard write and must not
+  silently persist data to disk.
+- AI remains optional acceleration; deterministic findings and visible blind
+  spots are the trust baseline.
+```
