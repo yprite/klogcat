@@ -12,8 +12,7 @@ import {
   type LogPolicySelectionId,
 } from '../utils/logPolicy'
 import { sourceLabelsForActivePolicy } from '../utils/sourceLabels'
-import { useSettingsStore } from '../stores/settingsStore'
-import { t } from '../utils/i18n'
+import { t, type Language } from '../utils/i18n'
 
 export type TestPathResult = { sourceType: SourceLogType; label: string; path: string; ok: boolean; message: string }
 
@@ -47,19 +46,18 @@ function stripSourcePathOverrides(policy: LogPolicy) {
   return next
 }
 
-export function SettingsNav() {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function SettingsNav({ language }: { language?: Language }) {
   return <nav aria-label={t(language, 'Settings sections')} className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Sections')}</p>
     <a className="mt-3 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-runtime">{t(language, 'Runtime')}</a>
+    <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-appearance">{t(language, 'Appearance')}</a>
     <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-log-source">{t(language, 'Log source')}</a>
     <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-advanced">{t(language, 'Advanced')}</a>
     <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-maintenance">{t(language, 'Maintenance')}</a>
   </nav>
 }
 
-export function RuntimeSection({ draft, setNum }: { draft: PersistedSettings; setNum: (key: 'initialTailLines' | 'bufferLimit', value: string) => void }) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function RuntimeSection({ draft, language, setNum }: { draft: PersistedSettings; language?: Language; setNum: (key: 'initialTailLines' | 'bufferLimit', value: string) => void }) {
   return <section id="settings-runtime" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <h3 className="text-sm font-semibold text-white">{t(language, 'Runtime')}</h3>
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -73,6 +71,7 @@ type LogSourceSectionProps = {
   activeTarget?: SelectedPodTarget
   handlePolicySelect: (value: LogPolicySelectionId) => void
   handleTestPaths: () => void
+  language?: Language
   previewPolicy: LogPolicy
   selectedPolicyId: LogPolicySelectionId
   setCustomPolicy: (policy: LogPolicy, message?: string) => void
@@ -82,8 +81,7 @@ type LogSourceSectionProps = {
   warnings: string[]
 }
 
-export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestPaths, previewPolicy, selectedPolicyId, setCustomPolicy, sourceTypes, testingPaths, testResults, warnings }: LogSourceSectionProps) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestPaths, language, previewPolicy, selectedPolicyId, setCustomPolicy, sourceTypes, testingPaths, testResults, warnings }: LogSourceSectionProps) {
   const sourceLabels = sourceLabelsForActivePolicy()
   const exampleNamespace = activeTarget?.namespace ?? 'example-namespace'
   const examplePod = activeTarget?.pod.name ?? 'example-pod'
@@ -122,12 +120,11 @@ export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestP
 
     {warnings.length > 0 && <ul className="mt-3 rounded border border-yellow-500/40 bg-yellow-500/10 p-2 text-xs text-yellow-100">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
 
-    <LogPathPreview activeTarget={activeTarget} exampleNamespace={exampleNamespace} examplePod={examplePod} handleTestPaths={handleTestPaths} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} />
+    <LogPathPreview activeTarget={activeTarget} exampleNamespace={exampleNamespace} examplePod={examplePod} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} />
   </section>
 }
 
-function LogPathPreview({ activeTarget, exampleNamespace, examplePod, handleTestPaths, previewPolicy, setCustomPolicy, sourceTypes, testingPaths, testResults }: Omit<LogSourceSectionProps, 'handlePolicySelect' | 'selectedPolicyId' | 'warnings'> & { exampleNamespace: string; examplePod: string }) {
-  const language = useSettingsStore((s) => s.settings?.language)
+function LogPathPreview({ activeTarget, exampleNamespace, examplePod, handleTestPaths, language, previewPolicy, setCustomPolicy, sourceTypes, testingPaths, testResults }: Omit<LogSourceSectionProps, 'handlePolicySelect' | 'selectedPolicyId' | 'warnings'> & { exampleNamespace: string; examplePod: string }) {
   return <div className="mt-3 rounded border border-slate-800 bg-slate-900/70 p-2">
     <p className="text-xs font-semibold text-slate-200">{t(language, activeTarget ? 'Preview using current target' : 'Preview using example target')}</p>
     <p className="mt-1 text-xs text-slate-400">{t(language, 'Namespace')}: {exampleNamespace} · {t(language, 'Pod')}: {examplePod}</p>
@@ -148,14 +145,14 @@ type AdvancedSectionProps = {
   previewPolicy: LogPolicy
   setCustomPolicy: (policy: LogPolicy, message?: string) => void
   setShowPathOverrides: (updater: (value: boolean) => boolean) => void
+  language?: Language
   setShowRawJson: (updater: (value: boolean) => boolean) => void
   showPathOverrides: boolean
   showRawJson: boolean
   sourceTypes: SourceLogType[]
 }
 
-export function AdvancedSection({ onRawPolicyTextChange, policyText, previewPolicy, setCustomPolicy, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes }: AdvancedSectionProps) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function AdvancedSection({ onRawPolicyTextChange, policyText, previewPolicy, setCustomPolicy, setShowPathOverrides, language, setShowRawJson, showPathOverrides, showRawJson, sourceTypes }: AdvancedSectionProps) {
   const sourceLabels = sourceLabelsForActivePolicy()
   return <section id="settings-advanced" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="mb-3 flex items-center justify-between gap-2">
@@ -188,8 +185,7 @@ export function AdvancedSection({ onRawPolicyTextChange, policyText, previewPoli
   </section>
 }
 
-export function StatusMessages({ error, errors, notice }: { error?: CommandError; errors: SettingsValidationError[]; notice?: string }) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function StatusMessages({ error, errors, language, notice }: { error?: CommandError; errors: SettingsValidationError[]; language?: Language; notice?: string }) {
   return <>
     {errors.length > 0 && <ul className="text-red-300 text-sm">{errors.map((e, index) => <li key={`${e.field}-${index}`}>{e.field}: {t(language, e.message)}</li>)}</ul>}
     {notice && <p className="text-green-300">{notice}</p>}
@@ -197,8 +193,7 @@ export function StatusMessages({ error, errors, notice }: { error?: CommandError
   </>
 }
 
-export function MaintenanceSection({ handleClearTargetCache, handleRestart, loading }: { handleClearTargetCache: () => void; handleRestart: () => void; loading: boolean }) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function MaintenanceSection({ handleClearTargetCache, handleRestart, language, loading }: { handleClearTargetCache: () => void; handleRestart: () => void; language?: Language; loading: boolean }) {
   return <section id="settings-maintenance" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <h3 className="text-sm font-semibold text-white">{t(language, 'Target cache')}</h3>
     <p className="mt-1 text-xs text-slate-400">{t(language, 'Clear cached cluster, namespace, and pod lists to resolve stale pod selections.')}</p>
@@ -209,10 +204,12 @@ export function MaintenanceSection({ handleClearTargetCache, handleRestart, load
   </section>
 }
 
-export function SettingsFooter({ handleReset, handleSave, loading }: { handleReset: () => void; handleSave: () => void; loading: boolean }) {
-  const language = useSettingsStore((s) => s.settings?.language)
+export function SettingsFooter({ canSave, handleReset, handleSave, language, loading, saveBlockedReason }: { canSave: boolean; handleReset: () => void; handleSave: () => void; language?: Language; loading: boolean; saveBlockedReason?: string }) {
   return <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-700 bg-slate-900 p-4">
     <button aria-label={t(language, 'Reset')} className="rounded border border-red-500/70 px-3 py-1 text-sm text-red-100 hover:bg-red-500/10" disabled={loading} onClick={handleReset}>{t(language, 'Reset all settings')}</button>
-    <button className="rounded border border-yellow-400 bg-yellow-300 px-4 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200" disabled={loading} onClick={handleSave}>{t(language, 'Save')}</button>
+    <div className="flex flex-col items-end gap-1">
+      {saveBlockedReason && <p className="max-w-md text-right text-xs text-yellow-200" role="status">{saveBlockedReason}</p>}
+      <button className="rounded border border-yellow-400 bg-yellow-300 px-4 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={loading || !canSave} onClick={handleSave}>{t(language, 'Save')}</button>
+    </div>
   </div>
 }

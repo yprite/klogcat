@@ -7,6 +7,14 @@ viewer tabs through a small public extension protocol.
 
 The app is built with Tauri, React, TypeScript, Rust, and Vite.
 
+## Documentation map
+
+Use this README as the product and developer entry point: what klogcat is, how
+to install it, how to run it, and where the code is organized. The GitHub Wiki
+is intentionally different: it is an operations ledger for release reports,
+quality scores, command logs, and audit artifacts. Long-form design and policy
+documents live under `docs/`.
+
 ## Why klogcat?
 
 Kubernetes logs are often easy to tail and hard to investigate. `kubectl logs`
@@ -38,12 +46,13 @@ klogcat keeps the core product narrow:
 ## Demo
 
 The demo below is recorded from the deterministic browser e2e harness. It shows
-the app running with a mock log stream, visible raw rows, and query filtering.
+multi-cluster target selection, multi-pod streaming, visible raw rows, and
+stable parsed-data column alignment.
 
-<video src="docs/assets/klogcat-demo.webm" controls muted width="100%"></video>
+<video src="docs/assets/klogcat-demo.mp4" controls muted width="100%"></video>
 
-If your Markdown renderer does not play embedded WebM, open
-[docs/assets/klogcat-demo.webm](docs/assets/klogcat-demo.webm).
+If your Markdown renderer does not play embedded MP4, open
+[docs/assets/klogcat-demo.mp4](docs/assets/klogcat-demo.mp4).
 
 ## Requirements
 

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const repoRoot = process.cwd()
+const metricsReportPath = path.join(repoRoot, '.harness', 'reports', 'metrics-prepush.json')
 const generatedReports: string[] = []
 
 describe('pre-push report generator', () => {
@@ -18,6 +19,7 @@ describe('pre-push report generator', () => {
 
   it('renders a Korean summary and includes stress test results', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'klogcat-prepush-report-'))
+    const previousMetrics = fs.existsSync(metricsReportPath) ? fs.readFileSync(metricsReportPath, 'utf8') : null
     try {
       writeLog(tmpDir, 'test-unit.out', vitestLayerOutput('unit', 4, 12, '120ms'))
       writeLog(tmpDir, 'test-scenario.out', vitestLayerOutput('scenario', 2, 5, '80ms'))
@@ -28,6 +30,23 @@ describe('pre-push report generator', () => {
       writeLog(tmpDir, 'lint.out', 'ok\n')
       writeLog(tmpDir, 'typecheck.out', 'ok\n')
       writeLog(tmpDir, 'frontend-build.out', 'dist/assets/index.js 10.25 kB │ gzip: 3.50 kB\n✓ built in 650ms\n')
+      fs.mkdirSync(path.dirname(metricsReportPath), { recursive: true })
+      fs.writeFileSync(metricsReportPath, JSON.stringify({
+        staticQuality: { score: 812.4, northStarScore: 900, phase: 'product-hardening-800' },
+        summary: {
+          fileCount: 42,
+          functionCount: 321,
+          maxCyclomaticComplexity: 9,
+          maxCognitiveComplexity: 14,
+          maxFunctionLines: 77,
+          maxFileLines: 488,
+          maxCoupling: 11,
+          minMaintainability: 61.5,
+          cycleCount: 0,
+          architectureViolationCount: 0,
+        },
+        violations: [],
+      }, null, 2), 'utf8')
 
       const result = spawnSync('node', ['scripts/harness/prepush-report.mjs', '--tmp-dir', tmpDir, '--release-gate', '0'], {
         cwd: repoRoot,
@@ -50,15 +69,28 @@ describe('pre-push report generator', () => {
         testsTotal: 5,
         duration: '6.44s',
       })
+      expect(summaryJson.staticQuality).toMatchObject({
+        score: 812.4,
+        northStarScore: 900,
+        phase: 'product-hardening-800',
+      })
 
       const summaryMarkdown = fs.readFileSync(path.join(reportDir, 'summary.md'), 'utf8')
       expect(summaryMarkdown).toContain('# klogcat pre-push 보고서')
       expect(summaryMarkdown).toContain('## 테스트 지표')
+      expect(summaryMarkdown).toContain('| 총점 | 812.4 / 900 |')
+      expect(summaryMarkdown).toContain('| 품질 단계 | product-hardening-800 |')
       expect(summaryMarkdown).toContain('| 스트레스 | `passed` | 5 | 5 | 6.44s |')
       expect(summaryMarkdown).toContain('## 빌드 및 정적 검사')
       expect(summaryMarkdown).toContain('## 로그')
+      expect(summaryMarkdown.toLowerCase()).not.toContain('n/a')
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true })
+      if (previousMetrics === null) {
+        fs.rmSync(metricsReportPath, { force: true })
+      } else {
+        fs.writeFileSync(metricsReportPath, previousMetrics, 'utf8')
+      }
     }
   })
 })

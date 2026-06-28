@@ -101,12 +101,13 @@ describe('LogRow', () => {
     expect(screen.getByText('201')).toBeInTheDocument()
   })
 
-  it('sizes parsed columns to their content instead of truncating values', () => {
+  it('keeps parsed columns and metadata on fixed tracks so rows align', () => {
     render(<LogRow row={{ ...row, url: '/very/long/path/that/should/remain/fully/visible', rmsg: 'a long response message that should not be ellipsized' }} grepQuery="" visibleColumns={['url','rmsg']} />)
 
-    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).toHaveClass('w-max')
-    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible').parentElement).not.toHaveClass('overflow-hidden')
-    expect(screen.getByText('a long response message that should not be ellipsized').parentElement).not.toHaveClass('text-ellipsis')
+    expect(screen.getByTestId('log-row-1').children[2]).toHaveClass('w-52')
+    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible')).toHaveClass('overflow-hidden')
+    expect(screen.getByText('/very/long/path/that/should/remain/fully/visible')).toHaveClass('text-ellipsis')
+    expect(screen.getByText('a long response message that should not be ellipsized')).toHaveClass('text-ellipsis')
   })
 
   it('uses the longest visible value as the shared width for that column', () => {

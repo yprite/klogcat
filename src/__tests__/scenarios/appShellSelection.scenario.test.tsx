@@ -151,7 +151,7 @@ describe('app shell selection scenario', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '✕' }))
+    fireEvent.click(screen.getByRole('button', { name: /close settings/i }))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument())
   })
 
