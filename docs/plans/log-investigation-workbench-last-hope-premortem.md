@@ -22,22 +22,27 @@ This persona does not judge the product by feature breadth. They judge it by:
 
 ## Verdict
 
-The roadmap is implementation-ready as a roadmap/RFC gate, but it is not yet
-incident-ready from the last-hope persona. It defines strong platform contracts,
-but the critical user journey is still scattered across P0, P1, and P2 slices.
+The roadmap is implementation-ready as a roadmap/RFC gate, and the P0.5
+Incident Triage Loop now addresses the original first-five-minutes gap. It is
+still not implementation-ready for any slice until the slice RFC carries the
+concrete dependency gates, feature flags, rollback behavior, degraded-state
+contracts, and verification artifacts required by the roadmap.
 
-The product needs an explicit "first five minutes" incident path before it can
-claim the log investigation workbench position.
+The product can claim the log investigation workbench position only after the
+P0/P0.5 loop works under the last-hope conditions below and later P1/P2 work
+does not dilute or bypass that loop.
 
 ## Tigers: Real Risks
 
-### 1. No single first-five-minutes incident path
+### 1. First-five-minutes incident path must stay explicit
 
-Classification: launch-blocking
+Classification: historically launch-blocking; mitigated by the P0.5 Incident
+Triage Loop, but still a regression risk
 
-The roadmap has workload collection, context, filters, analysis tabs, and
-exports, but it does not define the golden path from opening the app to finding
-the first actionable suspect.
+The original roadmap had workload collection, context, filters, analysis tabs,
+and exports, but did not define the golden path from app-ready state to first
+actionable suspect. P0.5 now addresses that gap; later slices must not scatter
+or weaken the path.
 
 Failure mode:
 
@@ -49,11 +54,13 @@ a better tail viewer, not a last-hope investigation workbench.
 
 Mitigation:
 
-- Add an Incident Mode slice before or inside P0/P1.
-- Define a required path: select target -> validate sources -> stream -> show
-  error/slow/restart/event suspects -> copy/share summary.
-- Add a hard metric: from empty app to first actionable finding in under 60
-  seconds on the incident fixture.
+- Keep the P0.5 Incident Triage Loop as a protected MVP requirement.
+- Define the required path in every affected slice: select target -> validate
+  sources -> stream -> show error/slow/restart/event suspects -> copy/share
+  summary.
+- Keep the hard metric aligned with the roadmap timing boundary: after the app is
+  ready and the fixture is deployed/Ready/producing logs, first actionable
+  finding appears within 60 seconds.
 
 Owner: PM + engineering
 
@@ -299,9 +306,9 @@ Investigation:
 The roadmap should not pass last-hope readiness until these are true:
 
 ```text
-- A user can open klogcat, select a workload, validate log sources, and see the
-  first failed/slow/error suspect in under 60 seconds on a disposable incident
-  fixture.
+- After the app is ready and the disposable incident fixture is deployed, Ready,
+  and producing documented log files, a user can select a workload, validate log
+  sources, and see the first failed/slow/error suspect in under 60 seconds.
 - If no suspect is found, the UI explains whether that means no matching rows,
   missing parser fields, missing permissions, stream failures, or source-path
   problems.
@@ -315,7 +322,7 @@ The roadmap should not pass last-hope readiness until these are true:
 
 ## Recommended Roadmap Adjustment
 
-Add a new bridge slice between current P0 and P1:
+Accepted roadmap adjustment:
 
 ```text
 P0.5 Incident Triage Loop
@@ -333,8 +340,9 @@ Scope:
 - selector narrowing for too-many-pods
 
 This slice should be completed before marketing the product as a log
-investigation workbench. Without it, the roadmap is technically coherent but
-emotionally and operationally weak for the last-hope user.
+investigation workbench. It remains the protected minimum because without it the
+roadmap would be technically coherent but emotionally and operationally weak for
+the last-hope user.
 
 Follow-up hardening accepted after independent review:
 
@@ -353,3 +361,99 @@ Follow-up hardening accepted after independent review:
 - AI remains optional acceleration; deterministic findings and visible blind
   spots are the trust baseline.
 ```
+
+
+## 30-Loop Follow-Up Risks
+
+Thirty independent review passes after the initial premortem found that the
+first-five-minutes gap is no longer the only risk. The remaining launch-blocking
+risk is **contract ambiguity**: implementation can still be wrong while appearing
+to satisfy the roadmap prose.
+
+### A. The file-tail runtime can be unavailable in real containers
+
+Classification: launch-blocking
+
+The product's core collection path depends on `kubectl exec ... -- tail -F`.
+Distroless/minimal images, shell-less containers, sidecar-only log paths, missing
+files, unreadable files, and completed/terminating pods can all make that path
+unavailable without implying the target was wrong.
+
+Mitigation:
+
+- Treat `tail_unavailable`, `shell_unavailable`, `missing_container`,
+  `missing_file_path`, `unreadable_file_path`, `permission_denied`,
+  `no_rows_yet`, and `command_failed` as distinct states.
+- Show container inventory, including regular/init/ephemeral/sidecar-like
+  containers, and never silently choose the first container.
+- Add live-kube fixtures for missing tail, missing shell, multi-container pods,
+  sidecar inclusion/exclusion, and completed/terminating pods.
+
+### B. Evidence can become ambiguous across pod and stream lifecycles
+
+Classification: launch-blocking
+
+Pod names are not stable evidence identities. Pod replacement, container restart,
+context/namespace switches, late async responses, stopped streams, dropped rows,
+and replay/import can all make a finding point to the wrong row or target.
+
+Mitigation:
+
+- Use pod UID, container identity, stream id, per-stream sequence, row id, and
+  stream incarnation in evidence references.
+- Make start/stop idempotent and reject stale async responses by operation id and
+  target generation.
+- Preserve row ids through export/import/replay; stale or missing evidence must
+  render as stale/missing, not silently disappear or relink.
+
+### C. Findings can be noisy or falsely reassuring
+
+Classification: launch-blocking
+
+Failed, slow, and error findings require deterministic rules. A no-finding result
+is dangerous unless source, stream, parser, permission, dropped-row, and clock
+skew health are good enough for the rules being claimed.
+
+Mitigation:
+
+- Define rule ids, fingerprints, thresholds, severity rubric, evidence sampling,
+  dedupe, and false-positive/false-negative fixtures.
+- Define parser format, timestamp, alias, coercion, malformed-row, multiline, and
+  mixed-format behavior.
+- Gate `healthy_no_findings` on source/stream/parser/permission/data-loss health.
+
+### D. Release-slice discipline must apply beyond P0.5
+
+Classification: launch-blocking for roadmap execution
+
+P1/P2 slices can break the last-hope loop if they add filters, analysis tabs,
+exports, AI, or runtime extensions without the same feature-flag, rollback,
+Raw Logs fallback, redaction, SDK, and compatibility discipline.
+
+Mitigation:
+
+- Every Slice C-G RFC inherits the same rollout, rollback, feature-flag,
+  expected-red-test, and scope-cut requirements as Slice A/B.
+- Cut risky P1/P2 scope before weakening direct pod Raw Logs, source validation,
+  first findings, no-finding explanations, permission repair, or redacted copy
+  summary.
+- Runtime extension and AI claims require real capability isolation, host-mediated
+  result channels, redaction preview, secret storage, cancellation, and audit
+  metadata before promotion.
+
+### E. Accessibility, localization, and handoff are part of incident trust
+
+Classification: launch-blocking for public workbench positioning
+
+A last-hope incident tool fails if the user cannot complete the path by keyboard,
+if screen readers cannot understand stream/finding/degraded state, if Korean and
+English copy is unclear, or if the copied summary is not an actionable handoff.
+
+Mitigation:
+
+- Add keyboard-only and screen-reader smoke gates for target picker, stream
+  controls, finding drilldown, no-finding card, and copy summary.
+- Keep English/Korean incident copy in the i18n catalog and review repair text,
+  redaction warnings, no-finding explanations, and handoff summaries.
+- Copy summary must include hypothesis, checked areas, open questions, suggested
+  next checks, known blind spots, evidence, permission gaps, and redaction state.

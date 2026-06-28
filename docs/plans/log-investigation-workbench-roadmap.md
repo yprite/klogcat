@@ -11,9 +11,10 @@ identified.
 
 **End image:** An engineer can select a workload, validate the log sources,
 stream the relevant pod file logs, follow pod replacements, see the first
-failed/slow/error suspects in under 60 seconds on an incident fixture, preserve
-evidence, and share a redacted incident summary. Third-party extensions can add
-domain-specific or AI analysis without depending on klogcat internals.
+failed/slow/error suspects in under 60 seconds after the app is ready and the
+incident fixture is deployed/Ready/producing logs, preserve evidence, and share
+a redacted incident summary. Third-party extensions can add domain-specific or
+AI analysis without depending on klogcat internals.
 
 **Last-hope persona:** The product must work for an on-call engineer during an
 active production incident, when normal terminal tailing is too noisy or too
@@ -75,9 +76,10 @@ until all of these are true:
 - The first supported parser/log-schema contract is specified and covered by an
   incident fixture plus at least one realistic sample corpus that was not
   authored solely for the happy path.
-- A user can reach the first failed/slow/error finding in under 60 seconds on
-  the disposable incident fixture through both product e2e and live-kube
-  validation.
+- After the app is ready and the disposable incident fixture is deployed, Ready,
+  and producing documented log files, a user can reach the first
+  failed/slow/error finding in under 60 seconds through both product e2e and
+  live-kube validation.
 - Degraded/no-finding fixture families prove missing source, missing parser
   fields, permission gaps, stream failures, no matching rows, and healthy logs
   are distinguishable before launch.
@@ -85,6 +87,9 @@ until all of these are true:
 - Permission repair text is copyable for every degraded Kubernetes permission
   that blocks a P0/P0.5 path.
 - Direct pod Raw Logs remains intact as the source-of-truth fallback.
+- The file-tail runtime prerequisite is documented and validated: target
+  containers support `kubectl exec` plus readable `tail -F`, or the UI shows a
+  specific tail/runtime diagnostic instead of a generic command failure.
 - The launch-trust minimum is met: license, checksumed release, HTTPS install
   path, supported OS/kubectl/Kubernetes matrix, and privacy/security statement.
 ```
@@ -95,6 +100,212 @@ last-hope incident loop. Workbench MVP optimizes for one workload, one service,
 or one bounded label selector in one namespace at a time; fleet-wide indexed
 search and cross-namespace incident search are out of scope until backed by a
 separate storage/search RFC.
+
+
+### Consolidated Hardening from 30-Loop Review
+
+A 30-pass independent review found that the roadmap is strong enough as a
+product direction, but Slice A/B must not start until these invariants are made
+explicit in the slice RFCs or accepted as deliberate cuts.
+
+#### Launch and timing invariants
+
+```text
+- The 60-second first-finding metric starts when the desktop app is ready for
+  input and the disposable incident fixture is already deployed, Ready, and
+  producing the documented APP/ACC/ERR file logs. Fixture creation, image pull,
+  namespace creation/deletion, cluster scheduling latency, and app startup are
+  recorded separately and do not count toward the 60-second product triage
+  budget.
+- "First failed/slow/error suspect" means failed or slow request findings plus
+  an explicitly supported error-classified finding family. If Slice B does not
+  implement a third error-family rule, launch copy and acceptance criteria must
+  say "failed or slow" rather than implying a separate error analyzer exists.
+- Every launch-blocking criterion must have an evidence artifact: CI run, live
+  kube run, fixture manifest, screenshot/video, checksumed release artifact,
+  or docs PR. Missing evidence is a blocked launch row, not an implicit waiver.
+```
+
+#### Concrete Slice A/B decisions before implementation
+
+```text
+- Slice A uses `TargetMode = 'pod' | 'workload' | 'labelSelector'`. Service
+  targets are out of scope unless a separate Option B RFC is accepted. A Service
+  pasted into the target picker shows `unsupported_service_target` and suggests
+  the owning workload or label selector. `serviceGet` must not be a baseline
+  PermissionFeature unless service targets are accepted.
+- Current persisted source keys are `SourceLogType = 'info' | 'access' | 'error'`.
+  Slice A/B must preserve these keys and map display labels separately; do not
+  introduce a persisted `app` key without a migration and SDK compatibility plan.
+- Slice B's first source setup mechanism is the existing persisted settings/log
+  policy path, starting with the built-in `scloud` policy. Repo/workspace
+  defaults, cluster annotations, extension-provided presets, and automatic
+  discovery are out of scope until their trust, precedence, and migration rules
+  are specified.
+- Initial feature flags are named and default off outside development:
+  `workbench.workloadFollow.enabled`, `workbench.kubernetesContext.enabled`, and
+  `workbench.incidentTriage.enabled`.
+```
+
+#### Kubernetes command, RBAC, and source-collection invariants
+
+```text
+- Every Kubernetes command for a selected target must pass `--context <context>`
+  and every namespaced command must pass `-n <namespace>`; never rely on the
+  mutable kubeconfig current context or namespace after target selection.
+- `kubectl` must be spawned with structured argv. No shell-concatenated command
+  strings for context, namespace, pod, selector, container, file path, repair
+  text, or diagnostic commands.
+- `tail -F` is a container-side runtime prerequisite. Missing or unusable tail,
+  missing shell for shell-based probes, missing container, missing file path,
+  unreadable file path, permission denied, no rows yet, parser mismatch, and
+  generic command failure are distinct SourceValidationState outcomes.
+- Multi-container pods must not silently default to the first container or all
+  containers. Regular, init, ephemeral, and sidecar-like containers are shown
+  separately. Init/ephemeral containers are context by default, not auto-tailed.
+- Stream limits are based on resolved stream targets, not pod count:
+  pods × selected containers × selected source families/file paths.
+- RBAC diagnostics must run scope-correct `kubectl auth can-i` preflights where
+  possible and still record attempted command failures. Namespace list denied
+  must allow manual/recent namespace entry when namespace-scoped pod access is
+  otherwise valid.
+- Repair text must be scope-correct: Role/RoleBinding for namespace gaps,
+  ClusterRole/ClusterRoleBinding for cluster gaps, never cluster-admin or
+  wildcard permissions. Events API group and subresources must match the actual
+  command used.
+```
+
+#### Stream identity, lifecycle, and data-loss invariants
+
+```text
+- Stream identity is not pod name alone. Targets and rows must carry context,
+  namespace, pod name, pod UID, container, source type, file path, stream id,
+  per-stream sequence, and stream incarnation/restart information.
+- Pod replacement, terminating pods, completed pods, container restartCount or
+  containerID changes, context/namespace unavailability, and user stop produce
+  explicit end reasons. Old stream segments remain visible; replacement streams
+  get new stream ids.
+- Start and Stop are idempotent. A second Start while starting/running cannot
+  spawn duplicate tails. Stop during Start either cancels before spawn or stops
+  immediately after spawn. No rows may append after a terminal state.
+- Every long-lived process, poller, watcher, Tauri subscription, extension
+  subscription, timer, export, AI request, and analysis run has an owner,
+  cancellation path, stale-response rule, and cleanup verification.
+- Async operations carry operationId plus investigationId/targetGeneration.
+  Superseded target/source/filter/extension/AI results are ignored or rendered
+  only as stale evidence, never merged into the current investigation.
+- Buffering policies must define row capacity, memory ceiling, oversize row
+  handling, drop policy, dropped-row reasons, and incident-summary blind spots.
+  Dropped, truncated, late, skewed, parser-error, and stream-gap rows cannot
+  result in a healthy no-finding claim.
+```
+
+#### Row identity, evidence, parser, and finding correctness
+
+```text
+- `rowId` is stable within a session/export/import/replay and is preserved
+  verbatim. Imported rows must not receive new row ids. Findings, summaries,
+  bookmarks, exports, AI, and extensions use EvidenceRef objects, not bare row
+  ids alone, when persistence or handoff is involved.
+- PermissionGap has a stable id because health, summaries, and no-finding
+  explanations reference permission gap ids.
+- Parser contracts define supported formats: JSONL, text-prefix, multiline, or
+  mixed. They also define timestamp fields/formats/timezone behavior, alias
+  precedence, numeric coercion, malformed-row diagnostics, multiline framing,
+  and mixed-format behavior.
+- `healthy_no_findings` is allowed only when sources, streams, parser fields,
+  permissions, dropped-row rates, and clock skew are healthy enough for the
+  relevant rule. Empty streams use `no_rows_yet` or the source validation
+  state, not healthy.
+- Failed Requests, Slow Requests, and any Error Events family must have rule ids,
+  fingerprints, severity rubric, evidence thresholds, false-positive/negative
+  fixtures, boundary cases, dedupe behavior, and exact expected/no-extra finding
+  assertions.
+```
+
+#### Search, filters, facets, and SDK consistency
+
+```text
+- Existing grep substring/regex mode remains separate from structured filters.
+  Structured filters do not support regex unless a slice RFC explicitly adds it.
+- Filters use draft vs committed state. Invalid structured filters keep the last
+  committed result set and do not recompute facets, findings, exports, or SDK
+  snapshots from the rejected query.
+- Numeric comparisons match only normalized numeric fields. Numeric-looking
+  strings are not coerced unless the parser contract normalizes that field.
+- Time windows define inclusivity, parsedTimestamp vs receivedAt fallback,
+  moving vs pinned behavior, and shared DTOs consumed by UI, facets, findings,
+  export, and SDK snapshots.
+- Facets and grouping define cardinality caps, missing buckets, OR-within-facet
+  and AND-across-facets semantics, sort order, representative rows, and SDK
+  snapshot behavior.
+- Before Slice C/D, the current `klogcat.logViewer@1` SDK row shape must be
+  reconciled with `ParsedLogRow`: either a documented adapter keeps v1 stable or
+  a `klogcat.logViewer@2` protocol is introduced.
+```
+
+#### Privacy, export, extension, and launch-trust gates
+
+```text
+- Redaction applies to raw original text, parsed/original fields, notes,
+  findings, Kubernetes events/metadata, diagnostic stderr, repair commands,
+  extension outputs, exports, clipboard, and AI/network payloads. Redaction
+  failure blocks clipboard/export/network unless an explicit user-confirmed
+  override flow is defined.
+- Copy incident summary opens a visible redacted preview before clipboard write,
+  includes current hypothesis, checked areas, open questions, suggested next
+  checks, blind spots, permission gaps, redaction status, and no hidden disk
+  write.
+- Export/import/persistence use versioned envelopes, JSON schemas, checksums,
+  size limits, unsupported-version handling, rollback behavior, and read-only
+  replay semantics. Corrupt Workbench state must not block direct pod Raw Logs.
+- SDK/runtime extension capabilities are deny-by-default. Bundled extensions use
+  only the public SDK and trusted-bundled trust level. `isolated-runtime` is
+  rejected until a real isolated host exists. Findings emitted by extensions use
+  a host-mediated result channel with host-owned ids, stale-evidence validation,
+  cleanup, and export inclusion rules.
+- Public launch requires license, privacy statement, HTTPS install path,
+  supported OS/kubectl/Kubernetes matrix, signed/notarized or clearly unsigned
+  macOS packaging policy, release checksums, and a runnable command gate whose
+  shell snippets cannot fail due to `cd src-tauri` nesting.
+```
+
+#### Accessibility, i18n, and incident workflow gates
+
+```text
+- The first-five-minutes path has an Incident Mode / Start triage entry point,
+  accepts common alert clues where supported, and always shows the next action
+  for findings, no-finding states, permission gaps, source problems, and partial
+  results.
+- Keyboard-only users can complete target selection, source validation, stream
+  start/stop, finding evidence drilldown, no-finding review, and copy summary.
+- Screen readers receive useful labels, row counts, selection state, new
+  findings, degraded health, copy/export status, and progress announcements.
+- English and Korean user-facing copy for incident summaries, repair text,
+  no-finding explanations, redaction warnings, and degraded states must be in the
+  i18n catalog and reviewed for incident clarity.
+- Color is never the only status signal. Large-data navigation includes keyboard
+  jump to findings/matches/evidence and predictable focus under virtualization.
+```
+
+#### Mandatory review findings to carry into Slice RFCs
+
+```text
+- Slice A RFC must define the cross-process command/event contract for
+  startStreamGroup, stopStreamGroup, stream-target status, stream-group status,
+  and log-line events with groupId, streamId, sequence, target metadata, source
+  type, file path, raw line, and receivedAt.
+- Slice B RFC must pin the initial parser/finding thresholds and fields. A safe
+  initial default is failed status >= 500 and slow duration >= 1000ms, but the
+  RFC must choose and test it explicitly.
+- Slice C-G RFCs inherit the same feature-flag, rollout, rollback, Raw Logs
+  fallback, expected-red-test, and scope-cut requirements as P0/P0.5 slices.
+- P1/P2 scope cuts protect the Workbench MVP loop first: direct pod Raw Logs,
+  workload/label follow, source validation, visible degraded states, permission
+  repair, first findings, no-finding explanations, and redacted copy summary are
+  protected; service targets, advanced analysis, standalone exports, AI network
+  calls, and runtime third-party loading are cut first when risk rises.
+```
 
 ---
 
@@ -290,6 +501,7 @@ Option A, out of scope for Workbench MVP:
 Option B, supported service target:
 - Add `service` to TargetMode.
 - Add `service?: { name: string; selector: string }` to LogTargetRef.
+- Add `serviceGet` to PermissionFeature.
 - Add `Get service` to the Kubernetes command/RBAC matrix.
 - Resolve pods through `kubectl get service -n <namespace> <name> -o json` and
   `.spec.selector`.
@@ -330,7 +542,9 @@ Source validation:
 - Each stream group must validate container/source/file-path choices before or
   during start.
 - Validation state must distinguish missing container, missing file path,
-  permission denied, command failure, no rows yet, parser mismatch, and healthy.
+  unreadable file path, missing or unusable container-side tail runtime, missing
+  shell for shell-based probes, permission denied, command failure, no rows yet,
+  parser mismatch, and healthy.
 - Source choices may come from user input, saved presets, repo/workspace
   defaults, or extension-provided presets, but the slice RFC must define which
   source is supported first.
@@ -358,6 +572,8 @@ type TargetMode = 'pod' | 'workload' | 'labelSelector'
 
 type WorkloadKind = 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'ReplicaSet'
 
+type SourceLogType = 'info' | 'access' | 'error'
+
 type LogTargetRef = {
   context: string
   namespace: string
@@ -374,7 +590,7 @@ type StreamTarget = {
   namespace: string
   pod: string
   container: string
-  sourceType: 'app' | 'access' | 'error'
+  sourceType: SourceLogType
   filePath: string
   status: 'pending' | 'starting' | 'running' | 'ended' | 'failed'
   errorCode?: string
@@ -392,6 +608,9 @@ type SourceValidationState = {
     | 'healthy'
     | 'missing_container'
     | 'missing_file_path'
+    | 'unreadable_file_path'
+    | 'tail_unavailable'
+    | 'shell_unavailable'
     | 'permission_denied'
     | 'command_failed'
     | 'no_rows_yet'
@@ -403,7 +622,7 @@ type SourceValidationState = {
 type SourcePreset = {
   id: string
   label: string
-  sourceType: 'app' | 'access' | 'error'
+  sourceType: SourceLogType
   containerSelector?: string
   filePath: string
   scope: 'user' | 'workspace' | 'repo' | 'cluster'
@@ -418,7 +637,6 @@ type PermissionFeature =
   | 'replicaSetGet'
   | 'eventList'
   | 'execTail'
-  | 'serviceGet'
   | 'contextPanel'
 
 type PermissionGap = {
@@ -723,7 +941,7 @@ the slice plan:
 | Surface | Required states |
 | --- | --- |
 | Target picker | direct pod, workload, label selector, loading, empty namespace, unsupported selector, too many pods, RBAC denied |
-| Source validation | unvalidated, validating, healthy, missing container, missing file path, permission denied, command failed, no rows yet, parser mismatch |
+| Source validation | unvalidated, validating, healthy, missing container, missing file path, unreadable file path, tail unavailable, shell unavailable, permission denied, command failed, no rows yet, parser mismatch |
 | Stream group status | all running, running with errors, starting, stopping, ended, failed |
 | Kubernetes context panel | loaded, loading, stale, partial, no permission, events unavailable |
 | Permission repair kit | no gaps, partial gaps, blocked feature, copy repair request, copy failed |
@@ -781,9 +999,9 @@ npm run test:scenario
 npm run test:stress
 npm run test:e2e
 npm run build
-cd src-tauri && cargo fmt -- --check
-cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
-cd src-tauri && cargo test --all-targets
+(cd src-tauri && cargo fmt -- --check)
+(cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
+(cd src-tauri && cargo test --all-targets)
 ```
 
 Required live Kubernetes validation for workload features:
@@ -810,8 +1028,9 @@ Performance budgets for P0/P1:
 - detail/open row p95 < 150ms.
 - stream group status update p95 < 250ms at 20 active streams.
 - facet recompute p95 < 500ms at 50k rows.
-- first actionable failed/slow/error finding appears in < 60 seconds on the
-  disposable incident fixture.
+- first actionable failed/slow/error finding appears in < 60 seconds after the
+  app is ready and the disposable incident fixture is deployed, Ready, and
+  producing documented log files.
 - investigation health updates p95 < 250ms when stream, parser, dropped-row, or
   permission state changes.
 ```
@@ -1022,8 +1241,9 @@ Ship:
 Completion gates:
 
 ```text
-- On the disposable incident fixture, a user can go from empty app to first
-  failed/slow/error finding in under 60 seconds.
+- On the disposable incident fixture, after the app is ready and the fixture is
+  deployed, Ready, and producing documented log files, a user can reach the
+  first failed/slow/error finding in under 60 seconds.
 - If no finding appears, the UI explains whether the cause is no matching rows,
   missing parser fields, missing permissions, stream failures, source-path
   problems, partial results, or healthy logs, using `NoFindingExplanation`.
@@ -1472,9 +1692,10 @@ Scope:
 Success metric:
 
 ```text
-An on-call engineer can go from empty app to first credible failed/slow/error
-suspect in under 60 seconds on the disposable incident fixture, or understand
-which source, parser, permission, or stream gap prevents that result.
+An on-call engineer can reach the first credible failed/slow/error suspect in
+under 60 seconds after the app is ready and the disposable incident fixture is
+deployed, Ready, and producing documented log files, or understand which source,
+parser, permission, or stream gap prevents that result.
 ```
 
 Acceptance criteria:
@@ -1482,7 +1703,7 @@ Acceptance criteria:
 | Case | Given | When | Then | Required validation |
 | --- | --- | --- | --- | --- |
 | Source setup baseline | The chosen MVP source setup mechanism has an APP/ACC/ERR preset or equivalent input | User selects a workload | Supported container/source/file-path choices are surfaced with diagnostics before stream start | unit + scenario |
-| First finding | Incident fixture has failing and slow rows | User selects workload and starts triage | First finding appears under 60 seconds through product e2e and disposable live-kube file-tail validation | scenario + stress + e2e + live-kube |
+| First finding | Incident fixture is deployed, Ready, and producing failing and slow rows before the measured flow starts | User selects workload and starts triage after the app is ready | First finding appears under 60 seconds through product e2e and disposable live-kube file-tail validation | scenario + stress + e2e + live-kube |
 | Realistic corpus | A non-happy-path sample corpus includes realistic field names and mixed structured/unstructured rows | Parser and findings run | Expected findings and no-finding states match the parser contract | unit + scenario |
 | Missing source | Selected source path does not exist in one pod | Stream group starts | Target shows missing file path and healthy targets continue | unit + scenario |
 | Parser gap | Rows are unstructured or missing status/elapsed fields | Triage runs | UI explains findings are unavailable because parser fields are missing | unit + scenario |
