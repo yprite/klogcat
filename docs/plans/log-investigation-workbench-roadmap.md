@@ -73,9 +73,14 @@ until all of these are true:
 - Slice B Incident Triage Loop is complete.
 - The first source discovery/setup mechanism is specified and implemented.
 - The first supported parser/log-schema contract is specified and covered by an
-  incident fixture.
+  incident fixture plus at least one realistic sample corpus that was not
+  authored solely for the happy path.
 - A user can reach the first failed/slow/error finding in under 60 seconds on
-  the disposable incident fixture.
+  the disposable incident fixture through both product e2e and live-kube
+  validation.
+- Degraded/no-finding fixture families prove missing source, missing parser
+  fields, permission gaps, stream failures, no matching rows, and healthy logs
+  are distinguishable before launch.
 - Copy incident summary works with default redaction and no hidden disk write.
 - Permission repair text is copyable for every degraded Kubernetes permission
   that blocks a P0/P0.5 path.
@@ -86,7 +91,10 @@ until all of these are true:
 
 P1 analysis tabs, full export bundles, runtime extensions, and AI analyzers can
 make the product more compelling, but they do not substitute for this minimum
-last-hope incident loop.
+last-hope incident loop. Workbench MVP optimizes for one workload, one service,
+or one bounded label selector in one namespace at a time; fleet-wide indexed
+search and cross-namespace incident search are out of scope until backed by a
+separate storage/search RFC.
 
 ---
 
@@ -255,9 +263,12 @@ MVP workload selector rules:
 
 ```text
 - Deployment, StatefulSet, DaemonSet, and ReplicaSet targets must resolve pods
-  through `.spec.selector.matchLabels`.
-- If a workload only uses `matchExpressions`, show `unsupported_selector` and do
-  not guess a selector.
+  through `.spec.selector.matchLabels` only when no `matchExpressions` are
+  present.
+- If a workload uses any `matchExpressions`, including mixed
+  `matchLabels` + `matchExpressions`, show `unsupported_selector` unless the
+  slice RFC implements exact Kubernetes selector serialization for expressions.
+  Do not broaden the selector by silently dropping expressions.
 - Label-selector target mode accepts a Kubernetes selector string and passes it
   directly to `kubectl get pods -l`.
 - Direct pod mode remains unchanged.
@@ -278,11 +289,15 @@ Option A, out of scope for Workbench MVP:
 
 Option B, supported service target:
 - Add `service` to TargetMode.
+- Add `service?: { name: string; selector: string }` to LogTargetRef.
+- Add `Get service` to the Kubernetes command/RBAC matrix.
 - Resolve pods through `kubectl get service -n <namespace> <name> -o json` and
   `.spec.selector`.
 - Require `get services` RBAC.
 - Selectorless, ExternalName, and unsupported headless-service cases must show
   `unsupported_service_target` and cannot guess pods from endpoints.
+- Add scenario or live-kube validation for the chosen supported/unsupported
+  service behavior before Slice A is complete.
 ```
 
 Stream limits:
@@ -363,6 +378,10 @@ type StreamTarget = {
   filePath: string
   status: 'pending' | 'starting' | 'running' | 'ended' | 'failed'
   errorCode?: string
+  droppedRowCount: number
+  parserFailureCount: number
+  lastRowAt?: string
+  stateChangedAt: string
 }
 
 type SourceValidationState = {
@@ -406,8 +425,12 @@ type PermissionGap = {
   feature: PermissionFeature
   context: string
   namespace?: string
+  scope: 'cluster' | 'namespace'
+  apiGroup: '' | 'apps' | 'events.k8s.io' | string
   verb: string
   resource: string
+  subresource?: string
+  resourceName?: string
   attemptedCommand?: string
   kubectlExitCode?: number
   stderrExcerpt?: string
@@ -455,15 +478,23 @@ type DiagnosticCommand = {
   redactionRequired: boolean
 }
 
+type StreamGroupState = 'starting' | 'running' | 'running_with_errors' | 'stopping' | 'ended' | 'failed'
+
 type InvestigationHealth = {
   groupId: string
+  context: string
+  namespace: string
+  targetCount: number
   activeTargets: number
   failedTargets: number
+  streamState: StreamGroupState
   droppedRowCount: number
   parserFailureCount: number
   permissionGapCount: number
+  permissionGapIds: string[]
   lastRowAt?: string
   receivedAt?: string
+  clockSkewSuspected: boolean
   state: 'healthy' | 'degraded' | 'stale' | 'failed'
 }
 
@@ -473,23 +504,55 @@ type TimelineRowIdentity = {
   sequence: number
 }
 
+type FindingState = 'active' | 'partial_results' | 'stale_evidence'
+
 type InvestigationFinding = {
   id: string
   source: 'firstParty' | 'extension' | 'ai'
   title: string
   severity: 'info' | 'warning' | 'error' | 'critical'
+  affectedTargets: LogTargetRef[]
+  timeRange?: { from: string; to: string }
   evidenceRowIds: string[]
+  evidenceCount: number
   summary: string
   suggestedNextChecks: string[]
+  state: FindingState
   confidence?: number
+}
+
+type NoFindingExplanation = {
+  reason:
+    | 'healthy_no_findings'
+    | 'no_matching_rows'
+    | 'missing_parser_fields'
+    | 'missing_permissions'
+    | 'stream_failures'
+    | 'source_path_problems'
+    | 'partial_results'
+  message: string
+  relatedPermissionGapIds?: string[]
+  relatedStreamIds?: string[]
+}
+
+type RedactionSummary = {
+  policyId: string
+  ruleVersion: string
+  redactedFieldCounts: Record<string, number>
+  warnings: string[]
 }
 
 type IncidentSummary = {
   target: LogTargetRef
   timeWindow: { from: string; to: string }
   findingIds: string[]
+  evidenceRowIds: string[]
   activeFilters: string[]
   redactionPolicyId: string
+  redactionStatus: 'not_required' | 'applied' | 'warning' | 'failed'
+  redactionSummary: RedactionSummary
+  permissionGapIds: string[]
+  noFindingExplanation?: NoFindingExplanation
   blindSpots: Array<
     | 'missing_source'
     | 'missing_parser_fields'
@@ -498,6 +561,38 @@ type IncidentSummary = {
     | 'dropped_rows'
     | 'partial_results'
   >
+}
+
+type CopyIncidentSummaryState = {
+  status: 'idle' | 'preview' | 'redaction_warning' | 'copying' | 'copy_success' | 'copy_failure'
+  summary?: IncidentSummary
+  errorMessage?: string
+}
+```
+
+Parsed row and field contract:
+
+```text
+Every parser, structured filter, bundled extension, AI analyzer input, export,
+and SDK-visible snapshot must use the same normalized row contract. Slice RFCs
+may add fields, but they cannot let core filters and extensions invent separate
+alias or typing rules.
+```
+
+```ts
+type ParsedLogRow = {
+  rowId: string
+  streamId: string
+  sequence: number
+  originalText: string
+  parsedTimestamp?: string
+  receivedAt: string
+  normalizedFields: Record<string, string | number | boolean | null>
+  originalFields: Record<string, unknown>
+  parserStatus: 'parsed' | 'unstructured' | 'parser_error'
+  parserError?: string
+  fieldAliases: Record<string, string>
+  privateFields: string[]
 }
 ```
 
@@ -577,7 +672,8 @@ Correlation:
 
 A fixture-only pass is not enough for launch. Before Workbench MVP launch, the
 parser contract must be exercised against at least one realistic sample corpus
-that was not authored solely for the happy-path test.
+that was not authored solely for the happy-path test, and that validation must
+be referenced by the Workbench MVP launch checklist and Slice B acceptance.
 
 ### 4.4 Structured Filter Grammar
 
@@ -754,12 +850,13 @@ Product validation metrics for Workbench MVP:
 - kubectl/K9s/Stern fallback rate during fixture-based usability trials
 ```
 
-At least three fixture families should exist before public workbench launch:
+At least three fixture families are mandatory before public workbench launch:
 
 ```text
 1. failing request incident
 2. slow request incident
-3. degraded incident with missing source, parser fields, or permission gaps
+3. degraded/no-finding incident covering missing source, missing parser fields,
+   permission gaps, stream failures, no matching rows, and healthy logs
 ```
 
 ---
@@ -807,7 +904,9 @@ Completion gates:
 - When a pod disappears and a replacement appears, klogcat follows the new pod.
 - Timeline rows keep target context visible.
 - Source validation distinguishes missing container, missing file path,
-  permission denied, no rows yet, parser mismatch, and healthy targets.
+  permission denied, no rows yet, and healthy targets. Parser mismatch is only
+  required in Slice A if the Slice A RFC defines the minimum parser contract;
+  otherwise it becomes mandatory in Slice B.
 - Tests cover direct pod mode, workload mode, and pod replacement.
 - RBAC-denied workload/event paths degrade without blocking direct pod mode.
 - Too-many-pods selectors provide a narrowing path before the user falls back to
@@ -927,7 +1026,7 @@ Completion gates:
   failed/slow/error finding in under 60 seconds.
 - If no finding appears, the UI explains whether the cause is no matching rows,
   missing parser fields, missing permissions, stream failures, source-path
-  problems, or healthy logs.
+  problems, partial results, or healthy logs, using `NoFindingExplanation`.
 - The user can copy an incident summary without using the full export bundle,
   after default redaction and without hidden disk persistence.
 - Investigation health is always visible while a stream group is active.
@@ -1027,6 +1126,14 @@ Ship as bundled extensions, not core viewer logic:
    - findings can be exported before AI work begins
    - top findings appear in the shared finding rail, not only inside tab-local
      UI
+6. Bundled Extension SDK readiness:
+   - the public SDK exposes a finding emit/subscribe contract or an equivalent
+     host-mediated result channel
+   - registered capabilities cannot exceed declared manifest capabilities
+   - `isolated-runtime` extensions are rejected until an actual isolated host
+     exists; same-context bundled code can only use `trusted-bundled`
+   - bundled extensions must not import Zustand stores, Tauri commands, or host
+     internals directly
 
 Completion gates:
 
@@ -1124,10 +1231,15 @@ Ship:
    - visible local-only/no-network state when an analyzer cannot or should not
      send data
 4. Finding result contract:
+   - AI analyzers return `InvestigationFinding` directly, or a versioned adapter
+     maps analyzer output into `InvestigationFinding`.
+   - Use `summary`; do not introduce a separate `explanation` field unless the
+     adapter maps it explicitly.
    - title
    - severity
+   - affected targets
+   - time range
    - evidence row ids
-   - explanation
    - suggested next checks
    - confidence
 5. Async analysis lifecycle:
@@ -1286,7 +1398,18 @@ Acceptance criteria:
 | Pod replacement | One selected workload pod is deleted | Replacement pod appears | New pod stream starts automatically | live-kube |
 | Source validation | One matching pod has the requested file path and another does not | User starts workload stream | Healthy target runs and failed target shows source validation error | unit + scenario |
 | RBAC denied | Workloads are denied but pods are listable | User opens target picker | Direct pod mode remains available with warning | unit + scenario |
-| Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count and narrowing options | unit + browser e2e |
+| Stream limit | Selector resolves above hard limit | User starts stream | Start is blocked with pod count, pod list inspection, selector refinement, and available restart/not-ready/newest/node narrowing options | unit + browser e2e |
+| Service decision | Service target support is either out of scope or selected for the slice | User pastes or selects a Service name | Option A shows unsupported handoff to workload/selector, or Option B resolves through `.spec.selector` and handles selectorless/ExternalName/headless cases | unit + scenario + live-kube if Option B |
+| Rollout fallback | Workload target mode is disabled by feature flag or rollback | User opens Raw Logs | Direct pod Raw Logs remains available with no migration | unit + scenario |
+
+Implementation RFC must define:
+
+```text
+- feature flag name and default state
+- rollback behavior
+- Raw Logs fallback behavior
+- tests expected to fail before implementation
+```
 
 ### Slice A2: Kubernetes Context MVP
 
@@ -1318,6 +1441,18 @@ Acceptance criteria:
 | Events available | Warning events exist for the selected pod | User opens context panel | Event reason, time, and message appear | unit + live-kube |
 | Events denied | Events are RBAC denied | User opens context panel | Logs continue and permission repair text is copyable | unit + live-kube |
 | Stale pod | Selected pod is replaced | Poll refresh sees replacement | Old context is marked stale and replacement context appears when matched | scenario + live-kube |
+| Pod get denied | `get pods` is denied but stream can continue | Context panel loads | Panel shows `no_permission`, stream continues, and repair text is copyable | unit + live-kube |
+| Partial context | Pod context loads but events or owner chain are unavailable | Context panel loads | Panel shows `partial` with `eventsUnavailableReason` or owner-chain diagnostic | unit + scenario |
+| Rollout fallback | Context panel is disabled by feature flag or rollback | User streams direct pod logs | Raw Logs remains usable and no context data is persisted | unit + scenario |
+
+Implementation RFC must define:
+
+```text
+- feature flag name and default state
+- rollback behavior
+- Raw Logs fallback behavior
+- tests expected to fail before implementation
+```
 
 ### Slice B: Incident Triage Loop
 
@@ -1346,13 +1481,29 @@ Acceptance criteria:
 
 | Case | Given | When | Then | Required validation |
 | --- | --- | --- | --- | --- |
-| First finding | Incident fixture has failing and slow rows | User selects workload and starts triage | First finding appears under 60 seconds | scenario + stress + e2e |
+| Source setup baseline | The chosen MVP source setup mechanism has an APP/ACC/ERR preset or equivalent input | User selects a workload | Supported container/source/file-path choices are surfaced with diagnostics before stream start | unit + scenario |
+| First finding | Incident fixture has failing and slow rows | User selects workload and starts triage | First finding appears under 60 seconds through product e2e and disposable live-kube file-tail validation | scenario + stress + e2e + live-kube |
+| Realistic corpus | A non-happy-path sample corpus includes realistic field names and mixed structured/unstructured rows | Parser and findings run | Expected findings and no-finding states match the parser contract | unit + scenario |
 | Missing source | Selected source path does not exist in one pod | Stream group starts | Target shows missing file path and healthy targets continue | unit + scenario |
 | Parser gap | Rows are unstructured or missing status/elapsed fields | Triage runs | UI explains findings are unavailable because parser fields are missing | unit + scenario |
-| Permission repair | Events are RBAC denied | User opens repair kit | Denied scope and copyable RBAC request are shown | unit + live-kube |
-| Too many pods | Selector resolves above hard limit | User starts stream | Narrowing workflow offers selector refinement before blocking | unit + browser e2e |
-| Copy summary | Findings and blind spots exist | User copies summary | Redacted summary includes target, time window, findings, and gaps | unit + e2e |
-| Health trust | Streams drop rows or parser failures occur | User watches investigation health | Degraded state and counters update within budget | stress + browser e2e |
+| Healthy no finding | Logs are healthy or no rows match failed/slow criteria | Triage runs | `NoFindingExplanation` distinguishes healthy logs from no matching rows | unit + scenario + e2e |
+| Permission repair | Events are RBAC denied | User opens repair kit | Denied scope, apiGroup, resource, and copyable RBAC request are shown | unit + live-kube |
+| Too many pods | Selector resolves above hard limit | User starts stream | Narrowing workflow shows pod count, pod list inspection, selector refinement, and available restart/not-ready/newest/node narrowing options | unit + browser e2e |
+| Copy summary success | Findings and blind spots exist | User copies summary | Redacted summary includes target, time window, findings, evidence rows, redaction status, and gaps | unit + e2e |
+| Copy summary no findings | No finding explanation exists | User previews or copies summary | Summary includes no-finding reason and known blind spots | unit + e2e |
+| Copy summary failure | Clipboard write fails or redaction warns | User copies summary | Recoverable `CopyIncidentSummaryState` shows warning or copy failure without hidden disk write | unit + browser e2e |
+| Health trust | Streams drop rows or parser failures occur | User watches investigation health | Degraded state, per-stream counters, clock-skew suspicion, and permission gap references update within budget | stress + browser e2e |
+| Rollout fallback | Incident triage is disabled by feature flag or rollback | User opens Raw Logs | Direct pod Raw Logs remains available and prior Raw Logs state is not migrated | unit + scenario |
+
+Implementation RFC must define:
+
+```text
+- feature flag name and default state
+- rollback behavior
+- Raw Logs fallback behavior
+- tests expected to fail before implementation
+- whether `parser_mismatch` was already implemented in Slice A or starts here
+```
 
 ### Slice C: Investigation Filters MVP
 

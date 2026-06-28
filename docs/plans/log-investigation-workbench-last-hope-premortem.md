@@ -215,7 +215,7 @@ Mitigation:
 
 Owner: engineering + frontend
 
-Due: before P0 is called done
+Due: before Workbench MVP launch; if Slice A is demoed separately, show at least minimal stream health so users do not mistake missing rows for healthy logs
 
 ### 8. AI tab is correctly P2, but trust rules must be visible earlier
 
@@ -291,8 +291,8 @@ explicit.
 
 Investigation:
 
-- State the MVP scale target: one workload/service at a time.
-- Treat fleet-wide search as out of scope unless backed by indexed storage.
+- State the MVP scale target: one workload/service or one bounded label selector in one namespace at a time.
+- Treat fleet-wide or cross-namespace search as out of scope unless backed by indexed storage.
 
 ## Required Product Standard for This Persona
 
@@ -324,11 +324,11 @@ P0.5 Incident Triage Loop
 Scope:
 
 - source discovery/setup baseline and source validation
-- first parser/log-schema contract and disposable incident fixture
+- first parser/log-schema contract, disposable incident fixture, realistic sample corpus, and degraded/no-finding fixture family
 - investigation health panel
 - minimal Failed Requests and Slow Requests findings
 - finding rail shared by bundled tabs
-- copy incident summary with default redaction and no hidden disk write
+- copy incident summary with default redaction, no hidden disk write, and recoverable copy/redaction-warning states
 - permission repair kit
 - selector narrowing for too-many-pods
 
