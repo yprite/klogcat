@@ -59,7 +59,7 @@ Mitigation:
   sources -> stream -> show error/slow/restart/event suspects -> copy/share
   summary.
 - Keep the hard metric aligned with the roadmap timing boundary: after the app is
-  ready and the fixture is deployed/Ready/producing logs, first actionable
+  ready and the fixture is deployed/Ready/producing logs, the first credible
   finding appears within 60 seconds.
 
 Owner: PM + engineering
@@ -90,7 +90,7 @@ Mitigation:
 
 Owner: engineering
 
-Due: before P0 Workload-Aware Log Collection starts
+Due: before Slice A Workload Follow MVP starts
 
 ### 3. Analysis tabs are P1, but last-hope value depends on them
 
@@ -457,3 +457,28 @@ Mitigation:
   redaction warnings, no-finding explanations, and handoff summaries.
 - Copy summary must include hypothesis, checked areas, open questions, suggested
   next checks, known blind spots, evidence, permission gaps, and redaction state.
+
+
+## 100-Loop Follow-Up Risks
+
+A later 100-pass independent review found that the persona risks are now less
+about missing roadmap ambition and more about implementation contracts that can
+look complete while failing under incident pressure. The roadmap now treats these
+as launch-blocking carry-forward gates:
+
+- command fidelity: structured kubectl argv, explicit context/namespace, and
+  copy diagnostics generated from argv rather than shell strings
+- evidence fidelity: EvidenceRef objects for findings, summaries, bookmarks,
+  exports, AI, and extensions instead of bare row ids
+- permission fidelity: stable PermissionGap ids plus event API group/RBAC/repair
+  text that exactly match the command attempted
+- source fidelity: probe fixtures that distinguish missing file, unreadable file,
+  missing tail, missing shell, permission denial, no rows yet, parser mismatch,
+  and generic command failure
+- stream fidelity: reconnect/cursor/data-loss semantics that visibly degrade
+  no-finding and finding states when gaps or duplicate risk exist
+- incident-path fidelity: a tested Incident Mode / Start triage entry point, not
+  only a collection of independent surfaces
+
+If any of these contracts are left to implementation intuition, the last-hope
+user can still lose trust even when the feature checklist appears complete.

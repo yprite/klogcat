@@ -96,10 +96,11 @@ until all of these are true:
 
 P1 analysis tabs, full export bundles, runtime extensions, and AI analyzers can
 make the product more compelling, but they do not substitute for this minimum
-last-hope incident loop. Workbench MVP optimizes for one workload, one service,
-or one bounded label selector in one namespace at a time; fleet-wide indexed
-search and cross-namespace incident search are out of scope until backed by a
-separate storage/search RFC.
+last-hope incident loop. Workbench MVP optimizes for one direct pod, one workload, or one bounded
+label selector in one namespace at a time. Service-originated incidents are
+accepted only as clues unless the separate Service target Option B RFC is
+accepted and implemented; fleet-wide indexed search and cross-namespace
+incident search are out of scope until backed by a separate storage/search RFC.
 
 
 ### Consolidated Hardening from 30-Loop Review
@@ -208,7 +209,9 @@ explicit in the slice RFCs or accepted as deliberate cuts.
   bookmarks, exports, AI, and extensions use EvidenceRef objects, not bare row
   ids alone, when persistence or handoff is involved.
 - PermissionGap has a stable id because health, summaries, and no-finding
-  explanations reference permission gap ids.
+  explanations reference permission gap ids. PermissionGap.id is stable for the
+  same context, namespace, feature, apiGroup, resource, subresource, verb, and
+  resourceName within an investigation/export/import replay.
 - Parser contracts define supported formats: JSONL, text-prefix, multiline, or
   mixed. They also define timestamp fields/formats/timezone behavior, alias
   precedence, numeric coercion, malformed-row diagnostics, multiline framing,
@@ -307,6 +310,41 @@ explicit in the slice RFCs or accepted as deliberate cuts.
   calls, and runtime third-party loading are cut first when risk rises.
 ```
 
+### Consolidated Hardening from 100-Loop Review
+
+A follow-up 100-pass review produced 103 successful parsed passes, 101 completed
+attempt records, and one failed/unparseable attempt that was replaced. Every
+successful pass found at least one blocker, but the repeated findings converged
+on a smaller set of contract fixes now carried by this roadmap.
+
+Required carry-forward gates:
+
+```text
+- Kubernetes argv fidelity: every selected-target kubectl command uses structured
+  argv with explicit --context and namespaced -n, including diagnostics and copy
+  commands. Display strings are derived only from argv.
+- Event API pinning: MVP uses events.events.k8s.io consistently, or a slice RFC
+  changes both command, RBAC, PermissionGap, repair text, and live fixtures.
+- Namespace-list denial fallback: least-privilege users can manually enter or
+  reuse a recent namespace and validate namespace-scoped pod/exec access.
+- Source-validation probes: every validation state has an exact argv, timeout,
+  exit/stderr/stdout mapping, RBAC prerequisite, and fixture before Slice A/B.
+- EvidenceRef everywhere: persisted/exported/SDK/copied/AI/bookmark/finding
+  evidence never uses bare row ids without stream, pod UID, container, source,
+  file path, incarnation, sequence, and stale/missing state.
+- PermissionGap id stability: summaries, health, and no-finding explanations
+  reference stable PermissionGap ids.
+- Reconnect/cursor policy: tail reconnect, process exit, rotation gaps, duplicate
+  risk, and data-loss events degrade investigation health until resolved.
+- Finding rule identity: Failed Requests, Slow Requests, and Error Events expose
+  family, rule id/version, fingerprint, dedupe key, thresholds, exact expected
+  fixtures, and no-extra finding assertions.
+- Query state DTO: draft invalid filters never replace committed rows, facets,
+  findings, exports, incident summaries, or SDK snapshots.
+- Service target scope: Workbench MVP supports direct pod, workload, and bounded
+  label selector only unless the separate Service Option B contract is accepted.
+```
+
 ---
 
 ## 1. Product Thesis
@@ -335,8 +373,7 @@ That means the product must optimize for:
 - supporting AI analysis with explicit privacy and context boundaries
 
 AI is optional acceleration, not the core trust mechanism. The default incident
-path must work through deterministic first-party findings, visible evidence row
-ids, explicit blind spots, and user-controlled summaries before any AI analyzer
+path must work through deterministic first-party findings, visible EvidenceRefs, explicit blind spots, and user-controlled summaries before any AI analyzer
 participates. Raw rows must never leave the machine by default.
 
 ---
@@ -448,7 +485,7 @@ All workload features must remain file-tail first. The primary log collection
 command remains:
 
 ```text
-kubectl exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>
+kubectl --context <context> exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>
 ```
 
 Previous stdout/stderr logs from `kubectl logs --previous` are **not in scope**
@@ -458,17 +495,22 @@ model and must be labeled as a different source family.
 
 Required MVP commands:
 
+MVP event API group is pinned to `events.k8s.io`; repair text, PermissionGap,
+live fixtures, and `kubectl get events.events.k8s.io` must all use that same
+resource family unless a slice RFC intentionally switches to core events.
+
+
 | Operation | Command shape | Required RBAC | Fallback |
 | --- | --- | --- | --- |
 | List contexts | `kubectl config get-contexts -o name` | local kubeconfig | Show no contexts and diagnostic error. |
-| List namespaces | `kubectl get namespaces -o json` | `list namespaces` | Show accessible context with namespace error. |
-| List pods by namespace | `kubectl get pods -n <namespace> -o json` | `list pods` | Disable pod/workload target mode for that namespace. |
-| List pods by selector | `kubectl get pods -n <namespace> -l <selector> -o json` | `list pods` | Show selector permission or syntax error. |
-| Get pod context | `kubectl get pod -n <namespace> <pod> -o json` | `get pods` | Stream can continue; context panel shows degraded state. |
-| List workloads | `kubectl get deploy,statefulset,daemonset,replicaset -n <namespace> -o json` | `list deployments,statefulsets,daemonsets,replicasets` | Keep direct pod mode available. |
-| Get related ReplicaSet | `kubectl get replicaset -n <namespace> <name> -o json` | `get replicasets` | Owner chain stops at ReplicaSet. |
-| List events | `kubectl get events -n <namespace> --field-selector involvedObject.name=<pod> -o json` | `list events` | Context panel shows events unavailable. |
-| Start file stream | `kubectl exec ... tail -F ...` | `create pods/exec` | Stream group records per-target start failure. |
+| List namespaces | `kubectl --context <context> get namespaces -o json` | `list namespaces` | Show namespace-list denied with exact scope; offer manual namespace entry and recent namespaces, then validate namespace-scoped pod access. |
+| List pods by namespace | `kubectl --context <context> get pods -n <namespace> -o json` | `list pods` | Disable pod/workload target mode only for that namespace after manual/recent namespace validation fails. |
+| List pods by selector | `kubectl --context <context> get pods -n <namespace> -l <selector> -o json` | `list pods` | Show selector permission or syntax error. |
+| Get pod context | `kubectl --context <context> get pod -n <namespace> <pod> -o json` | `get pods` | Stream can continue; context panel shows degraded state. |
+| List workloads | `kubectl --context <context> get deploy,statefulset,daemonset,replicaset -n <namespace> -o json` | `list deployments,statefulsets,daemonsets,replicasets` | Keep direct pod mode available. |
+| Get related ReplicaSet | `kubectl --context <context> get replicaset -n <namespace> <name> -o json` | `get replicasets` | Owner chain stops at ReplicaSet. |
+| List events | `kubectl --context <context> get events.events.k8s.io -n <namespace> --field-selector involvedObject.name=<pod> -o json` | `list events.events.k8s.io` | Context panel shows events unavailable and repair text uses `apiGroup: events.k8s.io`. |
+| Start file stream | `kubectl --context <context> exec -n <namespace> <pod> -c <container> -- tail -n <lines> -F <filePath>` | `create pods/exec` | Stream group records per-target start failure. |
 
 MVP workload selector rules:
 
@@ -527,6 +569,20 @@ Stream limits:
   narrowing when those fields are available.
 ```
 
+Reconnect/cursor policy:
+
+```text
+- `tail -F` reconnect starts a new streamIncarnation and records the previous
+  segment endReason. Because pod-internal files do not provide a durable cursor,
+  reconnect must be documented as at-least-once within the retained buffer and
+  may surface duplicate-risk or gap-risk markers.
+- Reconnect tests must cover pod replacement, container restart, command exit,
+  network interruption, user stop, duplicate rows after restart, and gap markers
+  when a file rotated outside the retained window.
+- DroppedRowCount is paired with reasoned data-loss events; aggregate counts
+  alone cannot justify a healthy investigation state.
+```
+
 Partial success:
 
 ```text
@@ -550,6 +606,20 @@ Source validation:
   source is supported first.
 - Validation errors must include copyable diagnostics and must not silently
   fall back to another source family.
+```
+
+Source validation probe matrix:
+
+```text
+- Slice A/B RFCs must define the exact structured argv, timeout, expected
+  stdout/stderr/exit-code signals, RBAC prerequisite, and fixture for each
+  validation outcome: missing_container, missing_file_path,
+  unreadable_file_path, tail_unavailable, shell_unavailable,
+  permission_denied, command_failed, no_rows_yet, parser_mismatch, and healthy.
+- Probe failure order must prevent generic command_failed from masking a more
+  specific state when stderr/exit-code evidence can distinguish it.
+- healthy_no_findings is impossible unless source validation and parser probes
+  have proven the source is healthy for the relevant finding rule.
 ```
 
 Permission repair:
@@ -589,19 +659,36 @@ type StreamTarget = {
   context: string
   namespace: string
   pod: string
+  podUid: string
   container: string
+  containerId?: string
   sourceType: SourceLogType
   filePath: string
+  restartCountAtStart?: number
+  startedAt?: string
+  endedAt?: string
   status: 'pending' | 'starting' | 'running' | 'ended' | 'failed'
+  streamIncarnation: string
+  endReason?: 'pod_replaced' | 'pod_terminated' | 'pod_completed' | 'container_restarted' | 'context_unavailable' | 'namespace_unavailable' | 'user_stop' | 'command_exit' | 'error'
   errorCode?: string
   droppedRowCount: number
+  dataLossEventIds: string[]
   parserFailureCount: number
   lastRowAt?: string
   stateChangedAt: string
 }
 
 type SourceValidationState = {
-  streamId: string
+  validationId: string
+  streamId?: string
+  groupId?: string
+  context: string
+  namespace: string
+  pod?: string
+  podUid?: string
+  container: string
+  sourceType: SourceLogType
+  filePath: string
   status:
     | 'unvalidated'
     | 'validating'
@@ -615,7 +702,7 @@ type SourceValidationState = {
     | 'command_failed'
     | 'no_rows_yet'
     | 'parser_mismatch'
-  diagnosticCommand?: string
+  diagnosticCommand?: DiagnosticCommand
   message: string
 }
 
@@ -640,6 +727,7 @@ type PermissionFeature =
   | 'contextPanel'
 
 type PermissionGap = {
+  id: string
   feature: PermissionFeature
   context: string
   namespace?: string
@@ -649,7 +737,7 @@ type PermissionGap = {
   resource: string
   subresource?: string
   resourceName?: string
-  attemptedCommand?: string
+  attemptedCommand?: DiagnosticCommand
   kubectlExitCode?: number
   stderrExcerpt?: string
   repairConfidence: 'exact' | 'inferred' | 'unknown'
@@ -692,8 +780,28 @@ type KubernetesContextSnapshot = {
 
 type DiagnosticCommand = {
   label: string
-  command: string
+  executable: 'kubectl' | string
+  argv: string[]
+  displayCommand: string
   redactionRequired: boolean
+}
+
+// displayCommand/copy text is a one-way rendering of executable + argv. It is
+// never parsed back for execution, and tests assert argv boundaries for context,
+// namespace, selector, container, pod, and file path values.
+
+type DataLossEvent = {
+  id: string
+  groupId: string
+  streamId: string
+  streamIncarnation: string
+  sourceType: SourceLogType
+  filePath: string
+  timeWindow?: { from: string; to: string }
+  sequenceRange?: { from: number; to: number }
+  reason: 'buffer_eviction' | 'oversize_row' | 'stream_gap' | 'rotation_gap' | 'parser_drop' | 'unknown'
+  count: number
+  affectedEvidenceRefs: EvidenceRef[]
 }
 
 type StreamGroupState = 'starting' | 'running' | 'running_with_errors' | 'stopping' | 'ended' | 'failed'
@@ -707,6 +815,7 @@ type InvestigationHealth = {
   failedTargets: number
   streamState: StreamGroupState
   droppedRowCount: number
+  dataLossEventIds: string[]
   parserFailureCount: number
   permissionGapCount: number
   permissionGapIds: string[]
@@ -718,8 +827,24 @@ type InvestigationHealth = {
 
 type TimelineRowIdentity = {
   rowId: string
+  investigationId: string
+  groupId: string
   streamId: string
   sequence: number
+  streamIncarnation: string
+  context: string
+  namespace: string
+  pod: string
+  podUid: string
+  container: string
+  containerId?: string
+  sourceType: SourceLogType
+  filePath: string
+}
+
+type EvidenceRef = TimelineRowIdentity & {
+  state: 'active' | 'stale' | 'missing'
+  exportRowFileRef?: string
 }
 
 type FindingState = 'active' | 'partial_results' | 'stale_evidence'
@@ -731,8 +856,15 @@ type InvestigationFinding = {
   severity: 'info' | 'warning' | 'error' | 'critical'
   affectedTargets: LogTargetRef[]
   timeRange?: { from: string; to: string }
-  evidenceRowIds: string[]
+  evidenceRefs: EvidenceRef[]
   evidenceCount: number
+  family: 'failed_request' | 'slow_request' | 'error_event' | 'extension' | 'ai'
+  ruleId: string
+  ruleVersion: string
+  fingerprint: string
+  dedupeKey: string
+  thresholdsApplied: Record<string, number | string>
+  evidencePolicy: 'exact' | 'sampled' | 'partial'
   summary: string
   suggestedNextChecks: string[]
   state: FindingState
@@ -753,6 +885,23 @@ type NoFindingExplanation = {
   relatedStreamIds?: string[]
 }
 
+type FilterMode = 'grep' | 'regex' | 'structured'
+
+type QueryState = {
+  mode: FilterMode
+  draft: string
+  committed: string
+  parseStatus: 'not_applicable' | 'valid' | 'invalid'
+  parseError?: string
+  appliedAt?: string
+}
+
+type FacetSelection = {
+  field: string
+  values: string[]
+  operator: 'orWithinFacet' | 'andAcrossFacets'
+}
+
 type RedactionSummary = {
   policyId: string
   ruleVersion: string
@@ -764,8 +913,9 @@ type IncidentSummary = {
   target: LogTargetRef
   timeWindow: { from: string; to: string }
   findingIds: string[]
-  evidenceRowIds: string[]
-  activeFilters: string[]
+  evidenceRefs: EvidenceRef[]
+  queryState: QueryState
+  facetSelections: FacetSelection[]
   redactionPolicyId: string
   redactionStatus: 'not_required' | 'applied' | 'warning' | 'failed'
   redactionSummary: RedactionSummary
@@ -834,8 +984,9 @@ Session/export DTOs must include:
 - target refs and resolved stream targets
 - source validation states
 - investigation health snapshot
+- data-loss events and dropped-row reason summaries
 - active filters/facets
-- bookmarked row ids and notes
+- bookmarked EvidenceRefs and notes
 - findings
 - incident summary
 - permission gaps
@@ -867,8 +1018,8 @@ slice that claims failed, slow, or error suspects must define:
 - required parsed fields for Failed Requests
 - required parsed fields for Slow Requests
 - accepted field aliases such as status/statusCode, elapsed/elapsedMs/
-  durationMs/latencyMs, traceId/trId
-- expected findings, expected evidence row ids, and expected no-finding states
+  durationMs/latencyMs, traceId/trId, with all duration aliases normalized into canonical durationMs before Slow Requests run
+- expected findings, expected EvidenceRefs, and expected no-finding states
 - fallback behavior when rows are unstructured or required fields are missing
 ```
 
@@ -880,8 +1031,8 @@ Failed Requests:
 - error rcode/reason field classified by the slice RFC.
 
 Slow Requests:
-- numeric elapsed, elapsedMs, durationMs, or latencyMs field, and
-- a threshold defined by the slice RFC.
+- canonical numeric durationMs field normalized from elapsed/elapsedMs/durationMs/latencyMs aliases, and
+- a threshold in milliseconds defined by the slice RFC. Slow Requests must not consume ambiguous raw elapsed fields until their units/coercion rules are specified.
 
 Correlation:
 - traceId or trId is optional for P0.5 but required before Trace/Transaction
@@ -931,6 +1082,18 @@ Field behavior:
 - Invalid filters show a parse error and do not change the active result set.
 - Facet counts are computed from rows after time range and source/target
   filters, but before that facet's own selected values.
+```
+
+Filter state contract:
+
+```text
+- Gated filter state is represented by QueryState and FacetSelection, not only
+  display strings. Draft invalid structured queries never replace the committed
+  query used by rows, facets, findings, exports, incident summaries, or SDK
+  snapshots.
+- Slice B may ship incident triage without general structured filters only if
+  its RFC states which first-party finding shortcuts are deterministic rules
+  rather than user-entered structured queries. Slice C owns the full grammar.
 ```
 
 ### 4.5 Required Product Surfaces
@@ -1028,7 +1191,7 @@ Performance budgets for P0/P1:
 - detail/open row p95 < 150ms.
 - stream group status update p95 < 250ms at 20 active streams.
 - facet recompute p95 < 500ms at 50k rows.
-- first actionable failed/slow/error finding appears in < 60 seconds after the
+- first credible failed/slow/error finding appears in < 60 seconds after the
   app is ready and the disposable incident fixture is deployed, Ready, and
   producing documented log files.
 - investigation health updates p95 < 250ms when stream, parser, dropped-row, or
@@ -1222,7 +1385,7 @@ Ship:
    - Slow Requests for parsed elapsed/duration fields
    - parser/log-schema contract and disposable incident fixture defined before
      implementation
-   - evidence rows referenced by stable row ids
+   - evidence rows referenced by EvidenceRefs with stable row ids and stream identity
    - explicit "unavailable because parser fields are missing" state
 4. Finding rail:
    - top suspects across bundled analysis tabs
@@ -1231,7 +1394,7 @@ Ship:
 5. Copy incident summary:
    - target/context/namespace
    - time window
-   - top findings and evidence row ids
+   - top findings and EvidenceRefs
    - active filters
    - stream/source/parser/permission blind spots
    - default redaction before clipboard write
@@ -1342,7 +1505,7 @@ Ship as bundled extensions, not core viewer logic:
    - show rows in request sequence
 5. Shared finding contract:
    - all analysis tabs emit `InvestigationFinding`
-   - finding evidence references stable row ids
+   - finding evidence references EvidenceRefs with stable row ids and stream identity
    - findings can be exported before AI work begins
    - top findings appear in the shared finding rail, not only inside tab-local
      UI
@@ -1459,7 +1622,7 @@ Ship:
    - severity
    - affected targets
    - time range
-   - evidence row ids
+   - EvidenceRefs
    - suggested next checks
    - confidence
 5. Async analysis lifecycle:
@@ -1704,6 +1867,7 @@ Acceptance criteria:
 | --- | --- | --- | --- | --- |
 | Source setup baseline | The chosen MVP source setup mechanism has an APP/ACC/ERR preset or equivalent input | User selects a workload | Supported container/source/file-path choices are surfaced with diagnostics before stream start | unit + scenario |
 | First finding | Incident fixture is deployed, Ready, and producing failing and slow rows before the measured flow starts | User selects workload and starts triage after the app is ready | First finding appears under 60 seconds through product e2e and disposable live-kube file-tail validation | scenario + stress + e2e + live-kube |
+| Incident start path | The app is ready and a supported alert clue, workload name, or label selector is available | User opens Incident Mode / Start triage | One visible path guides target selection, source confirmation, validation, stream start, health/blind-spot review, finding drilldown, and copy summary with next actions for finding, no-finding, partial, source, permission, and stream states | browser e2e + screenshot/video |
 | Realistic corpus | A non-happy-path sample corpus includes realistic field names and mixed structured/unstructured rows | Parser and findings run | Expected findings and no-finding states match the parser contract | unit + scenario |
 | Missing source | Selected source path does not exist in one pod | Stream group starts | Target shows missing file path and healthy targets continue | unit + scenario |
 | Parser gap | Rows are unstructured or missing status/elapsed fields | Triage runs | UI explains findings are unavailable because parser fields are missing | unit + scenario |
@@ -1777,7 +1941,7 @@ Acceptance criteria:
 | --- | --- | --- | --- | --- |
 | Failed Requests | ACC rows include 5xx responses | User opens Failed Requests | Top failing URLs and samples render | unit + scenario |
 | Slow Requests | Rows include elapsed values | User sets threshold | p50/p95/p99 and route groups update | unit + scenario |
-| Finding export | Analysis tab has findings | User exports | Findings reference stable row ids | unit + e2e |
+| Finding export | Analysis tab has findings | User exports | Findings reference EvidenceRefs with stable row ids and stream identity | unit + e2e |
 
 ### Slice E: Investigation Bundle
 
@@ -1802,7 +1966,7 @@ Acceptance criteria:
 
 | Case | Given | When | Then | Required validation |
 | --- | --- | --- | --- | --- |
-| Bookmark | User marks rows and adds notes | Session is exported | Notes and row ids appear in summary | unit + browser e2e |
+| Bookmark | User marks rows and adds notes | Session is exported | Notes and EvidenceRefs appear in summary | unit + browser e2e |
 | Redaction | Rows contain tokens/emails/IPs | Export preview opens | Redacted output is shown before write | unit + scenario |
 | Resume | Local session exists | App restarts | User can resume or clear explicitly | unit + e2e |
 
@@ -1820,7 +1984,7 @@ Scope:
 Success metric:
 
 ```text
-AI analysis produces structured findings with evidence row ids and no hidden
+AI analysis produces structured findings with EvidenceRefs and no hidden
 data egress.
 ```
 
