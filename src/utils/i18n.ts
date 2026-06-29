@@ -102,6 +102,8 @@ const ko: Record<string, string> = {
   'filter': '필터',
   'Copy raw': '원본 복사',
   'Copy JSON': 'JSON 복사',
+  'Collapse detail': '상세 접기',
+  'Close log row detail': '로그 행 상세 닫기',
   'Close': '닫기',
   'Log row detail': '로그 행 상세',
   'Select Log Targets': '로그 대상 선택',

@@ -352,7 +352,15 @@ export function LogViewer() {
     <span className="text-slate-400">{t(language, 'Selected')}: {selectedRow ? `#${selectedRow.id} ${selectedRow.sourceType}/${selectedRow.pod}` : t(language, 'none')}</span>
   </div>
   {selectedRow && <aside aria-label={t(language, 'Log row detail')} className="max-h-56 overflow-auto rounded border border-slate-700 bg-slate-950 p-3 text-xs">
-    <div className="mb-2 flex gap-2"><strong>{t(language, 'Row')} #{selectedRow.id}</strong><button type="button" onClick={() => void copyText(selectedRow.raw)}>{t(language, 'Copy raw')}</button><button type="button" onClick={() => void copyText(JSON.stringify(selectedRow, null, 2))}>{t(language, 'Copy JSON')}</button><button type="button" onClick={() => setSelectedRowId(null)}>{t(language, 'Close')}</button></div>
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <strong>{t(language, 'Row')} #{selectedRow.id}</strong>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800" onClick={() => void copyText(selectedRow.raw)}>{t(language, 'Copy raw')}</button>
+        <button type="button" className="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800" onClick={() => void copyText(JSON.stringify(selectedRow, null, 2))}>{t(language, 'Copy JSON')}</button>
+        <button type="button" className="rounded border border-yellow-500/70 px-2 py-0.5 font-semibold text-yellow-100 hover:bg-yellow-500/10" onClick={() => setSelectedRowId(null)}>{t(language, 'Collapse detail')}</button>
+        <button type="button" title={t(language, 'Close log row detail')} className="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800" onClick={() => setSelectedRowId(null)}>{t(language, 'Close')}</button>
+      </div>
+    </div>
     <pre className="whitespace-pre-wrap text-slate-200">{JSON.stringify(selectedRow, null, 2)}</pre>
   </aside>}
   </>
