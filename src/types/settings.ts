@@ -10,6 +10,12 @@ export type WorkbenchFeatureFlagName =
 export type WorkbenchFeatureFlags = Record<WorkbenchFeatureFlagName, boolean>
 export type WorkbenchSettings = { featureFlags?: Partial<WorkbenchFeatureFlags> }
 
+export type KeyboardShortcuts = {
+  openSettings?: string
+  openTargetPicker?: string
+  toggleStream?: string
+  restartStream?: string
+}
 export type PersistedSettings = {
   schemaVersion: 1
   defaultNamespace?: string
@@ -17,6 +23,7 @@ export type PersistedSettings = {
   initialTailLines: number
   bufferLimit: number
   logSources: Record<SourceLogType, LogSourceConfig>
+  shortcuts?: KeyboardShortcuts
   logPolicyId?: LogPolicySelectionId
   logPolicy?: LogPolicy
   workbench?: WorkbenchSettings

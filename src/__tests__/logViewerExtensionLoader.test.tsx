@@ -99,4 +99,30 @@ describe('log viewer extension loader', () => {
     result.cleanup()
     expect(cleanupOrder).toEqual(['vendor.slow', 'vendor.fast'])
   })
+
+  it('continues cleanup when one extension cleanup fails', () => {
+    const cleanupOrder: string[] = []
+    const fast = module({ id: 'vendor.fast', label: 'Fast' })
+    fast.activate = () => () => {
+      cleanupOrder.push('vendor.fast')
+    }
+    const broken = module({ id: 'vendor.broken', label: 'Broken' })
+    broken.activate = () => () => {
+      cleanupOrder.push('vendor.broken')
+      throw new Error('cleanup failed')
+    }
+    const slow = module({ id: 'vendor.slow', label: 'Slow' })
+    slow.activate = () => () => {
+      cleanupOrder.push('vendor.slow')
+    }
+
+    const result = activateConfiguredKlogcatExtensions([
+      { module: fast, order: 10 },
+      { module: broken, order: 20 },
+      { module: slow, order: 30 },
+    ], host)
+
+    expect(() => result.cleanup()).not.toThrow()
+    expect(cleanupOrder).toEqual(['vendor.slow', 'vendor.broken', 'vendor.fast'])
+  })
 })

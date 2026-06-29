@@ -4,7 +4,7 @@ import type { PersistedSettings } from '../types/settings'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
-import { buildScloudLogPath } from '../utils/logPath'
+import { buildLogPathFromPolicy, getLogPolicy } from '../utils/logPolicy'
 import { findFallbackPod } from '../utils/podFallback'
 
 export type LogStoreState = ReturnType<typeof useLogStore.getState>
@@ -92,6 +92,10 @@ export function operationState(log: LogStoreState, kube: KubeStoreState, targets
       : undefined
 
   return { active, label, detail }
+}
+
+function filePathForSettings(settings: PersistedSettings, namespace: string, pod: string, sourceType: SourceLogType) {
+  return buildLogPathFromPolicy(settings.logPolicy ?? getLogPolicy(), namespace, pod, sourceType)
 }
 
 function replaceSelectedPod(context: string, namespace: string, stalePod: string, fallbackPod: string) {
@@ -187,7 +191,7 @@ async function launchLogStream(
   log: LogStoreState,
 ): Promise<LaunchResult> {
   const container = resolveContainer(target.pod.containers)
-  const filePath = buildScloudLogPath(target.namespace, target.pod.name, selectedSourceType)
+  const filePath = filePathForSettings(settings, target.namespace, target.pod.name, selectedSourceType)
   const streamId = crypto.randomUUID()
   const sourceId = `${target.context}/${target.namespace}/${target.pod.name}/${container}/${selectedSourceType}/${filePath}`
   log.prepareStarting({ streamId, sourceId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })

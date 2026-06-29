@@ -1,4 +1,4 @@
-export type SourceLogType = 'info' | 'access' | 'error'
+export type SourceLogType = string
 export type ParseStatus = 'parsed' | 'raw'
 export type StreamStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error'
 

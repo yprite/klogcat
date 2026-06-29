@@ -1,5 +1,5 @@
 import type { CommandError } from '../commands/types'
-import type { PersistedSettings, SettingsValidationError } from '../types/settings'
+import type { KeyboardShortcuts, PersistedSettings, SettingsValidationError } from '../types/settings'
 import type { SourceLogType } from '../types/log'
 import type { SelectedPodTarget } from '../stores/kubeStore'
 import {
@@ -39,30 +39,64 @@ function policyWithSourcePath(policy: LogPolicy, sourceType: SourceLogType, path
   return next
 }
 
-function stripSourcePathOverrides(policy: LogPolicy) {
+function sourceKeyFromLabel(label: string) {
+  return label.trim().toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+function policyWithAddedSource(policy: LogPolicy, label: string) {
+  const key = sourceKeyFromLabel(label)
+  if (!key || policy.sources[key]) return policy
   const next = clonePolicy(policy)
-  next.pathTemplate = defaultLogPolicy.pathTemplate
-  next.sources = Object.fromEntries(Object.entries(defaultLogPolicy.sources).map(([key, source]) => [key, { ...next.sources[key as SourceLogType], pathSuffix: source.pathSuffix, pathTemplate: undefined }])) as LogPolicy['sources']
+  next.sources[key] = {
+    label: label.trim().toUpperCase(),
+    pathSuffix: `_${label.trim().toUpperCase()}`,
+    columns: defaultLogPolicy.sources.info.columns,
+  }
   return next
 }
 
-export function SettingsNav({ language }: { language?: Language }) {
+function policyWithoutSource(policy: LogPolicy, sourceType: SourceLogType) {
+  const next = clonePolicy(policy)
+  if (Object.keys(next.sources).length <= 1) return next
+  delete next.sources[sourceType]
+  return next
+}
+
+function stripSourcePathOverrides(policy: LogPolicy) {
+  const next = clonePolicy(policy)
+  next.pathTemplate = defaultLogPolicy.pathTemplate
+  next.sources = Object.fromEntries(Object.entries(next.sources).map(([key, source]) => {
+    const defaultSource = defaultLogPolicy.sources[key]
+    return [key, { ...source, pathSuffix: defaultSource?.pathSuffix ?? source.pathSuffix, pathTemplate: undefined }]
+  })) as LogPolicy['sources']
+  return next
+}
+
+export type SettingsSectionId = 'runtime' | 'appearance' | 'log-source' | 'advanced' | 'shortcuts' | 'maintenance'
+
+const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
+  { id: 'runtime', label: 'Runtime' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'log-source', label: 'Log source' },
+  { id: 'advanced', label: 'Advanced' },
+  { id: 'shortcuts', label: 'Shortcuts' },
+  { id: 'maintenance', label: 'Maintenance' },
+]
+
+export function SettingsNav({ activeSection, language, onSectionChange }: { activeSection: SettingsSectionId; language?: Language; onSectionChange: (section: SettingsSectionId) => void }) {
   return <nav aria-label={t(language, 'Settings sections')} className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Sections')}</p>
-    <a className="mt-3 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-runtime">{t(language, 'Runtime')}</a>
-    <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-appearance">{t(language, 'Appearance')}</a>
-    <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-log-source">{t(language, 'Log source')}</a>
-    <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-advanced">{t(language, 'Advanced')}</a>
-    <a className="mt-2 block rounded border border-slate-800 px-3 py-2 text-slate-200 hover:border-slate-600" href="#settings-maintenance">{t(language, 'Maintenance')}</a>
+    {settingsSections.map((section, index) => <button key={section.id} type="button" className={`${index === 0 ? 'mt-3' : 'mt-2'} block w-full rounded border px-3 py-2 text-left ${activeSection === section.id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-200 hover:border-slate-600'}`} onClick={() => onSectionChange(section.id)}>{t(language, section.label)}</button>)}
   </nav>
 }
 
-export function RuntimeSection({ draft, language, setNum }: { draft: PersistedSettings; language?: Language; setNum: (key: 'initialTailLines' | 'bufferLimit', value: string) => void }) {
+export function RuntimeSection({ draft, language, setDefaultNamespace, setNum }: { draft: PersistedSettings; language?: Language; setDefaultNamespace: (value: string) => void; setNum: (key: 'initialTailLines' | 'bufferLimit', value: string) => void }) {
   return <section id="settings-runtime" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <h3 className="text-sm font-semibold text-white">{t(language, 'Runtime')}</h3>
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
-      <label className="block text-sm">{t(language, 'Initial tail lines')} <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
-      <label className="block text-sm">{t(language, 'Buffer limit')} <input className="mt-1 w-full rounded p-2 text-black" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
+      <label className="block text-sm">{t(language, 'Initial tail lines')} <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" type="number" value={draft.initialTailLines} onChange={e=>setNum('initialTailLines', e.target.value)} /></label>
+      <label className="block text-sm">{t(language, 'Buffer limit')} <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" type="number" value={draft.bufferLimit} onChange={e=>setNum('bufferLimit', e.target.value)} /></label>
+      <label className="block text-sm sm:col-span-2">{t(language, 'Default namespace')} <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-white" value={draft.defaultNamespace ?? ''} onChange={e=>setDefaultNamespace(e.target.value)} placeholder="default" /></label>
     </div>
   </section>
 }
@@ -85,6 +119,11 @@ export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestP
   const sourceLabels = sourceLabelsForActivePolicy()
   const exampleNamespace = activeTarget?.namespace ?? 'example-namespace'
   const examplePod = activeTarget?.pod.name ?? 'example-pod'
+  const addSource = () => {
+    const label = window.prompt(t(language, 'New log type label'), 'DEBUG')
+    if (!label) return
+    setCustomPolicy(policyWithAddedSource(previewPolicy, label), t(language, 'Custom log type added'))
+  }
 
   return <section id="settings-log-source" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -112,16 +151,41 @@ export function LogSourceSection({ activeTarget, handlePolicySelect, handleTestP
     </div>
 
     <div className="mt-3 grid gap-2 sm:grid-cols-3">
-      {sourceTypes.map((type) => <label className="block rounded border border-slate-700 p-2" key={type}>
-        <span className="text-xs font-semibold text-white">{previewPolicy.sources[type]?.label ?? sourceLabels[type]} {t(language, 'suffix')}</span>
-        <input aria-label={`${previewPolicy.sources[type]?.label ?? sourceLabels[type]} ${t(language, 'suffix')}`} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" value={previewPolicy.sources[type]?.pathSuffix ?? ''} onChange={(e) => setCustomPolicy(policyWithSourceSuffix(previewPolicy, type, e.target.value))} />
-      </label>)}
+      {sourceTypes.map((type) => {
+        const label = previewPolicy.sources[type]?.label ?? sourceLabels[type] ?? type
+        const inputId = `source-suffix-${type}`
+        return <div className="rounded border border-slate-700 p-2" key={type}>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-semibold text-white" htmlFor={inputId}>{label} {t(language, 'suffix')}</label>
+            {sourceTypes.length > 1 && <button type="button" className="rounded border border-slate-700 px-1 text-[10px] text-slate-300 hover:border-red-400 hover:text-red-200" onClick={() => setCustomPolicy(policyWithoutSource(previewPolicy, type), t(language, 'Custom log type removed'))}>Remove</button>}
+          </div>
+          <input id={inputId} aria-label={`${label} ${t(language, 'suffix')}`} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" value={previewPolicy.sources[type]?.pathSuffix ?? ''} onChange={(e) => setCustomPolicy(policyWithSourceSuffix(previewPolicy, type, e.target.value))} />
+        </div>
+      })}
     </div>
+    <button type="button" className="mt-3 rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" onClick={addSource}>{t(language, 'Add log type')}</button>
 
     {warnings.length > 0 && <ul className="mt-3 rounded border border-yellow-500/40 bg-yellow-500/10 p-2 text-xs text-yellow-100">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
 
     <LogPathPreview activeTarget={activeTarget} exampleNamespace={exampleNamespace} examplePod={examplePod} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} />
   </section>
+}
+
+export function ShortcutsSection({ draft, language, setShortcut }: { draft: PersistedSettings; language?: Language; setShortcut: (key: keyof KeyboardShortcuts, value: string) => void }) {
+  const shortcuts = draft.shortcuts ?? {}
+  return <section id="settings-shortcuts" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+    <h3 className="text-sm font-semibold text-white">{t(language, 'Shortcuts')}</h3>
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <ShortcutInput label={t(language, 'Open settings')} value={shortcuts.openSettings ?? ''} onChange={(value) => setShortcut('openSettings', value)} />
+      <ShortcutInput label={t(language, 'Open target picker')} value={shortcuts.openTargetPicker ?? ''} onChange={(value) => setShortcut('openTargetPicker', value)} />
+      <ShortcutInput label={t(language, 'Start or stop stream')} value={shortcuts.toggleStream ?? ''} onChange={(value) => setShortcut('toggleStream', value)} />
+      <ShortcutInput label={t(language, 'Restart stream')} value={shortcuts.restartStream ?? ''} onChange={(value) => setShortcut('restartStream', value)} />
+    </div>
+  </section>
+}
+
+function ShortcutInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="block text-sm">{label}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-white" value={value} onChange={(event) => onChange(event.target.value)} placeholder="Meta+K" /></label>
 }
 
 function LogPathPreview({ activeTarget, exampleNamespace, examplePod, handleTestPaths, language, previewPolicy, setCustomPolicy, sourceTypes, testingPaths, testResults }: Omit<LogSourceSectionProps, 'handlePolicySelect' | 'selectedPolicyId' | 'warnings'> & { exampleNamespace: string; examplePod: string }) {

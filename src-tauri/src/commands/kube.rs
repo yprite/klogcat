@@ -1,7 +1,7 @@
-use crate::error::CommandError;
+use crate::{error::CommandError, kubectl::kubectl_binary};
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::HashMap, env, io, process::Command};
+use std::{collections::HashMap, io, process::Command};
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -59,10 +59,6 @@ fn compact_debug_text(value: &str) -> String {
     } else {
         single_line
     }
-}
-
-fn kubectl_binary() -> String {
-    env::var("KLOGCAT_KUBECTL_BIN").unwrap_or_else(|_| "kubectl".into())
 }
 
 fn run_kubectl(args: &[String]) -> Result<Output, CommandError> {

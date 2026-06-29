@@ -1,4 +1,5 @@
 use super::*;
+use crate::kubectl::kubectl_binary;
 use std::process::{Command, Stdio};
 
 pub(super) fn kubectl_tail_args(request: &StartLogStreamRequest) -> Vec<String> {
@@ -25,7 +26,7 @@ pub(super) fn kubectl_tail_args(request: &StartLogStreamRequest) -> Vec<String> 
 }
 
 pub(super) fn spawn_kubectl_tail(args: &[String]) -> Result<Child, CommandError> {
-    Command::new("kubectl")
+    Command::new(kubectl_binary())
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -18,6 +18,8 @@ describe('settings validation', () => {
     expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { ...defaultSettings.logSources.info, label: 'INFO' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.label' }))
     expect(validateSettings({ ...defaultSettings, schemaVersion: 2 })).toContainEqual(expect.objectContaining({ field: 'schemaVersion' }))
     expect(validateSettings({ ...defaultSettings, defaultNamespace: 123 })).toContainEqual(expect.objectContaining({ field: 'defaultNamespace' }))
+    expect(validateSettings({ ...defaultSettings, shortcuts: 'Meta+K' })).toContainEqual(expect.objectContaining({ field: 'shortcuts' }))
+    expect(validateSettings({ ...defaultSettings, shortcuts: { openSettings: 42 } })).toContainEqual(expect.objectContaining({ field: 'shortcuts.openSettings' }))
     expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { container: '', filePath: '/x' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.container' }))
     expect(validateSettings({ ...defaultSettings, logSources: { ...defaultSettings.logSources, info: { container: 'app', filePath: '/x\0y' } } })).toContainEqual(expect.objectContaining({ field: 'logSources.info.filePath' }))
   })

@@ -5,6 +5,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import type { PodInfo } from '../types/kube'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(async () => ({ settings: defaultSettings })),
@@ -65,6 +66,27 @@ function resetStores() {
   })
 }
 
+const apiPods: PodInfo[] = [
+  { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'api', tier: 'web' } },
+  { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'api', tier: 'web' } },
+  { name: 'worker-55d9-a', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'worker' } },
+]
+
+function seedLoadedTargets() {
+  useKubeStore.setState({
+    contexts: [{ name: 'ctx' }],
+    currentContext: 'ctx',
+    selectedContext: 'ctx',
+    selectedContexts: ['ctx'],
+    namespaces: [{ name: 'default' }],
+    namespacesByContext: { ctx: [{ name: 'default' }] },
+    selectedNamespace: 'default',
+    selectedNamespaces: { ctx: ['default'] },
+    pods: apiPods,
+    podsByScope: { 'ctx\u0000default': apiPods },
+  })
+}
+
 describe('AppShell target picker entry points', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -89,27 +111,7 @@ describe('AppShell target picker entry points', () => {
   })
 
   it('can select a workload group from the target picker without leaving raw logs', async () => {
-    useKubeStore.setState({
-      contexts: [{ name: 'ctx' }],
-      currentContext: 'ctx',
-      selectedContext: 'ctx',
-      selectedContexts: ['ctx'],
-      namespaces: [{ name: 'default' }],
-      namespacesByContext: { ctx: [{ name: 'default' }] },
-      selectedNamespace: 'default',
-      selectedNamespaces: { ctx: ['default'] },
-      pods: [
-        { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running', containers: ['app'] },
-        { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running', containers: ['app'] },
-        { name: 'worker-55d9-a', namespace: 'default', phase: 'Running', containers: ['app'] },
-      ],
-      podsByScope: { 'ctx\u0000default': [
-        { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running', containers: ['app'] },
-        { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running', containers: ['app'] },
-        { name: 'worker-55d9-a', namespace: 'default', phase: 'Running', containers: ['app'] },
-      ] },
-    })
-
+    seedLoadedTargets()
     render(<AppShell />)
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
@@ -122,28 +124,9 @@ describe('AppShell target picker entry points', () => {
   })
 
   it('can select running pods with a bounded label selector without leaving raw logs', async () => {
-    useKubeStore.setState({
-      contexts: [{ name: 'ctx' }],
-      currentContext: 'ctx',
-      selectedContext: 'ctx',
-      selectedContexts: ['ctx'],
-      namespaces: [{ name: 'default' }],
-      namespacesByContext: { ctx: [{ name: 'default' }] },
-      selectedNamespace: 'default',
-      selectedNamespaces: { ctx: ['default'] },
-      pods: [
-        { name: 'api-1', namespace: 'default', phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
-        { name: 'api-2', namespace: 'default', phase: 'Pending', containers: ['app'], labels: { app: 'api', tier: 'web' } },
-        { name: 'worker-1', namespace: 'default', phase: 'Running', containers: ['app'], labels: { app: 'worker' } },
-      ],
-      podsByScope: { 'ctx\u0000default': [
-        { name: 'api-1', namespace: 'default', phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
-        { name: 'api-2', namespace: 'default', phase: 'Pending', containers: ['app'], labels: { app: 'api', tier: 'web' } },
-        { name: 'worker-1', namespace: 'default', phase: 'Running', containers: ['app'], labels: { app: 'worker' } },
-      ] },
-    })
-
+    seedLoadedTargets()
     render(<AppShell />)
+
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
     expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Label selector'), { target: { value: 'app=api,tier=web' } })
@@ -156,6 +139,19 @@ describe('AppShell target picker entry points', () => {
     expect(screen.getByText('Raw Logs')).toBeInTheDocument()
   })
 
+  it('stacks the target tree and selected target panel before the desktop breakpoint', async () => {
+    render(<AppShell />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+    const layout = screen.getByTestId('target-picker-layout')
+    expect(layout).toHaveClass('grid-cols-1')
+    expect(layout.className).toContain('lg:grid-cols-[minmax(0,1fr)_22rem]')
+    expect(screen.getByRole('complementary', { name: 'Selected targets' })).toHaveClass('border-t')
+    expect(screen.getByRole('complementary', { name: 'Selected targets' }).className).toContain('lg:border-l')
+  })
+
   it('does not expose internal action debug logs in the user UI', async () => {
     render(<AppShell />)
 
@@ -164,5 +160,27 @@ describe('AppShell target picker entry points', () => {
 
     expect(screen.queryByText('Action debug')).not.toBeInTheDocument()
     expect(screen.queryByText(/Settings clicked/)).not.toBeInTheDocument()
+  })
+
+  it('handles configurable global shortcuts for settings, targets, stream toggle, and restart', async () => {
+    const toggleSpy = vi.fn()
+    const restartSpy = vi.fn()
+    window.addEventListener('klogcat:toggle-stream', toggleSpy)
+    window.addEventListener('klogcat:restart-stream', restartSpy)
+    render(<AppShell />)
+
+    fireEvent.keyDown(window, { key: ',', metaKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /close settings/i }))
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+    expect(toggleSpy).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true, shiftKey: true })
+    expect(restartSpy).toHaveBeenCalledTimes(1)
+    window.removeEventListener('klogcat:toggle-stream', toggleSpy)
+    window.removeEventListener('klogcat:restart-stream', restartSpy)
   })
 })

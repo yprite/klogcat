@@ -205,7 +205,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   pause() { set({ viewerPaused: true }) },
   resume() { const s = get(); set({ viewerPaused: false, visibleRows: filterRows(s.rows, s.grepQuery, s.grepMode), droppedWhilePaused: 0 }) },
   clear() { set({ rows: [], visibleRows: [], totalDroppedCount: 0, droppedWhilePaused: 0 }) },
-  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, latestStderr: undefined, stderrByStream: {}, errorMessage: undefined }) },
+  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, viewerPaused: false, totalDroppedCount: 0, droppedWhilePaused: 0, latestStderr: undefined, stderrByStream: {}, errorMessage: undefined }) },
 }))
 
 export function resetLogStoreForTests() { useLogStore.setState({ ...initial }) }

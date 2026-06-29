@@ -95,7 +95,10 @@ export function registerLogViewerExtension(extension: LogViewerExtension, option
   }
   registeredThirdPartyExtensions.set(normalized.id, normalized)
   notifySubscribers()
-  return () => unregisterLogViewerExtension(normalized.id)
+  return () => {
+    if (registeredThirdPartyExtensions.get(normalized.id) !== normalized) return false
+    return unregisterLogViewerExtension(normalized.id)
+  }
 }
 
 export function unregisterLogViewerExtension(id: LogViewerExtensionId) {

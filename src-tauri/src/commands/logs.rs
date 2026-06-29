@@ -1,4 +1,5 @@
 use crate::error::CommandError;
+use crate::kubectl::kubectl_binary;
 use crate::process::log_process::{LogProcessState, StartLogStreamRequest};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -33,7 +34,7 @@ pub struct CheckLogPathResult {
 fn run_check_log_path_command(
     request: &CheckLogPathRequest,
 ) -> Result<std::process::Output, CommandError> {
-    Command::new("kubectl")
+    Command::new(kubectl_binary())
         .args(build_check_log_path_args(request))
         .output()
         .map_err(|e| {

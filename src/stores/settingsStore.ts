@@ -8,7 +8,15 @@ import { assertValidLogPolicy, getLogPolicy, setActiveLogPolicy } from '../utils
 import { useLogStore } from './logStore'
 
 function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
-  return { ...settings, language: settings.language ?? 'en', logPolicyId: settings.logPolicyId ?? 'scloud', logPolicy: settings.logPolicy ?? getLogPolicy() }
+  const defaultNamespace = typeof settings.defaultNamespace === 'string' && settings.defaultNamespace.trim() ? settings.defaultNamespace.trim() : undefined
+  return {
+    ...settings,
+    defaultNamespace,
+    language: settings.language ?? 'en',
+    shortcuts: settings.shortcuts ?? defaultSettings.shortcuts,
+    logPolicyId: settings.logPolicyId ?? 'scloud',
+    logPolicy: settings.logPolicy ?? getLogPolicy(),
+  }
 }
 
 function applySettingsLogPolicy(settings: PersistedSettings) {
