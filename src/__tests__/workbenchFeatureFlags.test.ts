@@ -4,8 +4,8 @@ import { resolveWorkbenchFeatureFlags, workbenchFeatureFlagNames } from '../conf
 import { validateSettings } from '../config/validateSettings'
 
 describe('workbench feature flags', () => {
-  it('defaults every workbench MVP flag off outside development', () => {
-    expect(resolveWorkbenchFeatureFlags(undefined, { dev: false })).toEqual({
+  it('defaults every workbench MVP flag off', () => {
+    expect(resolveWorkbenchFeatureFlags(undefined)).toEqual({
       'workbench.workloadFollow.enabled': false,
       'workbench.kubernetesContext.enabled': false,
       'workbench.incidentTriage.enabled': false,
@@ -20,8 +20,8 @@ describe('workbench feature flags', () => {
     ])
   })
 
-  it('allows development defaults to be enabled explicitly', () => {
-    expect(resolveWorkbenchFeatureFlags({ 'workbench.workloadFollow.enabled': true }, { dev: true })).toMatchObject({
+  it('allows explicit opt-in flags', () => {
+    expect(resolveWorkbenchFeatureFlags({ 'workbench.workloadFollow.enabled': true })).toMatchObject({
       'workbench.workloadFollow.enabled': true,
       'workbench.kubernetesContext.enabled': false,
       'workbench.incidentTriage.enabled': false,

@@ -12,9 +12,7 @@ export const defaultWorkbenchFeatureFlags: WorkbenchFeatureFlags = {
   'workbench.incidentTriage.enabled': false,
 }
 
-type ResolveOptions = { dev?: boolean }
-
-export function resolveWorkbenchFeatureFlags(flags: Partial<WorkbenchFeatureFlags> | undefined, _options: ResolveOptions = {}): WorkbenchFeatureFlags {
+export function resolveWorkbenchFeatureFlags(flags: Partial<WorkbenchFeatureFlags> | undefined): WorkbenchFeatureFlags {
   return { ...defaultWorkbenchFeatureFlags, ...(flags ?? {}) }
 }
 
