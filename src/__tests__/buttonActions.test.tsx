@@ -43,10 +43,12 @@ function resetStores() {
     podsByScope: {},
     selectedPod: undefined,
     selectedPods: {},
+    selectedWorkloads: {},
     loadingContexts: false,
     loadingNamespaces: false,
     loadingPods: false,
     cacheRefreshing: false,
+    targetRefreshPhase: undefined,
     cacheLoaded: true,
     cacheLastRefreshAt: Date.now(),
     error: undefined,
@@ -80,7 +82,8 @@ describe('button actions', () => {
     expect(streamControls).toContainElement(screen.getByRole('button', { name: 'INFO' }))
     expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ACC' }))
     expect(streamControls).toContainElement(screen.getByRole('button', { name: 'ERR' }))
-    expect(streamControls).toContainElement(screen.getByRole('button', { name: 'Stop' }))
+    expect(streamControls).not.toContainElement(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByLabelText('Viewer controls')).toContainElement(screen.getByRole('button', { name: 'Start' }))
     expect(screen.getByLabelText('Viewer controls')).toContainElement(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Start: unavailable/)
 
@@ -88,12 +91,20 @@ describe('button actions', () => {
     expect(onSourceTypesChange).toHaveBeenCalledWith(['info', 'access'])
   })
 
+  it('stacks stream, viewer, and runtime controls before the desktop breakpoint', () => {
+    render(<LogToolbar sourceTypes={['info']} />)
+
+    const toolbar = screen.getByRole('region', { name: 'Log stream controls' })
+    expect(toolbar).toHaveClass('grid-cols-1')
+    expect(toolbar.className).toContain('lg:grid-cols-[minmax(24rem,1.2fr)_minmax(22rem,1fr)_minmax(26rem,1.15fr)]')
+  })
+
   it('disables Stop when no stream is active', () => {
     render(<LogToolbar sourceType="info" />)
 
-    const stop = screen.getByRole('button', { name: 'Stop' })
-    expect(stop).toBeDisabled()
-    expect(stop).toHaveAttribute('title', expect.stringMatching(/no active stream/i))
+    const start = screen.getByRole('button', { name: 'Start' })
+    expect(start).toBeDisabled()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/select namespace and pod/i))
   })
 
   it('reports empty stop attempts through the shared stream action helper', async () => {
@@ -195,6 +206,46 @@ describe('button actions', () => {
     await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(2))
     expect(startLogStream).toHaveBeenNthCalledWith(1, expect.objectContaining({ context: 'ctx', namespace: 'default', pod: 'pod-1', container: 'app' }))
     expect(startLogStream).toHaveBeenNthCalledWith(2, expect.objectContaining({ context: 'cluster-a', namespace: 'prod', pod: 'pod-2', container: 'worker' }))
+  })
+
+  it('uses the current settings log policy when building stream file paths', async () => {
+    const { startLogStream } = await import('../commands/tauriLogs')
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'foo',
+      pods: [{ name: 'pod-1', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+    })
+    useSettingsStore.setState({
+      settings: {
+        ...defaultSettings,
+        logPolicyId: 'custom',
+        logPolicy: {
+          ...defaultSettings.logPolicy!,
+          pathTemplate: '/custom/[namespace]/[podname]/[source].jsonl',
+        },
+      },
+      warning: undefined,
+      loading: false,
+      error: undefined,
+    })
+    useKubeStore.setState({
+      currentContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespaces: { ctx: ['foo'] },
+      podsByScope: {
+        'ctx\u0000foo': [{ name: 'pod-1', namespace: 'foo', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { 'ctx\u0000foo': ['pod-1'] },
+    })
+    render(<LogToolbar sourceTypes={['access']} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(1))
+    expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({
+      sourceType: 'access',
+      filePath: '/custom/foo/pod-1/access.jsonl',
+    }))
   })
 
   it('refreshes pods and retries with a matching fallback pod when a cached pod disappeared', async () => {
@@ -311,6 +362,7 @@ describe('button action settings and stream batches', () => {
 
     render(<SettingsModal open onClose={() => {}} onRestart={restart} />)
 
+    fireEvent.click(screen.getByRole('button', { name: /maintenance/i }))
     fireEvent.click(screen.getByRole('button', { name: /clear target cache/i }))
     expect(localStorage.getItem('klogcat:kube-cache:v1')).toBeNull()
     expect(useKubeStore.getState().selectedPods).toEqual({})
@@ -437,7 +489,9 @@ describe('button action settings and stream batches', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open={true} onClose={() => {}} />)
 
+    fireEvent.click(screen.getByRole('button', { name: /log source/i }))
     fireEvent.change(screen.getByRole('combobox', { name: /log policy/i }), { target: { value: 'custom' } })
+    fireEvent.click(screen.getByRole('button', { name: /advanced/i }))
     fireEvent.click(screen.getByRole('button', { name: /advanced raw json/i }))
     const policyInput = screen.getByLabelText(/custom policy json/i)
     const policy = JSON.parse(policyInput.textContent ?? '')

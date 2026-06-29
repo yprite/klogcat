@@ -43,6 +43,7 @@ function resetKubeStore() {
     loadingPods: false,
     cacheLoaded: false,
     cacheRefreshing: false,
+    targetRefreshPhase: undefined,
     cacheLastRefreshAt: undefined,
     error: undefined,
   })
@@ -182,6 +183,30 @@ describe('kubeStore context selection', () => {
     expect(useKubeStore.getState().pods).toEqual([{ name: 'live-pod', namespace: 'default', phase: 'Running', containers: ['app'] }])
   })
 
+  it('preserves selected pods when adding another namespace selection', async () => {
+    const defaultScope = scopeKey('ctx', 'default')
+    const prodScope = scopeKey('ctx', 'prod')
+    useKubeStore.setState({
+      selectedContext: 'ctx',
+      selectedContexts: ['ctx'],
+      selectedNamespace: 'default',
+      selectedNamespaces: { ctx: ['default'] },
+      namespacesByContext: { ctx: [{ name: 'default' }, { name: 'prod' }] },
+      podsByScope: {
+        [defaultScope]: [{ name: 'default-pod', namespace: 'default', phase: 'Running', containers: ['app'] }],
+      },
+      selectedPods: { [defaultScope]: ['default-pod'] },
+      selectedWorkloads: { [defaultScope]: ['default'] },
+    })
+    vi.mocked(listPods).mockResolvedValueOnce({ context: 'ctx', namespace: 'default', pods: [{ name: 'default-pod', namespace: 'default', phase: 'Running', containers: ['app'] }] })
+      .mockResolvedValueOnce({ context: 'ctx', namespace: 'prod', pods: [{ name: 'prod-pod', namespace: 'prod', phase: 'Running', containers: ['app'] }] })
+
+    await useKubeStore.getState().selectNamespaces([defaultScope, prodScope])
+
+    expect(useKubeStore.getState().selectedPods).toEqual({ [defaultScope]: ['default-pod'] })
+    expect(useKubeStore.getState().getSelectedPodTargets()[0]?.pod.name).toBe('default-pod')
+  })
+
   it('keeps the representative context aligned with the first scoped namespace selection', async () => {
     const clusterScope = scopeKey('cluster-a', 'prod')
     useKubeStore.setState({
@@ -286,6 +311,21 @@ describe('kubeStore context selection', () => {
     expect(listNamespaces).toHaveBeenCalledWith('cluster-a')
     expect(listPods).toHaveBeenCalledWith('default', 'ctx')
     expect(listPods).toHaveBeenCalledWith('prod', 'cluster-a')
+    expect(useKubeStore.getState().podsByScope[scopeKey('ctx', 'default')][0].name).toBe('default-pod')
+  })
+
+  it('finishes full target refresh when one pod scope fails', async () => {
+    useKubeStore.setState({ cacheLastRefreshAt: Date.now() - 25 * 60 * 60 * 1000 })
+    vi.mocked(listPods).mockImplementation(async (namespace: string, context?: string) => {
+      if (context === 'cluster-a') throw { code: 'list_pods_failed', message: 'denied' }
+      return { context, namespace, pods: [{ name: `${namespace}-pod`, namespace, phase: 'Running', containers: ['app'] }] }
+    })
+
+    await useKubeStore.getState().refreshAllTargets(false)
+
+    expect(useKubeStore.getState().cacheRefreshing).toBe(false)
+    expect(useKubeStore.getState().loadingPods).toBe(false)
+    expect(useKubeStore.getState().targetRefreshPhase).toBeUndefined()
     expect(useKubeStore.getState().podsByScope[scopeKey('ctx', 'default')][0].name).toBe('default-pod')
   })
 })

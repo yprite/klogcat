@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { GrepBar, applyQuerySuggestion, suggestionsForQuery } from '../../components/GrepBar'
 import { LogToolbar } from '../../components/LogToolbar'
 import { SettingsModal } from '../../components/SettingsModal'
@@ -131,6 +131,7 @@ describe('settings and toolbar scenario', () => {
 
     fireEvent.change(screen.getByLabelText(/initial tail lines/i), { target: { value: '77' } })
     fireEvent.change(screen.getByLabelText(/buffer limit/i), { target: { value: '3000' } })
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /advanced/i }))
     fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
     fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/custom/[namespace]/[podname]/info.log' } })
     fireEvent.click(screen.getByRole('button', { name: /advanced raw json/i }))
@@ -152,6 +153,7 @@ describe('settings and toolbar scenario', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     await waitFor(() => expect(screen.getByText(/settings reset to defaults/i)).toBeInTheDocument())
     window.localStorage.setItem('klogcat:kube-cache:v1', JSON.stringify({ version: 1, savedAt: Date.now(), contexts: [], namespacesByContext: {} }))
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /maintenance/i }))
     fireEvent.click(screen.getByRole('button', { name: /clear target cache/i }))
     expect(window.localStorage.getItem('klogcat:kube-cache:v1')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /restart app/i }))
@@ -161,6 +163,7 @@ describe('settings and toolbar scenario', () => {
     modal.unmount()
 
     const defaultRestart = render(<SettingsModal open onClose={() => {}} />)
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /maintenance/i }))
     fireEvent.click(screen.getByRole('button', { name: /restart app/i }))
     defaultRestart.unmount()
   })

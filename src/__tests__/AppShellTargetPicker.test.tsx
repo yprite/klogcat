@@ -84,6 +84,19 @@ describe('AppShell target picker entry points', () => {
     expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
   })
 
+  it('stacks the target tree and selected target panel before the desktop breakpoint', async () => {
+    render(<AppShell />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+    const layout = screen.getByTestId('target-picker-layout')
+    expect(layout).toHaveClass('grid-cols-1')
+    expect(layout.className).toContain('lg:grid-cols-[minmax(0,1fr)_22rem]')
+    expect(screen.getByRole('complementary', { name: 'Selected targets' })).toHaveClass('border-t')
+    expect(screen.getByRole('complementary', { name: 'Selected targets' }).className).toContain('lg:border-l')
+  })
+
   it('does not expose internal action debug logs in the user UI', async () => {
     render(<AppShell />)
 
@@ -92,5 +105,27 @@ describe('AppShell target picker entry points', () => {
 
     expect(screen.queryByText('Action debug')).not.toBeInTheDocument()
     expect(screen.queryByText(/Settings clicked/)).not.toBeInTheDocument()
+  })
+
+  it('handles configurable global shortcuts for settings, targets, stream toggle, and restart', async () => {
+    const toggleSpy = vi.fn()
+    const restartSpy = vi.fn()
+    window.addEventListener('klogcat:toggle-stream', toggleSpy)
+    window.addEventListener('klogcat:restart-stream', restartSpy)
+    render(<AppShell />)
+
+    fireEvent.keyDown(window, { key: ',', metaKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /close settings/i }))
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+    expect(toggleSpy).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true, shiftKey: true })
+    expect(restartSpy).toHaveBeenCalledTimes(1)
+    window.removeEventListener('klogcat:toggle-stream', toggleSpy)
+    window.removeEventListener('klogcat:restart-stream', restartSpy)
   })
 })

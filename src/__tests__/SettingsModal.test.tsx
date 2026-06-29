@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SettingsModal } from '../components/SettingsModal'
 import { defaultSettings } from '../config/defaultSettings'
 import { useSettingsStore } from '../stores/settingsStore'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
-import { defaultLogPolicy } from '../utils/logPolicy'
+import { defaultLogPolicy, defaultLogSourcesFromPolicy } from '../utils/logPolicy'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(async () => ({ settings: defaultSettings })),
@@ -66,6 +66,10 @@ function seedSelectedTarget() {
   })
 }
 
+function openSettingsSection(name: RegExp) {
+  fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name }))
+}
+
 describe('SettingsModal log policy selection', () => {
   beforeEach(() => {
     resetSettingsStore()
@@ -78,6 +82,7 @@ describe('SettingsModal log policy selection', () => {
     const onClose = vi.fn()
     render(<SettingsModal open onClose={onClose} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     const selector = screen.getByRole('combobox', { name: /profile/i })
     expect(selector).toHaveValue('scloud')
     expect(screen.queryByLabelText(/custom policy json/i)).not.toBeInTheDocument()
@@ -94,17 +99,19 @@ describe('SettingsModal log policy selection', () => {
   it('shows JSON editing only after the user opens advanced raw JSON for a custom policy', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.change(screen.getByRole('combobox', { name: /profile/i }), { target: { value: 'custom' } })
+    openSettingsSection(/advanced/i)
     fireEvent.click(screen.getByRole('button', { name: /advanced raw json/i }))
 
     expect(screen.getByLabelText(/custom policy json/i)).toBeInTheDocument()
-    expect(screen.getByText(/custom, based on scloud/i)).toBeInTheDocument()
   })
 
   it('hides container inputs from the normal settings page', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
     expect(screen.queryByLabelText(/container/i)).not.toBeInTheDocument()
+    openSettingsSection(/advanced/i)
     fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
     expect(screen.getByLabelText(/info path template/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/acc path template/i)).toBeInTheDocument()
@@ -115,10 +122,12 @@ describe('SettingsModal log policy selection', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     expect(screen.getByText('[namespace]')).toBeInTheDocument()
     expect(screen.getByText('[podname]')).toBeInTheDocument()
     expect(screen.getByText('[suffix]')).toBeInTheDocument()
 
+    openSettingsSection(/advanced/i)
     fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
     fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/custom/[namespace]/[podname]/info.log' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -133,6 +142,90 @@ describe('SettingsModal log policy selection', () => {
     })))
   })
 
+  it('writes derived logSources when saving custom policy changes', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    const nextPolicy = {
+      ...defaultLogPolicy,
+      sources: {
+        ...defaultLogPolicy.sources,
+        info: { ...defaultLogPolicy.sources.info, pathTemplate: '/custom/[namespace]/[podname]/info.log' },
+      },
+    }
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    openSettingsSection(/advanced/i)
+    fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
+    fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: nextPolicy.sources.info.pathTemplate } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({
+        sources: expect.objectContaining({
+          info: expect.objectContaining({ pathTemplate: nextPolicy.sources.info.pathTemplate }),
+        }),
+      }),
+      logSources: expect.objectContaining(defaultLogSourcesFromPolicy(nextPolicy)),
+    })))
+  })
+
+  it('saves default namespace without validation errors', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/default namespace/i), { target: { value: 'payments' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      defaultNamespace: 'payments',
+    })))
+  })
+
+  it('saves editable keyboard shortcuts', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    openSettingsSection(/shortcuts/i)
+    fireEvent.change(screen.getByLabelText(/open settings/i), { target: { value: 'Meta+.' } })
+    fireEvent.change(screen.getByLabelText(/open target picker/i), { target: { value: 'Meta+P' } })
+    fireEvent.change(screen.getByLabelText(/start or stop stream/i), { target: { value: 'Meta+S' } })
+    fireEvent.change(screen.getByLabelText(/restart stream/i), { target: { value: 'Meta+R' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      shortcuts: expect.objectContaining({
+        openSettings: 'Meta+.',
+        openTargetPicker: 'Meta+P',
+        restartStream: 'Meta+R',
+        toggleStream: 'Meta+S',
+      }),
+    })))
+  })
+
+  it('adds a custom log type and derives settings for it', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    vi.stubGlobal('prompt', vi.fn(() => 'DEBUG'))
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    openSettingsSection(/log source/i)
+    fireEvent.click(screen.getByRole('button', { name: /add log type/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!)
+    fireEvent.click(screen.getByRole('button', { name: /add log type/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      logPolicyId: 'custom',
+      logPolicy: expect.objectContaining({
+        sources: expect.objectContaining({
+          debug: expect.objectContaining({ label: 'DEBUG' }),
+        }),
+      }),
+      logSources: expect.objectContaining({
+        debug: expect.objectContaining({ container: 'app', filePath: '/scloud/[namespace]/logs/[podname]/[namespace]_DEBUG.log' }),
+      }),
+    })))
+  })
+
   it('keeps the settings content in a scrollable panel', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
@@ -141,11 +234,12 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByTestId('settings-scroll-panel')).toHaveClass('overflow-y-auto')
   })
 
-  it('links every visible settings section from the side navigation', () => {
+  it('switches settings sections from the side navigation', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
-    expect(screen.getByRole('link', { name: /appearance/i })).toHaveAttribute('href', '#settings-appearance')
+    openSettingsSection(/appearance/i)
     expect(document.getElementById('settings-appearance')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/initial tail lines/i)).not.toBeInTheDocument()
   })
 
   it('closes with Escape and exposes an accessible close button', async () => {
@@ -155,6 +249,7 @@ describe('SettingsModal log policy selection', () => {
     const closeButton = screen.getByRole('button', { name: /close settings/i })
     await waitFor(() => expect(closeButton).toHaveFocus())
 
+    fireEvent.keyDown(screen.getByRole('dialog', { name: /settings/i }), { key: 'Tab' })
     fireEvent.keyDown(screen.getByRole('dialog', { name: /settings/i }), { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
@@ -162,9 +257,12 @@ describe('SettingsModal log policy selection', () => {
   it('keeps Settings modal labels in the draft language before save', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/appearance/i)
     fireEvent.change(screen.getByLabelText(/language/i), { target: { value: 'ko' } })
 
+    openSettingsSection(/런타임/i)
     expect(screen.getByRole('heading', { name: '런타임' })).toBeInTheDocument()
+    openSettingsSection(/로그 소스/i)
     expect(screen.getByRole('heading', { name: '로그 소스 프로필' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument()
   })
@@ -173,6 +271,7 @@ describe('SettingsModal log policy selection', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.change(screen.getByLabelText(/path pattern/i), { target: { value: '/logs/app.log' } })
 
     expect(screen.getAllByText(/include \[namespace\]/i).length).toBeGreaterThan(0)
@@ -186,10 +285,10 @@ describe('SettingsModal log policy selection', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/advanced/i)
     fireEvent.click(screen.getByRole('button', { name: /advanced path overrides/i }))
     fireEvent.change(screen.getByLabelText(/info path template/i), { target: { value: '/logs/info.log' } })
 
-    expect(screen.getByText(/INFO: Include \[namespace\]/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(saveSettings).not.toHaveBeenCalled()
@@ -199,6 +298,7 @@ describe('SettingsModal log policy selection', () => {
     seedSelectedTarget()
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     expect(screen.getByRole('heading', { name: /log source profile/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/profile/i)).toHaveValue('scloud')
     expect(screen.getByLabelText(/path pattern/i)).toHaveValue('/scloud/[namespace]/logs/[podname]/[namespace][suffix].log')
@@ -208,13 +308,13 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByText(/preview using current target/i)).toBeInTheDocument()
     expect(screen.getByText('/scloud/payment-prod/logs/api-7d9c/payment-prod_ERR.log')).toBeInTheDocument()
     expect(screen.queryByLabelText(/custom policy json/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /advanced path overrides/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /advanced raw json/i })).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: /advanced/i })).toBeInTheDocument()
   })
 
   it('shows actionable validation for unknown variables and missing namespace or pod tokens', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.change(screen.getByLabelText(/path pattern/i), { target: { value: '/logs/[namesapce]/app.log' } })
 
     expect(screen.getByText(/unknown variable: \[namesapce\]/i)).toBeInTheDocument()
@@ -227,6 +327,7 @@ describe('SettingsModal log policy selection', () => {
     const { checkLogPath } = await import('../commands/tauriLogs')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.change(screen.getByLabelText(/path pattern/i), { target: { value: '/logs/' } })
     fireEvent.click(screen.getByRole('button', { name: '[namespace]' }))
     expect(screen.getByLabelText(/path pattern/i)).toHaveValue('/logs/[namespace]')
@@ -244,6 +345,7 @@ describe('SettingsModal log policy selection', () => {
   it('reports path test prerequisites before testing paths', () => {
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.click(screen.getByRole('button', { name: /test paths/i }))
     expect(screen.getByText(/select a namespace and pod before testing paths/i)).toBeInTheDocument()
   })
@@ -254,6 +356,7 @@ describe('SettingsModal log policy selection', () => {
     vi.mocked(checkLogPath).mockRejectedValueOnce(new Error('permission denied'))
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.click(screen.getByRole('button', { name: /test paths/i }))
     await waitFor(() => expect(screen.getByText(/permission denied/i)).toBeInTheDocument())
   })
@@ -262,6 +365,7 @@ describe('SettingsModal log policy selection', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/log source/i)
     fireEvent.change(screen.getByLabelText(/acc suffix/i), { target: { value: '_ACCESS' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -279,6 +383,7 @@ describe('SettingsModal log policy selection', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    openSettingsSection(/appearance/i)
     fireEvent.change(screen.getByLabelText(/language/i), { target: { value: 'ko' } })
     fireEvent.click(screen.getByRole('button', { name: '저장' }))
 

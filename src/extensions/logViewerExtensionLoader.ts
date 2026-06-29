@@ -72,7 +72,13 @@ export function activateConfiguredKlogcatExtensions(configuredModules: readonly 
     activatedIds,
     errors,
     cleanup() {
-      for (const cleanup of [...cleanups].reverse()) cleanup()
+      for (const cleanup of [...cleanups].reverse()) {
+        try {
+          cleanup()
+        } catch (error) {
+          console.error('[klogcat] Extension cleanup failed', error)
+        }
+      }
     },
   }
 }

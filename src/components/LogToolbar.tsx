@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { SourceLogType } from '../types/log'
 import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
@@ -20,20 +21,12 @@ import {
 function StreamControls({
   selectedSourceTypes,
   onSourceTypesChange,
-  status,
   operation,
-  onStart,
-  onStop,
-  onRestart,
   language,
 }: {
   selectedSourceTypes: SourceLogType[]
   onSourceTypesChange?: (value: SourceLogType[]) => void
-  status: ToolbarStatus
   operation: ReturnType<typeof operationState>
-  onStart: () => void
-  onStop: () => void
-  onRestart: () => void
   language?: Language
 }) {
   return <div aria-label={t(language, 'Stream controls')} className="rounded border border-slate-800 bg-slate-950/60 p-2">
@@ -43,20 +36,21 @@ function StreamControls({
     </div>
   <div className="flex items-center gap-2">
       {onSourceTypesChange && <LogTypeSelector value={selectedSourceTypes} onChange={onSourceTypesChange} />}
-      <button className="rounded border border-yellow-400 bg-yellow-300 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(status.startBlockedReason)} title={status.startBlockedReason ? t(language, status.startBlockedReason) : t(language, 'Start selected target streams')} onClick={onStart}>{t(language, 'Start')}</button>
-      <button className="rounded border border-red-500/70 px-3 py-1 text-sm font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!status.canStop} title={status.canStop ? t(language, 'Stop active streams') : t(language, 'No active stream to stop')} onClick={onStop}>{t(language, 'Stop')}</button>
-      <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!status.canRestart} title={status.canRestart ? t(language, 'Restart active streams') : t(language, 'Start a stream before restarting')} onClick={onRestart}>{t(language, 'Restart')}</button>
     </div>
     {operation.active && <div className="mt-2"><ProgressStripe label={`${operation.label} progress`} /></div>}
   </div>
 }
 
-function ViewerControls({ log, language }: { log: LogStoreState; language?: Language }) {
+function ViewerControls({ log, status, onToggleStream, onRestart, language }: { log: LogStoreState; status: ToolbarStatus; onToggleStream: () => void; onRestart: () => void; language?: Language }) {
   const canPause = log.streamStatus === 'running' || log.viewerPaused
   const hasRows = log.rows.length > 0
+  const toggleLabel = status.canStop ? 'Stop' : 'Start'
+  const toggleDisabled = status.canStop ? false : Boolean(status.startBlockedReason)
   return <div aria-label={t(language, 'Viewer controls')} className="rounded border border-slate-800 bg-slate-950/60 p-2">
     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t(language, 'Viewer controls')}</div>
     <div className="flex flex-wrap items-center gap-2">
+      <button className={`rounded border px-3 py-1 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${status.canStop ? 'border-red-500/70 text-red-100 hover:bg-red-500/10' : 'border-yellow-400 bg-yellow-300 text-slate-950 hover:bg-yellow-200'}`} disabled={toggleDisabled} title={status.canStop ? t(language, 'Stop active streams') : status.startBlockedReason ? t(language, status.startBlockedReason) : t(language, 'Start selected target streams')} onClick={onToggleStream}>{t(language, toggleLabel)}</button>
+      <button className="rounded border border-orange-400/70 px-3 py-1 text-sm font-semibold text-orange-100 hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={!status.canRestart} title={status.canRestart ? t(language, 'Restart active streams') : t(language, 'Start a stream before restarting')} onClick={onRestart}>{t(language, 'Restart')}</button>
       <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canPause} title={canPause ? t(language, 'Pause or resume log rendering') : t(language, 'Start a stream before pausing')} onClick={() => togglePause(log)}>{t(language, log.viewerPaused ? 'Resume' : 'Pause')}</button>
       <button className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={!hasRows} title={hasRows ? t(language, 'Clear buffered logs') : t(language, 'No logs to clear')} onClick={() => { log.recordActionDebug('Clear clicked'); log.clear() }}>{t(language, 'Clear')}</button>
       <label className="inline-flex items-center gap-1 text-sm text-slate-200"><input type="checkbox" checked={log.autoScrollEnabled} onChange={(event) => setAutoScroll(log, event.target.checked)} /> {t(language, 'Auto-scroll')}</label>
@@ -125,10 +119,24 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     await stopStreams(log, selectedStreamIds(log), false)
     await start(true)
   }
+  const toggleStream = () => {
+    if (status.canStop) return void stop()
+    return void start()
+  }
+  useEffect(() => {
+    const toggle = () => toggleStream()
+    const restartActive = () => { if (status.canRestart) void restart() }
+    window.addEventListener('klogcat:toggle-stream', toggle)
+    window.addEventListener('klogcat:restart-stream', restartActive)
+    return () => {
+      window.removeEventListener('klogcat:toggle-stream', toggle)
+      window.removeEventListener('klogcat:restart-stream', restartActive)
+    }
+  })
 
-  return <section aria-label="Log stream controls" className="grid shrink-0 grid-cols-[minmax(24rem,1.2fr)_minmax(22rem,1fr)_minmax(26rem,1.15fr)] gap-2 border-b border-slate-800 bg-slate-900 px-2 py-2">
-    <StreamControls selectedSourceTypes={selectedSourceTypes} onSourceTypesChange={onSourceTypesChange} status={status} operation={operation} onStart={() => void start()} onStop={() => void stop()} onRestart={() => void restart()} language={language} />
-    <ViewerControls log={log} language={language} />
+  return <section aria-label="Log stream controls" className="grid shrink-0 grid-cols-1 gap-2 border-b border-slate-800 bg-slate-900 px-2 py-2 lg:grid-cols-[minmax(24rem,1.2fr)_minmax(22rem,1fr)_minmax(26rem,1.15fr)]">
+    <StreamControls selectedSourceTypes={selectedSourceTypes} onSourceTypesChange={onSourceTypesChange} operation={operation} language={language} />
+    <ViewerControls log={log} status={status} onToggleStream={toggleStream} onRestart={() => void restart()} language={language} />
     <RuntimeStatus log={log} status={status} targets={targets} language={language} />
   </section>
 }

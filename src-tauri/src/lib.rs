@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod error;
+pub mod kubectl;
 pub mod process;
 pub mod settings;
 

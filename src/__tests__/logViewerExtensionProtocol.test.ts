@@ -118,4 +118,46 @@ describe('log viewer extension protocol', () => {
     expect(() => sdk.export.rowsAsJsonl()).toThrow(/logs.export/)
     expect(() => sdk.grep.setQuery('trace')).toThrow(/grep.write/)
   })
+
+  it('rejects invalid runtime grep modes from extensions', () => {
+    const actions = {
+      setGrepQuery: vi.fn(),
+      setGrepMode: vi.fn(),
+      pauseViewer: vi.fn(),
+      resumeViewer: vi.fn(),
+      clearViewer: vi.fn(),
+      setAutoScrollEnabled: vi.fn(),
+    }
+    const sdk = createLogViewerExtensionHostApi({
+      capabilities: ['grep.write'],
+      getSnapshot: () => snapshot,
+      subscribe: () => () => undefined,
+      actions,
+    })
+
+    expect(() => sdk.grep.setMode('glob' as never)).toThrow(/Invalid grep mode/)
+    expect(actions.setGrepMode).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid runtime value types from extensions', () => {
+    const actions = {
+      setGrepQuery: vi.fn(),
+      setGrepMode: vi.fn(),
+      pauseViewer: vi.fn(),
+      resumeViewer: vi.fn(),
+      clearViewer: vi.fn(),
+      setAutoScrollEnabled: vi.fn(),
+    }
+    const sdk = createLogViewerExtensionHostApi({
+      capabilities: ['grep.write', 'viewer.control'],
+      getSnapshot: () => snapshot,
+      subscribe: () => () => undefined,
+      actions,
+    })
+
+    expect(() => sdk.grep.setQuery({ value: 'trace' } as never)).toThrow(/Invalid grep query/)
+    expect(() => sdk.viewer.setAutoScrollEnabled('false' as never)).toThrow(/Invalid auto-scroll value/)
+    expect(actions.setGrepQuery).not.toHaveBeenCalled()
+    expect(actions.setAutoScrollEnabled).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,5 @@
 use crate::error::CommandError;
+use crate::kubectl::kubectl_binary;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering as CmpOrdering,
@@ -391,7 +392,11 @@ impl LogProcessState {
         if debug {
             eprintln!("[klogcat debug] starting stream {}", request.stream_id);
             eprintln!("[klogcat debug] source type: {}", request.source_type);
-            eprintln!("[klogcat debug] command: kubectl {}", args.join(" "));
+            eprintln!(
+                "[klogcat debug] command: {} {}",
+                kubectl_binary(),
+                args.join(" ")
+            );
         }
         let mut child = spawn_kubectl_tail(&args)?;
         let readers = spawn_stream_readers(

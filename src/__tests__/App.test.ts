@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { handleLogExit } from '../App'
+import { defaultSettings } from '../config/defaultSettings'
 import { startLogStream } from '../commands/tauriLogs'
 import { listPods } from '../commands/tauriKube'
 import { resetLogStoreForTests, useLogStore } from '../stores/logStore'
 import { useKubeStore } from '../stores/kubeStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { buildLogPathFromPolicy, defaultLogPolicy } from '../utils/logPolicy'
 import type { ActiveStreamMeta } from '../types/log'
 
 vi.mock('../commands/tauriLogEvents', () => ({
@@ -33,6 +36,12 @@ const meta = (streamId: string): ActiveStreamMeta => ({
 describe('Info log exit handling', () => {
   beforeEach(() => {
     resetLogStoreForTests()
+    useSettingsStore.setState({
+      settings: defaultSettings,
+      warning: undefined,
+      loading: false,
+      error: undefined,
+    })
     vi.mocked(startLogStream).mockClear()
     vi.mocked(listPods).mockReset().mockResolvedValue({ context: 'ctx', namespace: 'ns', pods: [] })
     useKubeStore.setState({
@@ -125,5 +134,39 @@ describe('Info log exit handling', () => {
     })))
     expect(useKubeStore.getState().selectedPods['ctx\u0000ns']).toEqual(['api-64cc9db7fd-k9f2p'])
     expect(useLogStore.getState().actionDebugMessages.some((message) => message.includes('Pod fallback on exit'))).toBe(true)
+  })
+
+  it('uses the active log policy for fallback stream file paths', async () => {
+    const customPolicy = {
+      ...defaultLogPolicy,
+      pathTemplate: '/custom/[namespace]/logs/[pod].txt',
+    }
+    const expectedPath = buildLogPathFromPolicy(customPolicy, 'ns', 'api-64cc9db7fd-k9f2p', 'info')
+    useSettingsStore.setState({
+      settings: { ...defaultSettings, logPolicy: customPolicy },
+      warning: undefined,
+      loading: false,
+      error: undefined,
+    })
+    vi.mocked(listPods).mockResolvedValueOnce({
+      context: 'ctx',
+      namespace: 'ns',
+      pods: [{ name: 'api-64cc9db7fd-k9f2p', namespace: 'ns', phase: 'Running', containers: ['app'] }],
+    })
+    useKubeStore.setState({
+      selectedPods: { 'ctx\u0000ns': ['api-7d9c8f6b8d-x2abc'] },
+      podsByScope: {
+        'ctx\u0000ns': [{ name: 'api-7d9c8f6b8d-x2abc', namespace: 'ns', phase: 'Running', containers: ['app'] }],
+      },
+    })
+    useLogStore.getState().prepareStarting({ ...meta('s1'), context: 'ctx', pod: 'api-7d9c8f6b8d-x2abc' })
+    useLogStore.getState().recordStderr('s1', 'Error from server (NotFound): pods "api-7d9c8f6b8d-x2abc" not found')
+
+    handleLogExit({ streamId: 's1', requestedStop: false, exitCode: 1 })
+
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledWith(expect.objectContaining({
+      pod: 'api-64cc9db7fd-k9f2p',
+      filePath: expectedPath,
+    })))
   })
 })
