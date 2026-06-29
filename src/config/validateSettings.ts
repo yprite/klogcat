@@ -1,4 +1,5 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
+import { isWorkbenchFeatureFlagName } from './workbenchFeatureFlags'
 import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
 
 function sourceKeys() { return sourceTypesFromPolicy(getLogPolicy()) }
@@ -8,7 +9,7 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy', 'workbench'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
@@ -51,11 +52,34 @@ function validateLogSource(key: string, source: unknown, errors: SettingsValidat
   if (typeof source.filePath !== 'string' || !source.filePath.startsWith('/') || source.filePath.includes('\0')) errors.push({ field: `logSources.${key}.filePath`, message: 'filePath must be an absolute path without null bytes' })
 }
 
+function validateWorkbenchSettings(value: unknown, errors: SettingsValidationError[]) {
+  if (value === undefined) return
+  if (!isRecord(value)) {
+    errors.push({ field: 'workbench', message: 'workbench must be an object when provided' })
+    return
+  }
+  rejectExtraKeys(value, ['featureFlags'], 'workbench', errors)
+  if (value.featureFlags === undefined) return
+  if (!isRecord(value.featureFlags)) {
+    errors.push({ field: 'workbench.featureFlags', message: 'featureFlags must be an object when provided' })
+    return
+  }
+  for (const [key, flagValue] of Object.entries(value.featureFlags)) {
+    const field = `workbench.featureFlags.${key}`
+    if (!isWorkbenchFeatureFlagName(key)) {
+      errors.push({ field, message: `Unknown workbench feature flag: ${key}` })
+      continue
+    }
+    if (typeof flagValue !== 'boolean') errors.push({ field, message: 'workbench feature flags must be boolean' })
+  }
+}
+
 export function validateSettings(value: unknown): SettingsValidationError[] {
   const errors: SettingsValidationError[] = []
   if (!isRecord(value)) return [{ field: 'settings', message: 'Settings must be an object' }]
   validateTopLevelFields(value, errors)
   validateEmbeddedLogPolicy(value, errors)
+  validateWorkbenchSettings(value.workbench, errors)
   validateLogSources(value.logSources, errors)
   return errors
 }
