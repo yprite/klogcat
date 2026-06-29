@@ -64,6 +64,16 @@ describe('log viewer extension registry', () => {
     expect(findLogViewerExtension('vendor.latency')?.label).toBe('Latency Map 2')
   })
 
+  it('does not let a stale unregister remove a replaced extension', () => {
+    const unregisterOriginal = registerLogViewerExtension(extension({ id: 'vendor.latency', label: 'Latency Map', description: 'Vendor latency breakdown' }))
+    const unregisterReplacement = registerLogViewerExtension(extension({ id: 'vendor.latency', label: 'Latency Map 2', description: 'Replacement' }), { replace: true })
+
+    expect(unregisterOriginal()).toBe(false)
+    expect(findLogViewerExtension('vendor.latency')?.label).toBe('Latency Map 2')
+    expect(unregisterReplacement()).toBe(true)
+    expect(findLogViewerExtension('vendor.latency')).toBeUndefined()
+  })
+
   it('requires logs.read and rejects unknown capabilities', () => {
     expect(() => registerLogViewerExtension(extension({ id: 'vendor.no-read', label: 'No Read', description: 'Missing read', requestedCapabilities: [] }))).toThrow(/logs.read/)
     expect(() => registerLogViewerExtension(extension({ id: 'vendor.unknown-cap', label: 'Unknown', description: 'Unknown cap', requestedCapabilities: ['logs.read', 'network' as never] }))).toThrow(/unknown capability/)

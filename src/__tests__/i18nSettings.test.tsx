@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SettingsModal } from '../components/SettingsModal'
 import { TopBar } from '../components/TopBar'
 import { defaultSettings } from '../config/defaultSettings'
@@ -48,6 +48,7 @@ describe('i18n language settings', () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
 
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /appearance/i }))
     const selector = screen.getByRole('combobox', { name: /language/i })
     expect(selector).toHaveValue('en')
 

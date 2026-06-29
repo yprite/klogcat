@@ -117,6 +117,7 @@ const ko: Record<string, string> = {
   'Target refresh': '대상 새로고침',
   'Updating targets': '대상 업데이트 중',
   'Loading targets': '대상 불러오는 중',
+  'Target discovery progress': '대상 탐색 진행률',
   'Target tree': '대상 트리',
   'namespaces': 'namespace',
   'pods': 'pod',

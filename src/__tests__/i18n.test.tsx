@@ -77,7 +77,7 @@ describe('Korean i18n rendering', () => {
       <TargetPickerDialog onClose={() => undefined} onContextChange={() => undefined} onNamespaceChange={() => undefined} onPodChange={() => undefined} />
     </>)
 
-    expect(screen.getByLabelText('스트림 컨트롤')).toContainElement(screen.getByRole('button', { name: '시작' }))
+    expect(screen.getByLabelText('뷰어 컨트롤')).toContainElement(screen.getByRole('button', { name: '시작' }))
     expect(screen.getByLabelText('뷰어 컨트롤')).toContainElement(screen.getByRole('button', { name: '지우기' }))
     expect(screen.getByLabelText('런타임 상태')).toHaveTextContent(/시작: 활성화됨/)
     expect(screen.getByRole('dialog', { name: '로그 대상 선택' })).toBeInTheDocument()

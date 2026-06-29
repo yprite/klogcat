@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { parseScopeKey, scopeKey, useKubeStore } from '../stores/kubeStore'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
 import { ActivityDots, ActivityRing, ProgressStripe } from './ProgressFeedback'
@@ -77,12 +77,11 @@ function buildVisibleTree(kube: ReturnType<typeof useKubeStore.getState>, normal
 }
 
 function ProgressPanel({ progressLabel, language }: { progressLabel: string; language?: Language }) {
-  return <div className="mb-3 rounded-lg border border-yellow-400/30 bg-slate-900/90 p-3 shadow-[0_0_24px_rgba(250,204,21,0.08)]">
-    <div className="mb-2 flex items-center justify-between gap-3 text-xs text-yellow-100">
+  return <div className="rounded border border-yellow-400/30 bg-slate-900/90 px-2 py-1.5">
+    <div className="flex items-center justify-between gap-3 text-xs text-yellow-100">
       <span className="inline-flex items-center gap-2"><ActivityRing label={`${progressLabel || t(language, 'Target refresh')} activity`} />{progressLabel || t(language, 'Updating targets')}</span>
       <ActivityDots label={t(language, 'Target progress dots')} />
     </div>
-    <ProgressStripe label={t(language, 'Target discovery progress')} />
   </div>
 }
 
@@ -93,7 +92,7 @@ function LoadingTargetsBanner({ progressLabel, language }: { progressLabel: stri
       <span>{progressLabel || t(language, 'Loading targets')}</span>
       <ActivityDots label={t(language, 'Loading targets progress')} />
     </div>
-    <ProgressStripe label={t(language, 'Loading targets progress bar')} />
+    <ProgressStripe label={t(language, 'Target discovery progress')} />
   </div>
 }
 
@@ -221,6 +220,7 @@ function LoadingPods({ namespaceName }: { namespaceName: string }) {
 }
 
 function getProgressLabelFromKube(kube: ReturnType<typeof useKubeStore.getState>, language?: Language) {
+  if (kube.targetRefreshPhase) return t(language, kube.targetRefreshPhase)
   if (kube.cacheRefreshing) return t(language, 'Refreshing cache')
   if (kube.loadingContexts) return t(language, 'Loading contexts')
   if (kube.loadingNamespaces) return t(language, 'Loading namespaces')
@@ -293,7 +293,7 @@ type SelectedTargetsProps = {
 }
 
 function SelectedTargetsPanel({ onPodChange, runSelectionChange, selectedPods, selectionPending, setDraftSelectedPods }: SelectedTargetsProps) {
-  return <aside aria-label={t(useSettingsStore.getState().settings?.language, 'Selected targets')} className="min-h-0 overflow-y-auto border-l border-slate-800 bg-slate-900/40 p-3">
+  return <aside aria-label={t(useSettingsStore.getState().settings?.language, 'Selected targets')} className="min-h-0 overflow-y-auto border-t border-slate-800 bg-slate-900/40 p-3 lg:border-l lg:border-t-0">
     <div className="mb-3 rounded border border-slate-800 bg-slate-950 p-3">
       <h3 className="text-sm font-semibold">{t(useSettingsStore.getState().settings?.language, 'Selected targets')}</h3>
       <p className="mt-1 text-xs text-slate-400">{t(useSettingsStore.getState().settings?.language, '{count} selected', { count: selectedPods.length })}{selectionPending ? ` · ${t(useSettingsStore.getState().settings?.language, 'applying…')}` : ''}</p>
@@ -347,22 +347,25 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
   }, [contextsToProbe.join('\u0000'), contextValues.join('\u0000')])
 
   const runSelectionChange = createSelectionChangeHandler(selectionPending, setSelectionPending)
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') onClose()
+  }
 
   return <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4">
-    <section role="dialog" aria-modal="true" aria-labelledby="target-picker-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 shadow-xl">
+    <section role="dialog" aria-modal="true" aria-labelledby="target-picker-title" onKeyDown={handleDialogKeyDown} className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 shadow-xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-800 p-4">
         <div>
           <h2 id="target-picker-title" className="text-lg font-semibold">{t(language, 'Select Log Targets')}</h2>
           <p className="text-xs text-slate-400">{t(language, 'Choose targets in Cluster → Namespace → Pod order.')}</p>
         </div>
+        {(discoveryActive || podRefreshActive) && <ProgressPanel progressLabel={progressLabel} language={language} />}
         <button className="rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800" onClick={onClose}>{t(language, 'Close')}</button>
       </div>
       <div className="shrink-0 border-b border-slate-800 p-3">
-        {(discoveryActive || podRefreshActive) && <ProgressPanel progressLabel={progressLabel} language={language} />}
         <label className="block text-xs uppercase text-slate-400">{t(language, 'Search targets')}</label>
         <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / phase / container')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22rem] overflow-hidden">
+      <div data-testid="target-picker-layout" className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_22rem]">
         <TargetTree collapsedContexts={collapsedContexts} contextValues={contextValues} namespaceValues={namespaceValues} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} progressLabel={progressLabel} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setCollapsedContexts={setCollapsedContexts} setDraftContextValues={setDraftContextValues} setDraftNamespaceValues={setDraftNamespaceValues} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} emptyState={emptyState} language={language} />
         <SelectedTargetsPanel onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} />
       </div>

@@ -266,4 +266,14 @@ describe('TopBar target picker', () => {
     expect(screen.getByRole('status', { name: /refreshing target cache/i })).toHaveClass('animate-klogcat-status-glow')
     expect(screen.getByText(/Targets: 1 selected/)).toBeInTheDocument()
   })
+
+  it('closes the target picker with Escape', () => {
+    render(<TopBar onSettings={() => {}} onContextChange={vi.fn()} onNamespaceChange={vi.fn()} onPodChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /change targets/i }))
+    const dialog = screen.getByRole('dialog', { name: /select log targets/i })
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog', { name: /select log targets/i })).not.toBeInTheDocument()
+  })
 })

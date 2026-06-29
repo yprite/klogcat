@@ -56,21 +56,21 @@ export type InfoParserPolicy = {
 
 export type SeverityPolicy = {
   levelRanks: Record<string, number>
-  fallbackLevelBySource: Partial<Record<SourceLogType, string>>
+  fallbackLevelBySource: Partial<Record<string, string>>
   exceptionLevel: string
   errorLevel: string
 }
 
 export type FailurePolicy = {
-  sourceTypes: readonly SourceLogType[]
+  sourceTypes: readonly string[]
   minimumStatus: number
   exceptionFields: readonly LogColumnKey[]
 }
 
 export type GroupingPolicy = {
   correlationFields: readonly LogColumnKey[]
-  accessSourceTypes: readonly SourceLogType[]
-  errorSourceTypes: readonly SourceLogType[]
+  accessSourceTypes: readonly string[]
+  errorSourceTypes: readonly string[]
 }
 
 export type FailedRequestGroup = {
@@ -94,7 +94,7 @@ export type LogPolicy = {
   version: 1
   pathTemplate: string
   defaultContainer: string
-  sources: Record<SourceLogType, LogSourcePolicy>
+  sources: Record<string, LogSourcePolicy>
   columns: {
     labels: Partial<Record<LogColumnKey, string>>
     defaultVisiblePriority: readonly LogColumnKey[]
@@ -314,7 +314,8 @@ function assertPolicyHeader(value: Record<string, unknown>) {
 
 function assertPolicySources(sources: unknown) {
   if (!isRecord(sources)) throw new Error('log policy sources must be an object')
-  const sourceKeys = Object.keys(defaultLogPolicy.sources)
+  const sourceKeys = Object.keys(sources)
+  if (sourceKeys.length === 0) throw new Error('log policy sources must include at least one source')
   for (const key of sourceKeys) {
     const source = sources[key]
     if (!isRecord(source)) throw new Error(`log policy sources.${key} must be an object`)

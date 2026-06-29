@@ -8,7 +8,7 @@ export type LogViewerExtensionProtocol = {
   version: typeof KLOGCAT_LOG_VIEWER_EXTENSION_PROTOCOL_VERSION
 }
 
-export type SdkLogSourceType = 'info' | 'access' | 'error'
+export type SdkLogSourceType = string
 export type SdkParseStatus = 'parsed' | 'raw'
 export type SdkStreamStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error'
 export type SdkGrepMode = 'substring' | 'regex'
@@ -160,6 +160,18 @@ function assertCapability(capabilities: readonly LogViewerCapability[], capabili
   if (!capabilities.includes(capability)) throw new Error(`Extension capability denied: ${capability}`)
 }
 
+function assertGrepMode(mode: SdkGrepMode) {
+  if (mode !== 'substring' && mode !== 'regex') throw new Error(`Invalid grep mode: ${mode}`)
+}
+
+function assertString(value: string, label: string) {
+  if (typeof value !== 'string') throw new Error(`Invalid ${label}: expected string`)
+}
+
+function assertBoolean(value: boolean, label: string) {
+  if (typeof value !== 'boolean') throw new Error(`Invalid ${label}: expected boolean`)
+}
+
 export function rowsAsJsonl(rows: readonly SdkLogRow[]) {
   return rows.map((row) => JSON.stringify(row)).join('\n')
 }
@@ -181,10 +193,12 @@ export function createLogViewerExtensionHostApi(options: CreateLogViewerExtensio
     grep: {
       setQuery: (query) => {
         assertCapability(options.capabilities, 'grep.write')
+        assertString(query, 'grep query')
         options.actions.setGrepQuery(query)
       },
       setMode: (mode) => {
         assertCapability(options.capabilities, 'grep.write')
+        assertGrepMode(mode)
         options.actions.setGrepMode(mode)
       },
     },
@@ -203,6 +217,7 @@ export function createLogViewerExtensionHostApi(options: CreateLogViewerExtensio
       },
       setAutoScrollEnabled: (enabled) => {
         assertCapability(options.capabilities, 'viewer.control')
+        assertBoolean(enabled, 'auto-scroll value')
         options.actions.setAutoScrollEnabled(enabled)
       },
     },

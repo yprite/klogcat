@@ -1,14 +1,14 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
-import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy } from '../utils/logPolicy'
+import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy, type LogPolicy } from '../utils/logPolicy'
 
-function sourceKeys() { return sourceTypesFromPolicy(getLogPolicy()) }
+function sourceKeys(policy?: LogPolicy) { return sourceTypesFromPolicy(policy ?? getLogPolicy()) }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly string[], prefix: string, errors: SettingsValidationError[]) {
   for (const key of Object.keys(value)) if (!allowed.includes(key)) errors.push({ field: `${prefix}.${key}`, message: `Unknown key: ${key}` })
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'logPolicyId', 'logPolicy'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
@@ -25,17 +25,30 @@ function integerInRange(value: unknown, min: number, max: number) {
 }
 
 function validateEmbeddedLogPolicy(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  if (value.logPolicy === undefined) return
-  try { assertValidLogPolicy(value.logPolicy) }
+  if (value.logPolicy === undefined) return undefined
+  try { assertValidLogPolicy(value.logPolicy); return value.logPolicy }
   catch (error) { errors.push({ field: 'logPolicy', message: error instanceof Error ? error.message : String(error) }) }
+  return undefined
 }
 
-function validateLogSources(value: unknown, errors: SettingsValidationError[]) {
+function validateShortcuts(value: unknown, errors: SettingsValidationError[]) {
+  if (value === undefined) return
+  if (!isRecord(value)) {
+    errors.push({ field: 'shortcuts', message: 'shortcuts must be an object' })
+    return
+  }
+  rejectExtraKeys(value, ['openSettings', 'openTargetPicker', 'toggleStream', 'restartStream'], 'shortcuts', errors)
+  for (const [key, shortcut] of Object.entries(value)) {
+    if (shortcut !== undefined && typeof shortcut !== 'string') errors.push({ field: `shortcuts.${key}`, message: 'shortcut must be a string' })
+  }
+}
+
+function validateLogSources(value: unknown, errors: SettingsValidationError[], policy?: LogPolicy) {
   if (!isRecord(value)) {
     errors.push({ field: 'logSources', message: 'logSources must be an object' })
     return
   }
-  const keys = sourceKeys()
+  const keys = sourceKeys(policy)
   const actualKeys = Object.keys(value).sort(); const expectedKeys = [...keys].sort()
   if (actualKeys.join(',') !== expectedKeys.join(',')) errors.push({ field: 'logSources', message: `logSources must contain exactly ${keys.join('/')} keys` })
   for (const key of keys) validateLogSource(key, value[key], errors)
@@ -55,8 +68,9 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   const errors: SettingsValidationError[] = []
   if (!isRecord(value)) return [{ field: 'settings', message: 'Settings must be an object' }]
   validateTopLevelFields(value, errors)
-  validateEmbeddedLogPolicy(value, errors)
-  validateLogSources(value.logSources, errors)
+  const policy = validateEmbeddedLogPolicy(value, errors)
+  validateShortcuts(value.shortcuts, errors)
+  validateLogSources(value.logSources, errors, policy)
   return errors
 }
 export function assertValidSettings(value: unknown): asserts value is PersistedSettings {

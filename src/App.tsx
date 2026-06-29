@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { AppShell } from './components/AppShell'
 import { useKubeStore, scopeKey } from './stores/kubeStore'
 import { useLogStore } from './stores/logStore'
+import { useSettingsStore } from './stores/settingsStore'
 import { subscribeLogEvents } from './commands/tauriLogEvents'
 import { startLogStream } from './commands/tauriLogs'
 import type { ActiveStreamMeta, LogStreamExitEvent } from './types/log'
-import { buildScloudLogPath } from './utils/logPath'
+import { buildLogPathFromPolicy, getLogPolicy } from './utils/logPolicy'
 import { findFallbackPod } from './utils/podFallback'
 import { activateConfiguredKlogcatExtensions } from './extensions/logViewerExtensionLoader'
 import { configuredLogViewerExtensions } from './extensions/configuredLogViewerExtensions'
@@ -80,7 +81,12 @@ async function retryWithFallbackPod(e: LogStreamExitEvent) {
 
   replaceSelectedPod(meta.context, meta.namespace, meta.pod, fallbackPod.name)
   const streamId = nextReconnectStreamId(meta.streamId)
-  const filePath = buildScloudLogPath(meta.namespace, fallbackPod.name, meta.sourceType)
+  const filePath = buildLogPathFromPolicy(
+    useSettingsStore.getState().settings?.logPolicy ?? getLogPolicy(),
+    meta.namespace,
+    fallbackPod.name,
+    meta.sourceType,
+  )
   const sourceId = `${meta.context}/${meta.namespace}/${fallbackPod.name}/${meta.container}/${meta.sourceType}/${filePath}`
   const nextMeta = { ...meta, streamId, sourceId, pod: fallbackPod.name, filePath }
   store.replaceStreamForReconnect(meta.streamId, nextMeta)

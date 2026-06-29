@@ -206,6 +206,7 @@ describe('main investigation workflow scenario', () => {
     expect(useLogStore.getState().rows).toEqual([])
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'Maintenance' }))
     expect(screen.getByText('Target cache')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear Target Cache' }))
     expect(screen.getByText(/Target cache cleared/)).toBeInTheDocument()

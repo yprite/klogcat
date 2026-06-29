@@ -18,6 +18,22 @@ async function stopAndClearIfActive() {
   useLogStore.getState().resetForSelectionChange()
 }
 
+function matchesShortcut(event: KeyboardEvent, shortcut?: string) {
+  if (!shortcut) return false
+  const parts = shortcut.split('+').map((part) => part.trim().toLowerCase()).filter(Boolean)
+  const key = parts.find((part) => !['meta', 'cmd', 'command', 'ctrl', 'control', 'shift', 'alt', 'option'].includes(part))
+  const meta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command')
+  const ctrl = parts.includes('ctrl') || parts.includes('control')
+  const alt = parts.includes('alt') || parts.includes('option')
+  const shift = parts.includes('shift')
+  return Boolean(key)
+    && event.key.toLowerCase() === key
+    && event.metaKey === meta
+    && event.ctrlKey === ctrl
+    && event.altKey === alt
+    && event.shiftKey === shift
+}
+
 export function AppShell({ eventError }: { eventError?: string }) {
   const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['info'])
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -42,10 +58,21 @@ export function AppShell({ eventError }: { eventError?: string }) {
       }
     }
   })() }, [])
-  const changeSources = async (next: SourceLogType[]) => { log.recordActionDebug(`Sources clicked: ${next.join(', ') || '(none)'}`); if (next.length === sourceTypes.length && next.every((value, index) => value === sourceTypes[index])) return; await stopAndClearIfActive(); setSourceTypes(next) }
-  const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectContexts(contexts) }
-  const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); await stopAndClearIfActive(); await useKubeStore.getState().selectNamespaces(namespaces) }
-  const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); await stopAndClearIfActive(); useKubeStore.getState().selectPods(pods) }
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const shortcuts = useSettingsStore.getState().settings?.shortcuts
+      if (matchesShortcut(event, shortcuts?.openSettings)) { event.preventDefault(); setSettingsOpen(true); return }
+      if (matchesShortcut(event, shortcuts?.openTargetPicker)) { event.preventDefault(); window.dispatchEvent(new Event('klogcat:open-target-picker')); return }
+      if (matchesShortcut(event, shortcuts?.toggleStream)) { event.preventDefault(); window.dispatchEvent(new Event('klogcat:toggle-stream')); return }
+      if (matchesShortcut(event, shortcuts?.restartStream)) { event.preventDefault(); window.dispatchEvent(new Event('klogcat:restart-stream')) }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+  const changeSources = async (next: SourceLogType[]) => { log.recordActionDebug(`Sources clicked: ${next.join(', ') || '(none)'}`); if (next.length === sourceTypes.length && next.every((value, index) => value === sourceTypes[index])) return; setSourceTypes(next); await stopAndClearIfActive() }
+  const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); const selection = useKubeStore.getState().selectContexts(contexts); await stopAndClearIfActive(); await selection }
+  const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); const selection = useKubeStore.getState().selectNamespaces(namespaces); await stopAndClearIfActive(); await selection }
+  const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); useKubeStore.getState().selectPods(pods); await stopAndClearIfActive() }
   return <div className="flex h-screen flex-col overflow-hidden">
     <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} />
     <main className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-2">
