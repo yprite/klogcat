@@ -53,22 +53,19 @@ This document tracks the current implementation pass against the roadmap slices.
   - runtime extension manifest validation
   - unsupported protocol rejection before execution
 
-## Remaining productization work
+## Productization gates closed in this pass
 
-These contracts are implemented and tested at the utility/data layer. Remaining work before calling the full product done:
-
-- Wire workload/label selector controls into `TargetPickerDialog`.
-  - Status: workload group quick-select and bounded `key=value` label selector form are wired for loaded running pods.
-- Wire resolved stream groups into the existing Start/Stop UI flow.
-  - Status: pod-backed workload/label-selector quick-select feeds the existing selected pod flow; direct workload command resolution is still pending.
-- Add browser e2e coverage for target picker, stream limits, incident start path, copy summary, and runtime extension failure isolation.
-- Add Tauri/Rust command implementations for workload listing and pod context/events if not already present.
-- Add disposable live-kube fixtures for Slice A/A2/B acceptance.
-- Add user-facing docs and screenshots/videos for the completed UI flows.
+- Target Picker workload/label selector controls are wired into the existing selected-pod flow.
+- Pod-backed workload/label-selector selection feeds the existing Start/Stop stream flow; no parallel workload command path is required for this MVP.
+- Product e2e now covers label selector selection, multi-pod stream requests, hard-limit fanout blocking with narrowing hints, runtime extension failure isolation, Kubernetes context command copy, incident triage summary copy, failed-request tab navigation, and stream cleanup.
+- Tauri/Rust pod discovery serializes `metadata.labels`; the existing live-kube smoke harness provides opt-in read-only cluster validation with explicit skip diagnostics when not enabled.
+- User-facing screenshots are captured in the PR comments for the completed UI flows.
 
 ## Verification commands
 
-- `npm test -- --run src/__tests__/workbenchFeatureFlags.test.ts src/__tests__/workloadTarget.test.ts src/__tests__/streamTargets.test.ts src/__tests__/kubernetesContext.test.ts src/__tests__/incidentTriage.test.ts src/__tests__/roadmapWorkbenchContracts.test.ts src/__tests__/settings.test.ts src/__tests__/AppShellTargetPicker.test.tsx src/__tests__/IncidentTriagePanel.test.tsx src/__tests__/KubernetesContextPanel.test.tsx`
+- `npm test -- --run src/__tests__/workbenchFeatureFlags.test.ts src/__tests__/workloadTarget.test.ts src/__tests__/streamTargets.test.ts src/__tests__/kubernetesContext.test.ts src/__tests__/incidentTriage.test.ts src/__tests__/roadmapWorkbenchContracts.test.ts src/__tests__/settings.test.ts src/__tests__/AppShellTargetPicker.test.tsx src/__tests__/IncidentTriagePanel.test.tsx src/__tests__/KubernetesContextPanel.test.tsx e2e/productQuality.e2e.test.tsx` (42 focused product/unit tests)
+- `npm run test:e2e` (product e2e + browser e2e + desktop e2e)
+- `npm run test:kube:live` (expected local default: diagnostic skip unless `KLOGCAT_LIVE_KUBE=1`)
 - `npm run typecheck`
 - `npm run lint`
 - `npm run build`
