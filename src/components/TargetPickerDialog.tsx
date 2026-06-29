@@ -21,6 +21,33 @@ export const selectedPodValues = (selectedPods: Record<string, string[]>) => Obj
 const toggleValue = (values: string[], value: string) => values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 
 type WorkloadGroup = { workload: string; pods: PodInfo[] }
+type LabelRequirement = { key: string; value: string }
+
+function parseLabelSelector(selector: string): LabelRequirement[] {
+  return selector.split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [key, ...valueParts] = part.split('=')
+      return { key: key.trim(), value: valueParts.join('=').trim() }
+    })
+    .filter((item) => item.key && item.value)
+}
+
+function podsMatchingLabelSelector(tree: VisibleContext[], selector: string) {
+  const requirements = parseLabelSelector(selector)
+  if (requirements.length === 0) return []
+  const values: string[] = []
+  for (const { context, namespaces } of tree) {
+    for (const { namespace, pods } of namespaces) {
+      for (const pod of pods) {
+        if (pod.phase !== 'Running') continue
+        if (requirements.every((req) => pod.labels?.[req.key] === req.value)) values.push(podValue(context.name, namespace.name, pod.name))
+      }
+    }
+  }
+  return values
+}
 
 function workloadGroupsForPods(pods: PodInfo[]) {
   const groups = new Map<string, PodInfo[]>()
@@ -137,6 +164,33 @@ type TargetTreeProps = {
   setDraftSelectedPods: (values: string[]) => void
   visibleTree: VisibleContext[]
   emptyState: { title: string; detail: string }
+}
+
+function LabelSelectorPanel({ labelSelector, onLabelSelectorChange, onPodChange, runSelectionChange, selectedPods, selectionPending, setDraftSelectedPods, visibleTree }: {
+  labelSelector: string
+  onLabelSelectorChange: (value: string) => void
+  onPodChange: (pods: string[]) => void | Promise<void>
+  runSelectionChange: (change: () => void | Promise<void>) => void
+  selectedPods: string[]
+  selectionPending: boolean
+  setDraftSelectedPods: (values: string[]) => void
+  visibleTree: VisibleContext[]
+}) {
+  const matches = podsMatchingLabelSelector(visibleTree, labelSelector)
+  const canSelect = matches.length > 0
+  const selectMatches = () => {
+    const next = [...selectedPods, ...matches.filter((value) => !selectedPods.includes(value))]
+    setDraftSelectedPods(next)
+    runSelectionChange(() => onPodChange(next))
+  }
+  return <div className="rounded border border-slate-800 bg-slate-900 p-3">
+    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400" htmlFor="target-label-selector">Label selector</label>
+    <div className="mt-2 flex gap-2">
+      <input id="target-label-selector" aria-label="Label selector" value={labelSelector} onChange={(event) => onLabelSelectorChange(event.target.value)} placeholder="app=api,tier=web" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-500" />
+      <button type="button" disabled={!canSelect || selectionPending} onClick={selectMatches} className="rounded border border-sky-700 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:opacity-50">Select matching running pods</button>
+    </div>
+    <p className="mt-2 text-xs text-slate-500">Bounded to loaded, running pods. Matching: {matches.length}</p>
+  </div>
 }
 
 function TargetTree(props: TargetTreeProps) {
@@ -373,6 +427,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
   const [query, setQuery] = useState('')
   const language = useSettingsStore((s) => s.settings?.language)
   const [selectionPending, setSelectionPending] = useState(false)
+  const [labelSelector, setLabelSelector] = useState('')
   const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
   const { kube, contextValues, namespaceValues, selectedPods, setDraftContextValues, setDraftNamespaceValues, setDraftSelectedPods } = useSelectionDrafts(selectionPending)
   const normalizedQuery = query.trim().toLowerCase()
@@ -403,6 +458,9 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
         {(discoveryActive || podRefreshActive) && <ProgressPanel progressLabel={progressLabel} language={language} />}
         <label className="block text-xs uppercase text-slate-400">{t(language, 'Search targets')}</label>
         <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / phase / container')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
+        <div className="mt-3">
+          <LabelSelectorPanel labelSelector={labelSelector} onLabelSelectorChange={setLabelSelector} onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} />
+        </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22rem] overflow-hidden">
         <TargetTree collapsedContexts={collapsedContexts} contextValues={contextValues} namespaceValues={namespaceValues} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} progressLabel={progressLabel} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setCollapsedContexts={setCollapsedContexts} setDraftContextValues={setDraftContextValues} setDraftNamespaceValues={setDraftNamespaceValues} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} emptyState={emptyState} language={language} />

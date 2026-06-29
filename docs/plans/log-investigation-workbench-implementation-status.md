@@ -15,11 +15,14 @@ This document tracks the current implementation pass against the roadmap slices.
   - resolved stream target DTOs with stream identity fields
   - source validation state for missing container
   - hard/soft stream-target limit enforcement and narrowing hints
+  - Target Picker workload quick-select and bounded label selector form wired to selected pods
+  - Tauri pod discovery now serializes `metadata.labels` so real cluster label selection can match loaded pods
 
 - Slice A2 Kubernetes Context MVP foundation
   - normalized `KubernetesContextSnapshot`
   - copyable `DiagnosticCommand` rendered from structured argv
   - no raw Kubernetes JSON in the normalized snapshot
+  - visible Kubernetes context toolbar panel with copyable pod/events commands
 
 - Slice B Incident Triage Loop foundation
   - failed request and slow request findings
@@ -55,9 +58,9 @@ This document tracks the current implementation pass against the roadmap slices.
 These contracts are implemented and tested at the utility/data layer. Remaining work before calling the full product done:
 
 - Wire workload/label selector controls into `TargetPickerDialog`.
-  - Status: workload group quick-select is wired for running pods sharing a stable controller prefix; label selector form is still pending.
+  - Status: workload group quick-select and bounded `key=value` label selector form are wired for loaded running pods.
 - Wire resolved stream groups into the existing Start/Stop UI flow.
-  - Status: pod-backed workload quick-select feeds the existing selected pod flow; direct label selector/workload command resolution is still pending.
+  - Status: pod-backed workload/label-selector quick-select feeds the existing selected pod flow; direct workload command resolution is still pending.
 - Add browser e2e coverage for target picker, stream limits, incident start path, copy summary, and runtime extension failure isolation.
 - Add Tauri/Rust command implementations for workload listing and pod context/events if not already present.
 - Add disposable live-kube fixtures for Slice A/A2/B acceptance.
@@ -65,7 +68,7 @@ These contracts are implemented and tested at the utility/data layer. Remaining 
 
 ## Verification commands
 
-- `npm test -- --run src/__tests__/workbenchFeatureFlags.test.ts src/__tests__/workloadTarget.test.ts src/__tests__/streamTargets.test.ts src/__tests__/kubernetesContext.test.ts src/__tests__/incidentTriage.test.ts src/__tests__/roadmapWorkbenchContracts.test.ts src/__tests__/settings.test.ts src/__tests__/AppShellTargetPicker.test.tsx src/__tests__/IncidentTriagePanel.test.tsx`
+- `npm test -- --run src/__tests__/workbenchFeatureFlags.test.ts src/__tests__/workloadTarget.test.ts src/__tests__/streamTargets.test.ts src/__tests__/kubernetesContext.test.ts src/__tests__/incidentTriage.test.ts src/__tests__/roadmapWorkbenchContracts.test.ts src/__tests__/settings.test.ts src/__tests__/AppShellTargetPicker.test.tsx src/__tests__/IncidentTriagePanel.test.tsx src/__tests__/KubernetesContextPanel.test.tsx`
 - `npm run typecheck`
 - `npm run lint`
 - `npm run build`

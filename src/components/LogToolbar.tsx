@@ -5,6 +5,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
 import { t, type Language } from '../utils/i18n'
 import { IncidentTriagePanel } from './IncidentTriagePanel'
+import { KubernetesContextPanel } from './KubernetesContextPanel'
 import { LogTypeSelector } from './LogTypeSelector'
 import {
   containerResolver,
@@ -127,10 +128,11 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
     await start(true)
   }
 
-  return <section aria-label="Log stream controls" className="grid shrink-0 grid-cols-[minmax(22rem,1fr)_minmax(18rem,0.8fr)_minmax(22rem,1fr)_minmax(24rem,1.1fr)] gap-2 border-b border-slate-800 bg-slate-900 px-2 py-2">
+  return <section aria-label="Log stream controls" className="grid shrink-0 grid-cols-[minmax(20rem,1fr)_minmax(16rem,0.8fr)_minmax(20rem,1fr)_minmax(24rem,1.1fr)_minmax(24rem,1.1fr)] gap-2 border-b border-slate-800 bg-slate-900 px-2 py-2">
     <StreamControls selectedSourceTypes={selectedSourceTypes} onSourceTypesChange={onSourceTypesChange} status={status} operation={operation} onStart={() => void start()} onStop={() => void stop()} onRestart={() => void restart()} language={language} />
     <ViewerControls log={log} language={language} />
     <RuntimeStatus log={log} status={status} targets={targets} language={language} />
+    <KubernetesContextPanel target={targets[0]} />
     <IncidentTriagePanel rows={log.visibleRows} />
   </section>
 }
