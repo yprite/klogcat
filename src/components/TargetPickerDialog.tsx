@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseScopeKey, scopeKey, useKubeStore } from '../stores/kubeStore'
+import { stablePodPrefix } from '../utils/podFallback'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
 import { ActivityDots, ActivityRing, ProgressStripe } from './ProgressFeedback'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -18,6 +19,20 @@ type VisibleContext = { context: ContextInfo; namespaces: VisibleNamespace[] }
 const podValue = (context: string, namespace: string, pod: string) => `${scopeKey(context, namespace)}\u0000${pod}`
 export const selectedPodValues = (selectedPods: Record<string, string[]>) => Object.entries(selectedPods).flatMap(([key, pods]) => pods.map((pod) => `${key}\u0000${pod}`))
 const toggleValue = (values: string[], value: string) => values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
+
+type WorkloadGroup = { workload: string; pods: PodInfo[] }
+
+function workloadGroupsForPods(pods: PodInfo[]) {
+  const groups = new Map<string, PodInfo[]>()
+  for (const pod of pods.filter((item) => item.phase === 'Running')) {
+    const workload = stablePodPrefix(pod.name)
+    groups.set(workload, [...(groups.get(workload) ?? []), pod])
+  }
+  return [...groups.entries()]
+    .map(([workload, pods]) => ({ workload, pods: pods.sort((a, b) => a.name.localeCompare(b.name)) }))
+    .filter((group) => group.pods.length > 1)
+    .sort((a, b) => a.workload.localeCompare(b.workload))
+}
 
 function phaseClass(phase: string) {
   if (phase === 'Running') return 'border-emerald-700 bg-emerald-950 text-emerald-300'
@@ -206,6 +221,7 @@ function NamespacePanel({ context, namespaceItem, namespaceValues, onNamespaceCh
     </label>
     <div className="space-y-1 pb-2 pl-7 pr-2">
       {pods.length === 0 && kube.loadingPods && namespaceChecked && <LoadingPods namespaceName={namespace.name} />}
+      {workloadGroupsForPods(pods).map((group) => <WorkloadGroupButton key={group.workload} context={context.name} namespace={namespace.name} group={group} onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} />)}
       {pods.length === 0 && (!kube.loadingPods || !namespaceChecked) && <p className="px-2 py-1 text-xs text-slate-500">{t(useSettingsStore.getState().settings?.language, 'No loaded pods')}</p>}
       {pods.map((pod) => <PodRow key={podValue(context.name, namespace.name, pod.name)} context={context.name} namespace={namespace.name} onPodChange={onPodChange} pod={pod} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} />)}
     </div>
@@ -218,6 +234,32 @@ function LoadingPods({ namespaceName }: { namespaceName: string }) {
     <div className="mb-1 flex items-center gap-2"><ActivityRing label={t(language, 'Loading pods activity')} /><span>{t(language, 'Loading pods')}</span><ActivityDots label={t(language, 'Loading pods progress')} /></div>
     <ProgressStripe label={`${t(language, 'Loading pods progress')} ${namespaceName}`} />
   </div>
+}
+
+function WorkloadGroupButton({ context, namespace, group, onPodChange, runSelectionChange, selectedPods, selectionPending, setDraftSelectedPods }: {
+  context: string
+  namespace: string
+  group: WorkloadGroup
+  onPodChange: (pods: string[]) => void | Promise<void>
+  runSelectionChange: (change: () => void | Promise<void>) => void
+  selectedPods: string[]
+  selectionPending: boolean
+  setDraftSelectedPods: (values: string[]) => void
+}) {
+  const values = group.pods.map((pod) => podValue(context, namespace, pod.name))
+  const allSelected = values.every((value) => selectedPods.includes(value))
+  const selectWorkload = () => {
+    const next = allSelected
+      ? selectedPods.filter((value) => !values.includes(value))
+      : [...selectedPods, ...values.filter((value) => !selectedPods.includes(value))]
+    setDraftSelectedPods(next)
+    runSelectionChange(() => onPodChange(next))
+  }
+  return <button type="button" disabled={selectionPending} aria-pressed={allSelected} aria-label={`${allSelected ? 'Remove' : 'Select'} workload ${group.workload} across ${group.pods.length} pods`} onClick={selectWorkload} className="flex w-full items-center gap-2 rounded border border-sky-800 bg-sky-950/50 px-2 py-1 text-left text-xs text-sky-100 hover:border-sky-500 hover:bg-sky-900/60 disabled:cursor-not-allowed disabled:opacity-70">
+    <span className="font-semibold">workload/{group.workload}</span>
+    <span className="text-sky-300">{group.pods.length} pods</span>
+    <span className="ml-auto text-[10px] uppercase tracking-wide text-sky-400">{allSelected ? 'selected' : 'select all'}</span>
+  </button>
 }
 
 function getProgressLabelFromKube(kube: ReturnType<typeof useKubeStore.getState>, language?: Language) {

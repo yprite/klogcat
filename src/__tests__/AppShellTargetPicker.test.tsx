@@ -25,7 +25,11 @@ vi.mock('../commands/tauriKube', () => ({
   listPods: vi.fn(async (namespace: string, context?: string) => ({
     context,
     namespace,
-    pods: [{ name: 'api-1', namespace, phase: 'Running', containers: ['app'] }],
+    pods: [
+      { name: 'api-7d9f8c9c6d-aaaaa', namespace, phase: 'Running', containers: ['app'] },
+      { name: 'api-7d9f8c9c6d-bbbbb', namespace, phase: 'Running', containers: ['app'] },
+      { name: 'worker-55d9-a', namespace, phase: 'Running', containers: ['app'] },
+    ],
   })),
 }))
 
@@ -82,6 +86,39 @@ describe('AppShell target picker entry points', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' }).at(-1)!)
 
     expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+  })
+
+  it('can select a workload group from the target picker without leaving raw logs', async () => {
+    useKubeStore.setState({
+      contexts: [{ name: 'ctx' }],
+      currentContext: 'ctx',
+      selectedContext: 'ctx',
+      selectedContexts: ['ctx'],
+      namespaces: [{ name: 'default' }],
+      namespacesByContext: { ctx: [{ name: 'default' }] },
+      selectedNamespace: 'default',
+      selectedNamespaces: { ctx: ['default'] },
+      pods: [
+        { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running', containers: ['app'] },
+        { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running', containers: ['app'] },
+        { name: 'worker-55d9-a', namespace: 'default', phase: 'Running', containers: ['app'] },
+      ],
+      podsByScope: { 'ctx\u0000default': [
+        { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running', containers: ['app'] },
+        { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running', containers: ['app'] },
+        { name: 'worker-55d9-a', namespace: 'default', phase: 'Running', containers: ['app'] },
+      ] },
+    })
+
+    render(<AppShell />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Select workload api across 2 pods' }))
+
+    expect(await screen.findByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-aaaaa/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-bbbbb/ })).toBeInTheDocument()
   })
 
   it('does not expose internal action debug logs in the user UI', async () => {
