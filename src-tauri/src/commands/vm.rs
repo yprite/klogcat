@@ -1,3 +1,4 @@
+use super::vm_username::{validate_bastion_username, validate_vm_username};
 use crate::error::CommandError;
 use crate::settings::{AwsVmTargetPluginSettings, TargetPluginSettings};
 use serde::{Deserialize, Serialize};
@@ -79,8 +80,8 @@ pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(),
             ));
         }
     }
-    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
-    validate_ssh_username("vmUsername", &plugin.vm_username)?;
+    validate_bastion_username(&plugin.bastion_username)?;
+    validate_vm_username(&plugin.vm_username)?;
     Ok(())
 }
 
@@ -108,8 +109,8 @@ pub fn validate_aws_vm_plugin(plugin: &AwsVmTargetPluginSettings) -> Result<(), 
             "consulCatalogCommand is required",
         ));
     }
-    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
-    validate_ssh_username("vmUsername", &plugin.vm_username)?;
+    validate_bastion_username(&plugin.bastion_username)?;
+    validate_vm_username(&plugin.vm_username)?;
     Ok(())
 }
 
@@ -261,28 +262,6 @@ pub fn password_ready_shell_condition(password: &str) -> String {
     } else {
         "true".into()
     }
-}
-
-fn validate_ssh_username(field: &str, value: &str) -> Result<(), CommandError> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(invalid_ssh_username(field));
-    };
-    if !(first.is_ascii_alphanumeric() || first == '.' || first == '_')
-        || value.len() > 64
-        || value.contains('@')
-        || !chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
-    {
-        return Err(invalid_ssh_username(field));
-    }
-    Ok(())
-}
-
-fn invalid_ssh_username(field: &str) -> CommandError {
-    CommandError::new(
-        "vm_plugin_config_invalid",
-        format!("{field} must be a safe SSH username"),
-    )
 }
 
 pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
@@ -641,5 +620,21 @@ mod tests {
         assert!(options.contains("BatchMode=yes"));
         assert!(options.contains("ConnectTimeout=10"));
         assert!(options.contains("StrictHostKeyChecking=no"));
+    }
+
+    #[test]
+    fn allows_email_vm_username_but_not_bastion_username() {
+        let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
+        plugin.enabled = true;
+        plugin.bastion_host = "bastion.example.com".into();
+        plugin.bastion_username = "ops".into();
+        plugin.bastion_password = "bastion-password".into();
+        plugin.vm_username = "operator@example.com".into();
+        plugin.vm_password = "vm-password".into();
+
+        assert!(validate_aws_vm_plugin(&plugin).is_ok());
+
+        plugin.bastion_username = "operator@example.com".into();
+        assert!(validate_aws_vm_plugin(&plugin).is_err());
     }
 }

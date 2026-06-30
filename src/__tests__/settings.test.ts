@@ -31,11 +31,14 @@ describe('settings validation', () => {
   })
   it('validates AWS VM target plugin settings', () => {
     const enabled = { ...defaultSettings.targetPlugins.awsVm, enabled: true }
+    const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret' }
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionHost: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionHost' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPort: 0 } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPort' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPassword: 'bad\0secret' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPassword' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionUsername: '-bad' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPasswordMode: 'password-plus-totp', bastionTotpSecret: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionTotpSecret' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, logPaths: { info: '/x' } } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.logPaths' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, vmUsername: 'operator@example.com' } } })).toEqual([])
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
   })
 })

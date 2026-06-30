@@ -29,7 +29,10 @@ fn validate_required_fields(r: &StartLogStreamRequest) -> Result<(), CommandErro
 }
 
 fn validate_target_kind(r: &StartLogStreamRequest) -> Result<(), CommandError> {
-    if matches!(r.target_kind.as_deref(), None | Some("kubernetes") | Some("aws-vm")) {
+    if matches!(
+        r.target_kind.as_deref(),
+        None | Some("kubernetes") | Some("aws-vm")
+    ) {
         return Ok(());
     }
     Err(CommandError::new(

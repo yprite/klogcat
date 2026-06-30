@@ -10,7 +10,6 @@ export const AWS_VM_TARGET_KIND = 'aws-vm'
 const awsVmSettingKeys = ['enabled', 'bastionHost', 'bastionPort', 'bastionUsername', 'bastionPassword', 'bastionTotpSecret', 'bastionPasswordMode', 'vmUsername', 'vmPassword', 'consulCatalogCommand', 'strictHostKeyChecking', 'logPaths'] as const
 const requiredStringKeys = ['bastionHost', 'bastionUsername', 'bastionPassword', 'vmUsername', 'vmPassword', 'consulCatalogCommand'] as const
 const secretKeys = ['bastionPassword', 'vmPassword', 'bastionTotpSecret'] as const
-const usernameKeys = ['bastionUsername', 'vmUsername'] as const
 
 export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
   enabled: false,
@@ -51,6 +50,15 @@ function integerInRange(value: unknown, min: number, max: number) {
 
 function isSshUsername(value: string) {
   return /^[A-Za-z0-9._][A-Za-z0-9._-]{0,63}$/.test(value)
+}
+
+function isSshEmailUsername(value: string) {
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value)
+}
+
+function isValidUsername(key: 'bastionUsername' | 'vmUsername', value: string) {
+  if (key === 'vmUsername' && isSshEmailUsername(value)) return true
+  return isSshUsername(value)
 }
 
 function validateVmLogPaths(value: unknown, errors: SettingsValidationError[]) {
@@ -107,9 +115,9 @@ function validateAwsVmSecrets(value: Record<string, unknown>, errors: SettingsVa
 }
 
 function validateAwsVmUsernames(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  for (const key of usernameKeys) {
+  for (const key of ['bastionUsername', 'vmUsername'] as const) {
     const username = value[key]
-    if (typeof username === 'string' && username.trim() !== '' && !isSshUsername(username)) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a safe SSH username` })
+    if (typeof username === 'string' && username.trim() !== '' && !isValidUsername(key, username)) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a safe SSH username or email account` })
   }
 }
 

@@ -107,7 +107,7 @@ fn vm_tail_shell_command(request: &StartLogStreamRequest) -> Result<String, Comm
         shell_word(&request.file_path)
     ));
     let sshpass_command = format!(
-        "SSHPASS={} sshpass -e ssh {} -o ProxyCommand={} -- {}@{} {}",
+        "SSHPASS={} sshpass -e ssh {} -o ProxyCommand={} -l {} -- {} {}",
         vm_password_expr,
         vm_ssh_options(&vm.plugin, false),
         crate::commands::vm::shell_quote(&sshpass_proxy),
@@ -116,7 +116,7 @@ fn vm_tail_shell_command(request: &StartLogStreamRequest) -> Result<String, Comm
         remote_tail
     );
     let plain_command = format!(
-        "ssh {} -o ProxyCommand={} -- {}@{} {}",
+        "ssh {} -o ProxyCommand={} -l {} -- {} {}",
         vm_ssh_options(&vm.plugin, true),
         crate::commands::vm::shell_quote(&plain_proxy),
         shell_word(&vm.plugin.vm_username),

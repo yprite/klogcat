@@ -544,13 +544,22 @@ mod tests {
         s.target_plugins.aws_vm.vm_password = "vm-password".into();
         assert!(validate_settings(&s).is_empty());
 
+        s.target_plugins.aws_vm.vm_username = "operator@example.com".into();
+        assert!(validate_settings(&s).is_empty());
+
         s.target_plugins.aws_vm.bastion_password = "bad\0secret".into();
         assert!(validate_settings(&s)
             .iter()
             .any(|error| error.field == "targetPlugins.awsVm.bastionPassword"));
 
         s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
+        s.target_plugins.aws_vm.vm_username = "app".into();
         s.target_plugins.aws_vm.bastion_username = "-bad".into();
+        assert!(validate_settings(&s)
+            .iter()
+            .any(|error| error.field == "targetPlugins.awsVm.bastionUsername"));
+
+        s.target_plugins.aws_vm.bastion_username = "operator@example.com".into();
         assert!(validate_settings(&s)
             .iter()
             .any(|error| error.field == "targetPlugins.awsVm.bastionUsername"));

@@ -168,17 +168,19 @@ fn validate_usernames(
     plugin: &AwsVmTargetPluginSettings,
     errors: &mut Vec<SettingsValidationError>,
 ) {
-    for (field, value) in [
-        ("bastionUsername", &plugin.bastion_username),
-        ("vmUsername", &plugin.vm_username),
-    ] {
-        if !value.trim().is_empty() && !is_ssh_username(value) {
-            errors.push(err(
-                format!("targetPlugins.awsVm.{field}"),
-                format!("{field} must be a safe SSH username"),
-            ));
-        }
+    if !plugin.bastion_username.trim().is_empty() && !is_ssh_username(&plugin.bastion_username) {
+        errors.push(username_error("bastionUsername"));
     }
+    if !plugin.vm_username.trim().is_empty() && !is_vm_username(&plugin.vm_username) {
+        errors.push(username_error("vmUsername"));
+    }
+}
+
+fn username_error(field: &str) -> SettingsValidationError {
+    err(
+        format!("targetPlugins.awsVm.{field}"),
+        format!("{field} must be a safe SSH username or email account"),
+    )
 }
 
 fn validate_log_paths(
@@ -214,6 +216,39 @@ fn is_ssh_username(value: &str) -> bool {
         && value.len() <= 64
         && !value.contains('@')
         && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+}
+
+fn is_vm_username(value: &str) -> bool {
+    is_ssh_username(value) || is_ssh_email_username(value)
+}
+
+fn is_ssh_email_username(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    is_safe_email_local(local) && is_safe_email_domain(domain)
+}
+
+fn is_safe_email_local(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '%' | '+' | '-'))
+}
+
+fn is_safe_email_domain(value: &str) -> bool {
+    value.contains('.') && value.split('.').all(is_safe_email_label)
+}
+
+fn is_safe_email_label(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    value.len() <= 63
+        && first.is_ascii_alphanumeric()
+        && !value.ends_with('-')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
 }
 
 fn err(field: impl Into<String>, message: impl Into<String>) -> SettingsValidationError {
