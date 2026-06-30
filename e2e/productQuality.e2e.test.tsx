@@ -13,7 +13,7 @@ import { useKubeStore } from '../src/stores/kubeStore'
 import { useSettingsStore } from '../src/stores/settingsStore'
 import { failedRequestsExtensionModule } from '../src/extensions/examples/FailedRequestsExtension'
 import { activateKlogcatExtensionModule } from '../src/extensions/logViewerExtensionLoader'
-import { resetLogViewerExtensionsForTests } from '../src/extensions/logViewerExtensions'
+import { registerLogViewerExtension, resetLogViewerExtensionsForTests } from '../src/extensions/logViewerExtensions'
 import type { GetSettingsResponse, PersistedSettings, SettingsWarning } from '../src/types/settings'
 import type { ContextInfo, PodInfo } from '../src/types/kube'
 import type {
@@ -56,6 +56,7 @@ const fakeBackend = vi.hoisted(() => ({
   cleanup: vi.fn(),
   startRequests: [] as StartRequest[],
   stopRequests: [] as string[],
+  clipboardWrites: [] as string[],
 }))
 
 vi.mock('../src/commands/tauriLogEvents', () => ({
@@ -112,6 +113,10 @@ function installLocalStorageMock() {
       get length() { return Object.keys(store).length },
     },
   })
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn(async (text: string) => { fakeBackend.clipboardWrites.push(text) }) },
+  })
 }
 
 function resetKubeStore() {
@@ -150,6 +155,7 @@ function resetFakeBackend() {
   fakeBackend.cleanup = vi.fn()
   fakeBackend.startRequests = []
   fakeBackend.stopRequests = []
+  fakeBackend.clipboardWrites = []
 }
 
 function seedKubernetesTargets() {
@@ -157,9 +163,24 @@ function seedKubernetesTargets() {
   fakeBackend.namespacesByContext = { 'cluster-a': [{ name: 'prod' }] }
   fakeBackend.podsByScope = {
     'cluster-a\u0000prod': [
-      { name: 'api-7d9c8f6b8d-x2abc', namespace: 'prod', phase: 'Running', containers: ['app'] },
-      { name: 'api-pending', namespace: 'prod', phase: 'Pending', containers: ['app'] },
+      { name: 'api-7d9c8f6b8d-x2abc', namespace: 'prod', phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
+      { name: 'api-7d9c8f6b8d-y3def', namespace: 'prod', phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
+      { name: 'api-pending', namespace: 'prod', phase: 'Pending', containers: ['app'], labels: { app: 'api', tier: 'web' } },
     ],
+  }
+}
+
+function seedManyRunningPods(count: number) {
+  fakeBackend.contexts = [{ name: 'cluster-a' }]
+  fakeBackend.namespacesByContext = { 'cluster-a': [{ name: 'prod' }] }
+  fakeBackend.podsByScope = {
+    'cluster-a\u0000prod': Array.from({ length: count }, (_, index) => ({
+      name: `api-${String(index + 1).padStart(2, '0')}`,
+      namespace: 'prod',
+      phase: 'Running',
+      containers: ['app'],
+      labels: { app: 'api', tier: 'web' },
+    })),
   }
 }
 
@@ -246,17 +267,23 @@ describe('product quality e2e', () => {
 
     fireEvent.click(within(targetDialog).getByText('prod').closest('label')!.querySelector('input')!)
     await waitFor(() => expect(within(targetDialog).getByLabelText('cluster-a / prod / api-7d9c8f6b8d-x2abc')).toBeEnabled())
-    fireEvent.click(within(targetDialog).getByLabelText('cluster-a / prod / api-7d9c8f6b8d-x2abc'))
+    fireEvent.change(within(targetDialog).getByLabelText('Label selector'), { target: { value: 'app=api,tier=web' } })
+    fireEvent.click(within(targetDialog).getByRole('button', { name: 'Select matching running pods' }))
     await waitFor(() => expect(within(targetDialog).getByText(/cluster-a \/ prod \/ api-7d9c8f6b8d-x2abc/)).toBeInTheDocument())
-    await waitFor(() => expect(screen.getAllByText(/Targets: 1/).length).toBeGreaterThan(0))
+    expect(within(targetDialog).getByText(/cluster-a \/ prod \/ api-7d9c8f6b8d-y3def/)).toBeInTheDocument()
+    expect(within(screen.getByRole('complementary', { name: 'Selected targets' })).queryByText(/api-pending/)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText(/Targets: 2/).length).toBeGreaterThan(0))
     fireEvent.click(within(targetDialog).getByRole('button', { name: 'Close' }))
+    expect(screen.getByLabelText('Kubernetes context')).toHaveTextContent('cluster-a / prod / api-7d9c8f6b8d-x2abc')
+    fireEvent.click(screen.getByRole('button', { name: 'Copy events command' }))
+    await waitFor(() => expect(fakeBackend.clipboardWrites.at(-1)).toContain('events.events.k8s.io'))
 
     fireEvent.click(screen.getByRole('button', { name: 'ALL' }))
     await act(async () => undefined)
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
 
-    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(3))
-    expect(fakeBackend.startRequests.map((request) => request.sourceType)).toEqual(['info', 'access', 'error'])
+    await waitFor(() => expect(startLogStream).toHaveBeenCalledTimes(6))
+    expect(fakeBackend.startRequests.map((request) => request.sourceType)).toEqual(['info', 'access', 'error', 'info', 'access', 'error'])
     expect(fakeBackend.startRequests[0]).toEqual(expect.objectContaining({
       context: 'cluster-a',
       namespace: 'prod',
@@ -282,6 +309,10 @@ describe('product quality e2e', () => {
 
     await waitFor(() => expect(useLogStore.getState().visibleRows).toHaveLength(2))
     await waitFor(() => expect(screen.getAllByText('Rows: 2/2').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getByLabelText('Incident triage')).toHaveTextContent('1 findings'))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy redacted incident summary' }))
+    await waitFor(() => expect(fakeBackend.clipboardWrites.at(-1)).toContain('Failed request'))
+    expect(fakeBackend.clipboardWrites.at(-1)).not.toContain('10.0.0.')
     fireEvent.click(screen.getByRole('tab', { name: 'Failed Requests' }))
     const failedView = await screen.findByTestId('failed-requests-view')
     expect(within(failedView).getByText('Request-centric investigation layer')).toBeInTheDocument()
@@ -292,8 +323,62 @@ describe('product quality e2e', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change Targets' }))
     const cleanupDialog = await screen.findByRole('dialog', { name: /select log targets/i })
     fireEvent.click(within(cleanupDialog).getByText(/cluster-a \/ prod \/ api-7d9c8f6b8d-x2abc/))
-    await waitFor(() => expect(stopLogStream).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(stopLogStream).toHaveBeenCalledTimes(6))
     expect(fakeBackend.stopRequests).toEqual(fakeBackend.startRequests.map((request) => request.streamId))
+  })
+
+  it('blocks hard-limit stream fanout before launching kubectl streams', async () => {
+    seedManyRunningPods(18)
+
+    await renderProductApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+    const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
+    await waitFor(() => expect(within(targetDialog).getByText('api-01')).toBeInTheDocument())
+
+    fireEvent.click(within(targetDialog).getByText('prod').closest('label')!.querySelector('input')!)
+    await waitFor(() => expect(within(targetDialog).getByLabelText('cluster-a / prod / api-01')).toBeEnabled())
+    fireEvent.change(within(targetDialog).getByLabelText('Label selector'), { target: { value: 'app=api,tier=web' } })
+    fireEvent.click(within(targetDialog).getByRole('button', { name: 'Select matching running pods' }))
+    await waitFor(() => expect(within(targetDialog).getByText('18 selected')).toBeInTheDocument())
+    fireEvent.click(within(targetDialog).getByRole('button', { name: 'Close' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'ALL' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Too many stream targets: 54\/50/))
+    expect(screen.getByRole('alert')).toHaveTextContent(/refine label selector/i)
+    expect(startLogStream).not.toHaveBeenCalled()
+  })
+
+  it('isolates a crashing runtime extension while raw logs remain usable', async () => {
+    registerLogViewerExtension({
+      id: 'crashy.runtime',
+      ownerId: 'klogcat.e2e',
+      label: 'Crashy Runtime',
+      description: 'Throws during render to prove extension isolation',
+      requestedCapabilities: ['logs.read'],
+      trustLevel: 'isolated-runtime',
+      order: 10,
+      component: () => { throw new Error('intentional runtime extension failure') },
+    })
+    seedKubernetesTargets()
+
+    await renderProductApp()
+    fireEvent.click(screen.getByRole('tab', { name: 'Crashy Runtime' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Extension failed: Crashy Runtime'))
+    expect(screen.getByRole('alert')).toHaveTextContent('intentional runtime extension failure')
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[klogcat extension error]',
+      'Crashy Runtime',
+      expect.any(Error),
+      expect.any(String),
+    )
+    consoleErrorSpy.mockClear()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Raw Logs' }))
+    expect(await screen.findByText('No log target selected')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Choose Target' })[0]).toBeEnabled()
   })
 
   it('keeps desktop release validation explicit through the protected-branch gate', () => {

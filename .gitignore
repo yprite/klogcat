@@ -2,10 +2,7 @@ node_modules/
 dist/
 src-tauri/target/
 .hermes/
-.harness/reports/
-.harness/tmp/
-.harness/coverage/
-.harness/e2e-artifacts/
+.harness/
 docs/reports/
 .DS_Store
 .env

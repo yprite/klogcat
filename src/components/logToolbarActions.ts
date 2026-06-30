@@ -5,6 +5,7 @@ import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
 import { buildLogPathFromPolicy, getLogPolicy } from '../utils/logPolicy'
+import { enforceStreamTargetLimit, type ResolvedStreamTarget } from '../utils/streamTargets'
 import { findFallbackPod } from '../utils/podFallback'
 
 export type LogStoreState = ReturnType<typeof useLogStore.getState>
@@ -96,6 +97,33 @@ export function operationState(log: LogStoreState, kube: KubeStoreState, targets
 
 function filePathForSettings(settings: PersistedSettings, namespace: string, pod: string, sourceType: SourceLogType) {
   return buildLogPathFromPolicy(settings.logPolicy ?? getLogPolicy(), namespace, pod, sourceType)
+}
+
+function resolvedStreamTargetsForStart(targets: SelectedTarget[], selectedSourceTypes: SourceLogType[], settings: PersistedSettings, resolveContainer: ContainerResolver): ResolvedStreamTarget[] {
+  return targets.flatMap((target) => selectedSourceTypes.map((sourceType) => {
+    const container = resolveContainer(target.pod.containers)
+    const filePath = filePathForSettings(settings, target.namespace, target.pod.name, sourceType)
+    const base = {
+      context: target.context,
+      namespace: target.namespace,
+      pod: target.pod.name,
+      container,
+      sourceType,
+      filePath,
+    }
+    return {
+      ...base,
+      streamTargetId: [base.context, base.namespace, base.pod, '', base.container, base.sourceType, base.filePath].join('\u0000'),
+      validationState: target.pod.containers.includes(container) ? 'not_checked' : 'missing_container',
+      diagnostics: target.pod.containers.includes(container) ? [] : [`container ${container} not found in pod ${target.pod.name}`],
+    }
+  }))
+}
+
+function streamLimitErrorMessage(result: ReturnType<typeof enforceStreamTargetLimit>) {
+  if (result.ok) return undefined
+  const hints = result.narrowingHints.map((hint) => hint.replace(/_/g, ' ')).join(', ')
+  return `Too many stream targets: ${result.count}/${result.hardLimit}. Narrow selection: ${hints}`
 }
 
 function replaceSelectedPod(context: string, namespace: string, stalePod: string, fallbackPod: string) {
@@ -254,6 +282,9 @@ export async function startStreams({
 
   const liveTargets = await resolveLiveTargetsForStart(targets, resolveContainer, log)
   if (liveTargets.length === 0) { log.markError(undefined, 'No live pod found for selected target'); return }
+
+  const limitMessage = streamLimitErrorMessage(enforceStreamTargetLimit(resolvedStreamTargetsForStart(liveTargets, selectedSourceTypes, settings, resolveContainer)))
+  if (limitMessage) { log.markError(undefined, limitMessage); return }
 
   for (const originalTarget of liveTargets) {
     const cancelled = await startTargetStreams(originalTarget, selectedSourceTypes, settings, resolveContainer, log)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { parseScopeKey, scopeKey, useKubeStore } from '../stores/kubeStore'
+import { stablePodPrefix } from '../utils/podFallback'
 import type { ContextInfo, NamespaceInfo, PodInfo } from '../types/kube'
 import { ActivityDots, ActivityRing, ProgressStripe } from './ProgressFeedback'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -18,6 +19,47 @@ type VisibleContext = { context: ContextInfo; namespaces: VisibleNamespace[] }
 const podValue = (context: string, namespace: string, pod: string) => `${scopeKey(context, namespace)}\u0000${pod}`
 export const selectedPodValues = (selectedPods: Record<string, string[]>) => Object.entries(selectedPods).flatMap(([key, pods]) => pods.map((pod) => `${key}\u0000${pod}`))
 const toggleValue = (values: string[], value: string) => values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
+
+type WorkloadGroup = { workload: string; pods: PodInfo[] }
+type LabelRequirement = { key: string; value: string }
+
+function parseLabelSelector(selector: string): LabelRequirement[] {
+  return selector.split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [key, ...valueParts] = part.split('=')
+      return { key: key.trim(), value: valueParts.join('=').trim() }
+    })
+    .filter((item) => item.key && item.value)
+}
+
+function podsMatchingLabelSelector(tree: VisibleContext[], selector: string) {
+  const requirements = parseLabelSelector(selector)
+  if (requirements.length === 0) return []
+  const values: string[] = []
+  for (const { context, namespaces } of tree) {
+    for (const { namespace, pods } of namespaces) {
+      for (const pod of pods) {
+        if (pod.phase !== 'Running') continue
+        if (requirements.every((req) => pod.labels?.[req.key] === req.value)) values.push(podValue(context.name, namespace.name, pod.name))
+      }
+    }
+  }
+  return values
+}
+
+function workloadGroupsForPods(pods: PodInfo[]) {
+  const groups = new Map<string, PodInfo[]>()
+  for (const pod of pods.filter((item) => item.phase === 'Running')) {
+    const workload = stablePodPrefix(pod.name)
+    groups.set(workload, [...(groups.get(workload) ?? []), pod])
+  }
+  return [...groups.entries()]
+    .map(([workload, pods]) => ({ workload, pods: pods.sort((a, b) => a.name.localeCompare(b.name)) }))
+    .filter((group) => group.pods.length > 1)
+    .sort((a, b) => a.workload.localeCompare(b.workload))
+}
 
 function phaseClass(phase: string) {
   if (phase === 'Running') return 'border-emerald-700 bg-emerald-950 text-emerald-300'
@@ -123,6 +165,33 @@ type TargetTreeProps = {
   emptyState: { title: string; detail: string }
 }
 
+function LabelSelectorPanel({ labelSelector, onLabelSelectorChange, onPodChange, runSelectionChange, selectedPods, selectionPending, setDraftSelectedPods, visibleTree }: {
+  labelSelector: string
+  onLabelSelectorChange: (value: string) => void
+  onPodChange: (pods: string[]) => void | Promise<void>
+  runSelectionChange: (change: () => void | Promise<void>) => void
+  selectedPods: string[]
+  selectionPending: boolean
+  setDraftSelectedPods: (values: string[]) => void
+  visibleTree: VisibleContext[]
+}) {
+  const matches = podsMatchingLabelSelector(visibleTree, labelSelector)
+  const canSelect = matches.length > 0
+  const selectMatches = () => {
+    const next = [...selectedPods, ...matches.filter((value) => !selectedPods.includes(value))]
+    setDraftSelectedPods(next)
+    runSelectionChange(() => onPodChange(next))
+  }
+  return <div className="rounded border border-slate-800 bg-slate-900 p-3">
+    <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400" htmlFor="target-label-selector">Label selector</label>
+    <div className="mt-2 flex gap-2">
+      <input id="target-label-selector" aria-label="Label selector" value={labelSelector} onChange={(event) => onLabelSelectorChange(event.target.value)} placeholder="app=api,tier=web" className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-500" />
+      <button type="button" disabled={!canSelect || selectionPending} onClick={selectMatches} className="rounded border border-sky-700 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:opacity-50">Select matching running pods</button>
+    </div>
+    <p className="mt-2 text-xs text-slate-500">Bounded to loaded, running pods. Matching: {matches.length}</p>
+  </div>
+}
+
 function TargetTree(props: TargetTreeProps) {
   const kube = useKubeStore()
   const loadingTargets = kube.loadingContexts || kube.loadingNamespaces || kube.cacheRefreshing
@@ -205,6 +274,7 @@ function NamespacePanel({ context, namespaceItem, namespaceValues, onNamespaceCh
     </label>
     <div className="space-y-1 pb-2 pl-7 pr-2">
       {pods.length === 0 && kube.loadingPods && namespaceChecked && <LoadingPods namespaceName={namespace.name} />}
+      {workloadGroupsForPods(pods).map((group) => <WorkloadGroupButton key={group.workload} context={context.name} namespace={namespace.name} group={group} onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} />)}
       {pods.length === 0 && (!kube.loadingPods || !namespaceChecked) && <p className="px-2 py-1 text-xs text-slate-500">{t(useSettingsStore.getState().settings?.language, 'No loaded pods')}</p>}
       {pods.map((pod) => <PodRow key={podValue(context.name, namespace.name, pod.name)} context={context.name} namespace={namespace.name} onPodChange={onPodChange} pod={pod} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} />)}
     </div>
@@ -217,6 +287,32 @@ function LoadingPods({ namespaceName }: { namespaceName: string }) {
     <div className="mb-1 flex items-center gap-2"><ActivityRing label={t(language, 'Loading pods activity')} /><span>{t(language, 'Loading pods')}</span><ActivityDots label={t(language, 'Loading pods progress')} /></div>
     <ProgressStripe label={`${t(language, 'Loading pods progress')} ${namespaceName}`} />
   </div>
+}
+
+function WorkloadGroupButton({ context, namespace, group, onPodChange, runSelectionChange, selectedPods, selectionPending, setDraftSelectedPods }: {
+  context: string
+  namespace: string
+  group: WorkloadGroup
+  onPodChange: (pods: string[]) => void | Promise<void>
+  runSelectionChange: (change: () => void | Promise<void>) => void
+  selectedPods: string[]
+  selectionPending: boolean
+  setDraftSelectedPods: (values: string[]) => void
+}) {
+  const values = group.pods.map((pod) => podValue(context, namespace, pod.name))
+  const allSelected = values.every((value) => selectedPods.includes(value))
+  const selectWorkload = () => {
+    const next = allSelected
+      ? selectedPods.filter((value) => !values.includes(value))
+      : [...selectedPods, ...values.filter((value) => !selectedPods.includes(value))]
+    setDraftSelectedPods(next)
+    runSelectionChange(() => onPodChange(next))
+  }
+  return <button type="button" disabled={selectionPending} aria-pressed={allSelected} aria-label={`${allSelected ? 'Remove' : 'Select'} workload ${group.workload} across ${group.pods.length} pods`} onClick={selectWorkload} className="flex w-full items-center gap-2 rounded border border-sky-800 bg-sky-950/50 px-2 py-1 text-left text-xs text-sky-100 hover:border-sky-500 hover:bg-sky-900/60 disabled:cursor-not-allowed disabled:opacity-70">
+    <span className="font-semibold">workload/{group.workload}</span>
+    <span className="text-sky-300">{group.pods.length} pods</span>
+    <span className="ml-auto text-[10px] uppercase tracking-wide text-sky-400">{allSelected ? 'selected' : 'select all'}</span>
+  </button>
 }
 
 function getProgressLabelFromKube(kube: ReturnType<typeof useKubeStore.getState>, language?: Language) {
@@ -331,6 +427,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
   const [query, setQuery] = useState('')
   const language = useSettingsStore((s) => s.settings?.language)
   const [selectionPending, setSelectionPending] = useState(false)
+  const [labelSelector, setLabelSelector] = useState('')
   const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
   const { kube, contextValues, namespaceValues, selectedPods, setDraftContextValues, setDraftNamespaceValues, setDraftSelectedPods } = useSelectionDrafts(selectionPending)
   const normalizedQuery = query.trim().toLowerCase()
@@ -364,6 +461,9 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
       <div className="shrink-0 border-b border-slate-800 p-3">
         <label className="block text-xs uppercase text-slate-400">{t(language, 'Search targets')}</label>
         <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / phase / container')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
+        <div className="mt-3">
+          <LabelSelectorPanel labelSelector={labelSelector} onLabelSelectorChange={setLabelSelector} onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} />
+        </div>
       </div>
       <div data-testid="target-picker-layout" className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_22rem]">
         <TargetTree collapsedContexts={collapsedContexts} contextValues={contextValues} namespaceValues={namespaceValues} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} progressLabel={progressLabel} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setCollapsedContexts={setCollapsedContexts} setDraftContextValues={setDraftContextValues} setDraftNamespaceValues={setDraftNamespaceValues} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} emptyState={emptyState} language={language} />

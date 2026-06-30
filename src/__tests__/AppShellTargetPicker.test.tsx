@@ -5,6 +5,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { useKubeStore } from '../stores/kubeStore'
 import { resetLogStoreForTests } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import type { PodInfo } from '../types/kube'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(async () => ({ settings: defaultSettings })),
@@ -25,7 +26,11 @@ vi.mock('../commands/tauriKube', () => ({
   listPods: vi.fn(async (namespace: string, context?: string) => ({
     context,
     namespace,
-    pods: [{ name: 'api-1', namespace, phase: 'Running', containers: ['app'] }],
+    pods: [
+      { name: 'api-7d9f8c9c6d-aaaaa', namespace, phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
+      { name: 'api-7d9f8c9c6d-bbbbb', namespace, phase: 'Running', containers: ['app'], labels: { app: 'api', tier: 'web' } },
+      { name: 'worker-55d9-a', namespace, phase: 'Running', containers: ['app'], labels: { app: 'worker' } },
+    ],
   })),
 }))
 
@@ -61,6 +66,27 @@ function resetStores() {
   })
 }
 
+const apiPods: PodInfo[] = [
+  { name: 'api-7d9f8c9c6d-aaaaa', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'api', tier: 'web' } },
+  { name: 'api-7d9f8c9c6d-bbbbb', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'api', tier: 'web' } },
+  { name: 'worker-55d9-a', namespace: 'default', phase: 'Running' as const, containers: ['app'], labels: { app: 'worker' } },
+]
+
+function seedLoadedTargets() {
+  useKubeStore.setState({
+    contexts: [{ name: 'ctx' }],
+    currentContext: 'ctx',
+    selectedContext: 'ctx',
+    selectedContexts: ['ctx'],
+    namespaces: [{ name: 'default' }],
+    namespacesByContext: { ctx: [{ name: 'default' }] },
+    selectedNamespace: 'default',
+    selectedNamespaces: { ctx: ['default'] },
+    pods: apiPods,
+    podsByScope: { 'ctx\u0000default': apiPods },
+  })
+}
+
 describe('AppShell target picker entry points', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -82,6 +108,35 @@ describe('AppShell target picker entry points', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' }).at(-1)!)
 
     expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+  })
+
+  it('can select a workload group from the target picker without leaving raw logs', async () => {
+    seedLoadedTargets()
+    render(<AppShell />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Select workload api across 2 pods' }))
+
+    expect(await screen.findByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-aaaaa/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-bbbbb/ })).toBeInTheDocument()
+  })
+
+  it('can select running pods with a bounded label selector without leaving raw logs', async () => {
+    seedLoadedTargets()
+    render(<AppShell />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
+    expect(await screen.findByRole('dialog', { name: 'Select Log Targets' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Label selector'), { target: { value: 'app=api,tier=web' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select matching running pods' }))
+
+    expect(await screen.findByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-aaaaa/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ctx \/ default \/ api-7d9f8c9c6d-bbbbb/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ctx \/ default \/ worker-55d9-a/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Raw Logs')).toBeInTheDocument()
   })
 
   it('stacks the target tree and selected target panel before the desktop breakpoint', async () => {

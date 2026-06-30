@@ -1794,6 +1794,8 @@ Implementation RFC must define:
 - tests expected to fail before implementation
 ```
 
+Implementation plan: `docs/plans/slice-a-workload-follow-mvp-implementation.md`
+
 ### Slice A2: Kubernetes Context MVP
 
 Priority: P0

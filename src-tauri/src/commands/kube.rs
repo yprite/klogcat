@@ -1,7 +1,7 @@
 use crate::{error::CommandError, kubectl::kubectl_binary};
 use serde::Serialize;
 use serde_json::Value;
-use std::{io, process::Command};
+use std::{collections::HashMap, io, process::Command};
 
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +31,7 @@ pub struct PodInfo {
     pub namespace: String,
     pub phase: String,
     pub containers: Vec<String>,
+    pub labels: HashMap<String, String>,
 }
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -263,11 +264,23 @@ pub fn parse_pods_json(
                 .iter()
                 .filter_map(|c| c["name"].as_str().map(String::from))
                 .collect();
+            let labels = item["metadata"]["labels"]
+                .as_object()
+                .map(|labels| {
+                    labels
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            value.as_str().map(|value| (key.clone(), value.to_string()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             Some(PodInfo {
                 name: name.into(),
                 namespace: namespace.into(),
                 phase,
                 containers,
+                labels,
             })
         })
         .collect();
@@ -293,9 +306,11 @@ mod tests {
     }
     #[test]
     fn pods_extract() {
-        let r=parse_pods_json(Some("ctx".into()), "ns", r#"{"items":[{"metadata":{"name":"p"},"status":{"phase":"Running"},"spec":{"containers":[{"name":"app"}]}}]}"#).unwrap();
+        let r=parse_pods_json(Some("ctx".into()), "ns", r#"{"items":[{"metadata":{"name":"p","labels":{"app":"api","tier":"web"}},"status":{"phase":"Running"},"spec":{"containers":[{"name":"app"}]}}]}"#).unwrap();
         assert_eq!(r.context, Some("ctx".into()));
         assert_eq!(r.pods[0].containers, vec!["app"]);
+        assert_eq!(r.pods[0].labels.get("app"), Some(&"api".to_string()));
+        assert_eq!(r.pods[0].labels.get("tier"), Some(&"web".to_string()));
     }
 
     #[test]
