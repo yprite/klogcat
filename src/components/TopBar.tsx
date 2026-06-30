@@ -16,13 +16,33 @@ function targetStatusLabel(kube: ReturnType<typeof useKubeStore.getState>, selec
   return selectedCount > 0 ? t(language, 'Targets selected') : t(language, 'Select a target')
 }
 
+function selectedTargetCount(kube: ReturnType<typeof useKubeStore.getState>, vm: ReturnType<typeof useVmStore.getState>, vmTargetsEnabled: boolean) {
+  const selectedPods = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
+  const selectedVms = vmTargetsEnabled ? vm.selectedTargetIds.length : 0
+  return selectedPods + selectedVms
+}
+
+function ChooseTargetButton({ language, loading, selectedCount, onClick }: { language?: Language; loading: boolean; selectedCount: number; onClick: () => void }) {
+  const label = selectedCount > 0 ? 'Change Targets' : 'Choose Target'
+  return <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${loading ? 'animate-klogcat-status-glow' : ''}`} onClick={onClick}>{t(language, label)}</button>
+}
+
+function TargetStatusPill({ language, loading, selectedCount, statusLabel }: { language?: Language; loading: boolean; selectedCount: number; statusLabel: string }) {
+  return <div aria-label={loading ? statusLabel : undefined} className={`ml-auto flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-300 ${loading ? 'animate-klogcat-status-glow' : ''}`} role={loading ? 'status' : undefined}>
+    {loading && <ActivityRing label={t(language, 'Target refresh activity')} />}
+    <span>{statusLabel}</span>
+    <span className="text-slate-500">{t(language, 'Targets: {count} selected', { count: selectedCount })}</span>
+    {loading && <ActivityDots label={t(language, 'Target refresh progress')} />}
+  </div>
+}
+
 export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodChange, onVmTargetChange = () => undefined }: { onSettings: () => void; onContextChange: (contexts: string[]) => void | Promise<void>; onNamespaceChange: (namespaces: string[]) => void | Promise<void>; onPodChange: (pods: string[]) => void | Promise<void>; onVmTargetChange?: (targets: string[]) => void | Promise<void> }) {
   const kube = useKubeStore()
   const vm = useVmStore()
   const language = useSettingsStore((s) => s.settings?.language)
   const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
-  const selectedCount = (selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)) + (vmTargetsEnabled ? vm.selectedTargetIds.length : 0)
+  const selectedCount = selectedTargetCount(kube, vm, vmTargetsEnabled)
   const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing || vm.loading
   const statusLabel = targetStatusLabel(kube, selectedCount, language)
   useEffect(() => {
@@ -32,14 +52,9 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   }, [])
   return <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-2 py-1.5">
     <strong>klogcat</strong>
-    <button className={`rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-yellow-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} onClick={() => setTargetPickerOpen(true)}>{selectedCount > 0 ? t(language, 'Change Targets') : t(language, 'Choose Target')}</button>
+    <ChooseTargetButton language={language} loading={targetsLoading} selectedCount={selectedCount} onClick={() => setTargetPickerOpen(true)} />
     <button className="rounded border border-slate-700 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800" onClick={onSettings}>{t(language, 'Settings')}</button>
-    <div aria-label={targetsLoading ? statusLabel : undefined} className={`ml-auto flex items-center gap-2 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-300 ${targetsLoading ? 'animate-klogcat-status-glow' : ''}`} role={targetsLoading ? 'status' : undefined}>
-      {targetsLoading && <ActivityRing label={t(language, 'Target refresh activity')} />}
-      <span>{statusLabel}</span>
-      <span className="text-slate-500">{t(language, 'Targets: {count} selected', { count: selectedCount })}</span>
-      {targetsLoading && <ActivityDots label={t(language, 'Target refresh progress')} />}
-    </div>
+    <TargetStatusPill language={language} loading={targetsLoading} selectedCount={selectedCount} statusLabel={statusLabel} />
     {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} onVmTargetChange={onVmTargetChange} />}
   </div>
 }

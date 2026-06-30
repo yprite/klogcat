@@ -2,9 +2,16 @@ use crate::error::CommandError;
 use crate::settings::{AwsVmTargetPluginSettings, TargetPluginSettings};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{io::Read, net::{IpAddr, Ipv4Addr}, process::{Command, Output}, sync::mpsc, thread, time::{Duration, Instant}};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+use std::{
+    io::Read,
+    net::{IpAddr, Ipv4Addr},
+    process::{Command, Output},
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -61,9 +68,9 @@ pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(),
     for (field, value) in [
         ("bastionHost", &plugin.bastion_host),
         ("bastionUsername", &plugin.bastion_username),
-        ("bastionPasswordEnv", &plugin.bastion_password_env),
+        ("bastionPassword", &plugin.bastion_password),
         ("vmUsername", &plugin.vm_username),
-        ("vmPasswordEnv", &plugin.vm_password_env),
+        ("vmPassword", &plugin.vm_password),
     ] {
         if value.trim().is_empty() {
             return Err(CommandError::new(
@@ -92,11 +99,9 @@ pub fn validate_aws_vm_plugin(plugin: &AwsVmTargetPluginSettings) -> Result<(), 
             "bastionPasswordMode must be password or password-plus-totp",
         ));
     }
-    validate_env_name(&plugin.bastion_password_env)?;
-    validate_env_name(&plugin.vm_password_env)?;
-    if let Some(secret_env) = plugin.bastion_totp_secret_env.as_deref().filter(|v| !v.trim().is_empty()) {
-        validate_env_name(secret_env)?;
-    }
+    validate_secret_value("bastionPassword", &plugin.bastion_password)?;
+    validate_secret_value("vmPassword", &plugin.vm_password)?;
+    validate_optional_secret_value("bastionTotpSecret", plugin.bastion_totp_secret.as_deref())?;
     if plugin.consul_catalog_command.trim().is_empty() {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
@@ -106,6 +111,23 @@ pub fn validate_aws_vm_plugin(plugin: &AwsVmTargetPluginSettings) -> Result<(), 
     validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
     validate_ssh_username("vmUsername", &plugin.vm_username)?;
     Ok(())
+}
+
+fn validate_secret_value(field: &str, value: &str) -> Result<(), CommandError> {
+    if value.contains('\0') {
+        return Err(CommandError::new(
+            "vm_plugin_config_invalid",
+            format!("{field} cannot contain null bytes"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_optional_secret_value(field: &str, value: Option<&str>) -> Result<(), CommandError> {
+    match value {
+        Some(secret) => validate_secret_value(field, secret),
+        None => Ok(()),
+    }
 }
 
 pub fn bastion_shell_command(
@@ -141,7 +163,8 @@ pub fn bastion_shell_command(
 pub fn ssh_options(plugin: &AwsVmTargetPluginSettings, batch_mode: bool) -> String {
     let batch = if batch_mode { "yes" } else { "no" };
     let prompts = if batch_mode { "0" } else { "1" };
-    let base = format!("-o BatchMode={batch} -o ConnectTimeout=10 -o NumberOfPasswordPrompts={prompts}");
+    let base =
+        format!("-o BatchMode={batch} -o ConnectTimeout=10 -o NumberOfPasswordPrompts={prompts}");
     if plugin.strict_host_key_checking {
         base
     } else {
@@ -153,96 +176,91 @@ pub fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-pub fn password_shell_expr(env_name: &str) -> Result<String, CommandError> {
-    validate_env_name(env_name)?;
-    Ok(format!("${{{env_name}:?missing {env_name}}}"))
+pub fn password_shell_expr(password: &str) -> Result<String, CommandError> {
+    if password.contains('\0') {
+        return Err(CommandError::new(
+            "vm_plugin_config_invalid",
+            "password cannot contain null bytes",
+        ));
+    }
+    Ok(shell_quote(password))
 }
 
 pub fn bastion_password_shell_expr(
     plugin: &AwsVmTargetPluginSettings,
 ) -> Result<String, CommandError> {
-    let password = password_shell_expr(&plugin.bastion_password_env)?;
+    let password = password_shell_expr(&plugin.bastion_password)?;
     if plugin.bastion_password_mode != "password-plus-totp" {
         return Ok(password);
     }
-    let Some(secret_env) = plugin
-        .bastion_totp_secret_env
+    let Some(secret) = plugin
+        .bastion_totp_secret
         .as_deref()
         .filter(|v| !v.trim().is_empty())
     else {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
-            "bastionTotpSecretEnv is required for password-plus-totp mode",
+            "bastionTotpSecret is required for password-plus-totp mode",
         ));
     };
-    validate_env_name(secret_env)?;
     Ok(format!(
-        "{password}$(oathtool --totp -b \"${{{secret_env}:?missing {secret_env}}}\")"
+        "{password}$(oathtool --totp -b {})",
+        shell_quote(secret)
     ))
 }
 
 pub fn bastion_sshpass_password_setup(
     plugin: &AwsVmTargetPluginSettings,
 ) -> Result<String, CommandError> {
-    validate_env_name(&plugin.bastion_password_env)?;
     if plugin.bastion_password_mode != "password-plus-totp" {
-        return Ok(format!(
-            "SSHPASS=\"${{{}:?missing {}}}\"",
-            plugin.bastion_password_env, plugin.bastion_password_env
-        ));
+        return Ok(format!("SSHPASS={}", shell_quote(&plugin.bastion_password)));
     }
-    let Some(secret_env) = plugin
-        .bastion_totp_secret_env
+    let Some(secret) = plugin
+        .bastion_totp_secret
         .as_deref()
         .filter(|v| !v.trim().is_empty())
     else {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
-            "bastionTotpSecretEnv is required for password-plus-totp mode",
+            "bastionTotpSecret is required for password-plus-totp mode",
         ));
     };
-    validate_env_name(secret_env)?;
     Ok(format!(
-        "otp=$(oathtool --totp -b \"${{{secret_env}:?missing {secret_env}}}\") || exit 64; SSHPASS=\"${{{}:?missing {}}}${{otp}}\"",
-        plugin.bastion_password_env, plugin.bastion_password_env
+        "otp=$(oathtool --totp -b {}) || exit 64; SSHPASS={}$(printf %s \"$otp\")",
+        shell_quote(secret),
+        shell_quote(&plugin.bastion_password)
     ))
 }
 
 pub fn bastion_password_ready_shell_condition(
     plugin: &AwsVmTargetPluginSettings,
 ) -> Result<String, CommandError> {
-    validate_env_name(&plugin.bastion_password_env)?;
     if plugin.bastion_password_mode != "password-plus-totp" {
-        return Ok(format!("[ -n \"${{{}:-}}\" ]", plugin.bastion_password_env));
+        return Ok(password_ready_shell_condition(&plugin.bastion_password));
     }
-    let Some(secret_env) = plugin
-        .bastion_totp_secret_env
+    let Some(secret) = plugin
+        .bastion_totp_secret
         .as_deref()
         .filter(|v| !v.trim().is_empty())
     else {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
-            "bastionTotpSecretEnv is required for password-plus-totp mode",
+            "bastionTotpSecret is required for password-plus-totp mode",
         ));
     };
-    validate_env_name(secret_env)?;
     Ok(format!(
-        "[ -n \"${{{}:-}}\" ] && [ -n \"${{{secret_env}:-}}\" ] && command -v oathtool >/dev/null 2>&1",
-        plugin.bastion_password_env
+        "{} && {} && command -v oathtool >/dev/null 2>&1",
+        password_ready_shell_condition(&plugin.bastion_password),
+        password_ready_shell_condition(secret)
     ))
 }
 
-fn validate_env_name(name: &str) -> Result<(), CommandError> {
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        return Err(invalid_env_name(name));
-    };
-    if !(first == '_' || first.is_ascii_alphabetic())
-        || !chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-    {
-        return Err(invalid_env_name(name));
+pub fn password_ready_shell_condition(password: &str) -> String {
+    if password.is_empty() {
+        "false".into()
+    } else {
+        "true".into()
     }
-    Ok(())
 }
 
 fn validate_ssh_username(field: &str, value: &str) -> Result<(), CommandError> {
@@ -267,13 +285,6 @@ fn invalid_ssh_username(field: &str) -> CommandError {
     )
 }
 
-fn invalid_env_name(name: &str) -> CommandError {
-    CommandError::new(
-        "vm_plugin_config_invalid",
-        format!("invalid environment variable name: {name}"),
-    )
-}
-
 pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
     if !is_safe_host(&target.address) {
         return Err(CommandError::new(
@@ -285,6 +296,20 @@ pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
 }
 
 fn run_shell_with_timeout(command: &str, timeout: Duration) -> Result<Output, CommandError> {
+    let mut child = spawn_shell_child(command)?;
+    let pid = child.id();
+    let stdout_rx = read_child_pipe(child.stdout.take(), "stdout")?;
+    let stderr_rx = read_child_pipe(child.stderr.take(), "stderr")?;
+    wait_for_shell_child(
+        &mut child,
+        pid,
+        stdout_rx,
+        stderr_rx,
+        Instant::now() + timeout,
+    )
+}
+
+fn spawn_shell_child(command: &str) -> Result<std::process::Child, CommandError> {
     let mut child_command = Command::new("sh");
     child_command
         .arg("-lc")
@@ -295,51 +320,81 @@ fn run_shell_with_timeout(command: &str, timeout: Duration) -> Result<Output, Co
     {
         child_command.process_group(0);
     }
-    let mut child = child_command.spawn()
-        .map_err(|e| {
-            CommandError::new("vm_discovery_spawn_failed", "failed to spawn VM discovery command")
-                .with_details(e.to_string())
-        })?;
-    let pid = child.id();
-    let stdout = child.stdout.take().ok_or_else(|| {
-        CommandError::new("vm_discovery_failed", "failed to capture VM discovery stdout")
-    })?;
-    let stderr = child.stderr.take().ok_or_else(|| {
-        CommandError::new("vm_discovery_failed", "failed to capture VM discovery stderr")
-    })?;
-    let stdout_rx = read_pipe(stdout);
-    let stderr_rx = read_pipe(stderr);
-    let deadline = Instant::now() + timeout;
+    child_command.spawn().map_err(|e| {
+        CommandError::new(
+            "vm_discovery_spawn_failed",
+            "failed to spawn VM discovery command",
+        )
+        .with_details(e.to_string())
+    })
+}
 
+fn read_child_pipe<T: Read + Send + 'static>(
+    pipe: Option<T>,
+    name: &str,
+) -> Result<mpsc::Receiver<std::io::Result<Vec<u8>>>, CommandError> {
+    let pipe = pipe.ok_or_else(|| {
+        CommandError::new(
+            "vm_discovery_failed",
+            format!("failed to capture VM discovery {name}"),
+        )
+    })?;
+    Ok(read_pipe(pipe))
+}
+
+fn wait_for_shell_child(
+    child: &mut std::process::Child,
+    pid: u32,
+    stdout_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    stderr_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    deadline: Instant,
+) -> Result<Output, CommandError> {
     loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = collect_pipe(stdout_rx, "stdout")?;
-                let stderr = collect_pipe(stderr_rx, "stderr")?;
-                return Ok(Output { status, stdout, stderr });
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                kill_process_group(pid);
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(CommandError::new(
-                    "vm_discovery_timeout",
-                    "VM discovery timed out",
-                )
-                .with_details("Timed out while running Consul catalog command through bastion"));
-            }
-            Ok(None) => thread::sleep(Duration::from_millis(25)),
-            Err(e) => {
-                kill_process_group(pid);
-                let _ = child.kill();
-                return Err(CommandError::new(
-                    "vm_discovery_failed",
-                    "failed to wait for VM discovery command",
-                )
-                .with_details(e.to_string()));
-            }
+        if let Some(status) = try_shell_child_status(child, pid)? {
+            return collect_shell_output(status, stdout_rx, stderr_rx);
         }
+        if Instant::now() >= deadline {
+            return timeout_shell_child(child, pid);
+        }
+        thread::sleep(Duration::from_millis(25));
     }
+}
+
+fn try_shell_child_status(
+    child: &mut std::process::Child,
+    pid: u32,
+) -> Result<Option<std::process::ExitStatus>, CommandError> {
+    child.try_wait().map_err(|e| {
+        kill_process_group(pid);
+        let _ = child.kill();
+        CommandError::new(
+            "vm_discovery_failed",
+            "failed to wait for VM discovery command",
+        )
+        .with_details(e.to_string())
+    })
+}
+
+fn collect_shell_output(
+    status: std::process::ExitStatus,
+    stdout_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    stderr_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+) -> Result<Output, CommandError> {
+    Ok(Output {
+        status,
+        stdout: collect_pipe(stdout_rx, "stdout")?,
+        stderr: collect_pipe(stderr_rx, "stderr")?,
+    })
+}
+
+fn timeout_shell_child(child: &mut std::process::Child, pid: u32) -> Result<Output, CommandError> {
+    kill_process_group(pid);
+    let _ = child.kill();
+    let _ = child.wait();
+    Err(
+        CommandError::new("vm_discovery_timeout", "VM discovery timed out")
+            .with_details("Timed out while running Consul catalog command through bastion"),
+    )
 }
 
 fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> mpsc::Receiver<std::io::Result<Vec<u8>>> {
@@ -352,7 +407,10 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> mpsc::Receiver<std::io:
     rx
 }
 
-fn collect_pipe(rx: mpsc::Receiver<std::io::Result<Vec<u8>>>, name: &str) -> Result<Vec<u8>, CommandError> {
+fn collect_pipe(
+    rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    name: &str,
+) -> Result<Vec<u8>, CommandError> {
     match rx.recv_timeout(Duration::from_secs(1)) {
         Ok(Ok(buffer)) => Ok(buffer),
         Ok(Err(e)) => Err(CommandError::new(
@@ -387,20 +445,32 @@ fn is_safe_host(value: &str) -> bool {
 
 fn is_allowed_vm_ip(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(address) => {
-            !address.is_loopback()
-                && !address.is_link_local()
-                && !address.is_unspecified()
-                && !address.is_multicast()
-                && address != Ipv4Addr::BROADCAST
-        }
-        IpAddr::V6(address) => {
-            !address.is_loopback()
-                && !address.is_unicast_link_local()
-                && !address.is_unspecified()
-                && !address.is_multicast()
-        }
+        IpAddr::V4(address) => is_allowed_ipv4(address),
+        IpAddr::V6(address) => is_allowed_ipv6(address),
     }
+}
+
+fn is_allowed_ipv4(address: Ipv4Addr) -> bool {
+    ![
+        address.is_loopback(),
+        address.is_link_local(),
+        address.is_unspecified(),
+        address.is_multicast(),
+        address == Ipv4Addr::BROADCAST,
+    ]
+    .into_iter()
+    .any(|blocked| blocked)
+}
+
+fn is_allowed_ipv6(address: std::net::Ipv6Addr) -> bool {
+    ![
+        address.is_loopback(),
+        address.is_unicast_link_local(),
+        address.is_unspecified(),
+        address.is_multicast(),
+    ]
+    .into_iter()
+    .any(|blocked| blocked)
 }
 
 fn is_safe_dns_name(value: &str) -> bool {
@@ -454,16 +524,43 @@ fn parse_vm_targets_json(input: &str) -> Result<Vec<VmTargetInfo>, CommandError>
 }
 
 fn vm_target_from_json(value: &Value) -> Option<VmTargetInfo> {
-    let address = first_string(value, &["Address", "address", "ServiceAddress", "serviceAddress", "ip"])?;
-    let name = first_string(value, &["Node", "node", "ServiceName", "serviceName", "name", "ID", "id"])
-        .unwrap_or_else(|| address.clone());
-    let id = first_string(value, &["ID", "id", "Node", "node", "name"]).unwrap_or_else(|| name.clone());
+    let address = first_string(
+        value,
+        &[
+            "Address",
+            "address",
+            "ServiceAddress",
+            "serviceAddress",
+            "ip",
+        ],
+    )?;
+    let name = first_string(
+        value,
+        &[
+            "Node",
+            "node",
+            "ServiceName",
+            "serviceName",
+            "name",
+            "ID",
+            "id",
+        ],
+    )
+    .unwrap_or_else(|| address.clone());
+    let id =
+        first_string(value, &["ID", "id", "Node", "node", "name"]).unwrap_or_else(|| name.clone());
     let tags = value
         .get("ServiceTags")
         .or_else(|| value.get("serviceTags"))
         .or_else(|| value.get("tags"))
         .and_then(Value::as_array)
-        .map(|items| items.iter().filter_map(Value::as_str).map(String::from).collect());
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        });
     Some(VmTargetInfo {
         id,
         name,
@@ -486,7 +583,10 @@ fn parse_vm_targets_lines(input: &str) -> Vec<VmTargetInfo> {
         .lines()
         .filter_map(|line| {
             let parts = line.split_whitespace().collect::<Vec<_>>();
-            let address = parts.iter().find(|part| looks_like_address(part))?.to_string();
+            let address = parts
+                .iter()
+                .find(|part| looks_like_address(part))?
+                .to_string();
             let name = parts.first().copied().unwrap_or(&address).to_string();
             let target = VmTargetInfo {
                 id: name.clone(),
@@ -532,9 +632,9 @@ mod tests {
     }
 
     #[test]
-    fn validates_env_names_and_ssh_options() {
-        assert!(password_shell_expr("KLOGCAT_VM_PASSWORD").is_ok());
-        assert!(password_shell_expr("bad-name").is_err());
+    fn builds_password_shell_literals_and_ssh_options() {
+        assert_eq!(password_shell_expr("p'ass").unwrap(), "'p'\\''ass'");
+        assert!(password_shell_expr("bad\0secret").is_err());
         let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
         plugin.strict_host_key_checking = false;
         let options = ssh_options(&plugin, true);

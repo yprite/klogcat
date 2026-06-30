@@ -7,17 +7,21 @@ import type { TargetPluginDefinition } from './pluginModel'
 export const AWS_VM_TARGET_PLUGIN_ID = 'aws-vm'
 export const AWS_VM_TARGET_SETTINGS_KEY = 'awsVm'
 export const AWS_VM_TARGET_KIND = 'aws-vm'
+const awsVmSettingKeys = ['enabled', 'bastionHost', 'bastionPort', 'bastionUsername', 'bastionPassword', 'bastionTotpSecret', 'bastionPasswordMode', 'vmUsername', 'vmPassword', 'consulCatalogCommand', 'strictHostKeyChecking', 'logPaths'] as const
+const requiredStringKeys = ['bastionHost', 'bastionUsername', 'bastionPassword', 'vmUsername', 'vmPassword', 'consulCatalogCommand'] as const
+const secretKeys = ['bastionPassword', 'vmPassword', 'bastionTotpSecret'] as const
+const usernameKeys = ['bastionUsername', 'vmUsername'] as const
 
 export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
   enabled: false,
   bastionHost: '',
   bastionPort: 22,
   bastionUsername: '',
-  bastionPasswordEnv: 'KLOGCAT_BASTION_PASSWORD',
-  bastionTotpSecretEnv: 'KLOGCAT_BASTION_TOTP_SECRET',
+  bastionPassword: '',
+  bastionTotpSecret: '',
   bastionPasswordMode: 'password',
   vmUsername: '',
-  vmPasswordEnv: 'KLOGCAT_VM_PASSWORD',
+  vmPassword: '',
   consulCatalogCommand: 'consul catalog nodes -format=json',
   strictHostKeyChecking: true,
   logPaths: {
@@ -45,10 +49,6 @@ function integerInRange(value: unknown, min: number, max: number) {
   return Number.isInteger(value) && (value as number) >= min && (value as number) <= max
 }
 
-function isEnvName(value: string) {
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value)
-}
-
 function isSshUsername(value: string) {
   return /^[A-Za-z0-9._][A-Za-z0-9._-]{0,63}$/.test(value)
 }
@@ -72,33 +72,45 @@ export function validateAwsVmTargetPluginSettings(value: unknown, errors: Settin
     errors.push({ field: 'targetPlugins.awsVm', message: 'awsVm plugin config must be an object' })
     return
   }
-  rejectExtraKeys(value, ['enabled', 'bastionHost', 'bastionPort', 'bastionUsername', 'bastionPasswordEnv', 'bastionTotpSecretEnv', 'bastionPasswordMode', 'vmUsername', 'vmPasswordEnv', 'consulCatalogCommand', 'strictHostKeyChecking', 'logPaths'], 'targetPlugins.awsVm', errors)
+  rejectExtraKeys(value, awsVmSettingKeys, 'targetPlugins.awsVm', errors)
+  validateAwsVmShape(value, errors)
+  validateAwsVmRequiredStrings(value, errors)
+  validateAwsVmSecrets(value, errors)
+  validateAwsVmUsernames(value, errors)
+  if (value.enabled === true) validateVmLogPaths(value.logPaths, errors)
+}
+
+function validateAwsVmShape(value: Record<string, unknown>, errors: SettingsValidationError[]) {
   if (typeof value.enabled !== 'boolean') errors.push({ field: 'targetPlugins.awsVm.enabled', message: 'enabled must be a boolean' })
   if (!integerInRange(value.bastionPort, 1, 65535)) errors.push({ field: 'targetPlugins.awsVm.bastionPort', message: 'bastionPort must be 1..65535' })
   if (value.bastionPasswordMode !== 'password' && value.bastionPasswordMode !== 'password-plus-totp') errors.push({ field: 'targetPlugins.awsVm.bastionPasswordMode', message: 'bastionPasswordMode must be password or password-plus-totp' })
-  for (const key of ['bastionHost', 'bastionUsername', 'bastionPasswordEnv', 'vmUsername', 'vmPasswordEnv', 'consulCatalogCommand'] as const) {
+  if (typeof value.strictHostKeyChecking !== 'boolean') errors.push({ field: 'targetPlugins.awsVm.strictHostKeyChecking', message: 'strictHostKeyChecking must be a boolean' })
+}
+
+function validateAwsVmRequiredStrings(value: Record<string, unknown>, errors: SettingsValidationError[]) {
+  for (const key of requiredStringKeys) {
     if (typeof value[key] !== 'string') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a string` })
   }
-  if (value.enabled === true) {
-    for (const key of ['bastionHost', 'bastionUsername', 'bastionPasswordEnv', 'vmUsername', 'vmPasswordEnv', 'consulCatalogCommand'] as const) {
-      if (typeof value[key] === 'string' && value[key].trim() === '') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
-    }
+  if (value.enabled !== true) return
+  for (const key of requiredStringKeys) {
+    if (typeof value[key] === 'string' && value[key].trim() === '') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
   }
-  for (const key of ['bastionPasswordEnv', 'vmPasswordEnv', 'bastionTotpSecretEnv'] as const) {
-    const envName = value[key]
-    if ((key === 'bastionPasswordEnv' || key === 'vmPasswordEnv') && typeof envName === 'string' && envName.trim() === '') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a valid environment variable name` })
-    if (envName !== undefined && typeof envName === 'string' && envName.trim() !== '' && !isEnvName(envName)) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a valid environment variable name` })
+}
+
+function validateAwsVmSecrets(value: Record<string, unknown>, errors: SettingsValidationError[]) {
+  for (const key of secretKeys) {
+    const secret = value[key]
+    if (secret !== undefined && typeof secret !== 'string') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a string when provided` })
+    if (typeof secret === 'string' && secret.includes('\0')) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} cannot contain null bytes` })
   }
-  if (value.enabled === true && value.bastionPasswordMode === 'password-plus-totp' && (typeof value.bastionTotpSecretEnv !== 'string' || value.bastionTotpSecretEnv.trim() === '')) errors.push({ field: 'targetPlugins.awsVm.bastionTotpSecretEnv', message: 'bastionTotpSecretEnv is required for password-plus-totp mode' })
-  for (const key of ['bastionTotpSecretEnv'] as const) {
-    if (value[key] !== undefined && typeof value[key] !== 'string') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a string when provided` })
-  }
-  for (const key of ['bastionUsername', 'vmUsername'] as const) {
+  if (value.enabled === true && value.bastionPasswordMode === 'password-plus-totp' && (typeof value.bastionTotpSecret !== 'string' || value.bastionTotpSecret.trim() === '')) errors.push({ field: 'targetPlugins.awsVm.bastionTotpSecret', message: 'bastionTotpSecret is required for password-plus-totp mode' })
+}
+
+function validateAwsVmUsernames(value: Record<string, unknown>, errors: SettingsValidationError[]) {
+  for (const key of usernameKeys) {
     const username = value[key]
     if (typeof username === 'string' && username.trim() !== '' && !isSshUsername(username)) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a safe SSH username` })
   }
-  if (typeof value.strictHostKeyChecking !== 'boolean') errors.push({ field: 'targetPlugins.awsVm.strictHostKeyChecking', message: 'strictHostKeyChecking must be a boolean' })
-  validateVmLogPaths(value.logPaths, errors)
 }
 
 export const awsVmTargetPlugin: TargetPluginDefinition<AwsVmTargetPluginSettings> = {

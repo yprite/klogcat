@@ -213,11 +213,11 @@ describe('product quality e2e', () => {
     expect(screen.getByRole('tab', { name: 'Raw Logs' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('tab', { name: 'Failed Requests' })).not.toBeInTheDocument()
 
-    await waitFor(() => expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Start: unavailable \(Select a pod or VM target\)/)).toBeInTheDocument())
     expect(screen.getByLabelText('Runtime status')).toHaveTextContent(/Targets\s*0/)
 
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute('title', expect.stringMatching(/Select namespace and pod/))
+    expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute('title', expect.stringMatching(/Select a pod or VM target/))
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Choose Target' })[0])
     const targetDialog = await screen.findByRole('dialog', { name: /select log targets/i })
