@@ -67,6 +67,11 @@ describe('log viewer virtual row scenario', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy raw' }))
     fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }))
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('title', 'Close log row detail')
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse detail' }))
+    expect(screen.queryByRole('complementary', { name: /log row detail/i })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('log-row-1'))
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('complementary', { name: /log row detail/i })).not.toBeInTheDocument()
 
