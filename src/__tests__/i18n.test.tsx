@@ -81,7 +81,7 @@ describe('Korean i18n rendering', () => {
     expect(screen.getByLabelText('뷰어 컨트롤')).toContainElement(screen.getByRole('button', { name: '지우기' }))
     expect(screen.getByLabelText('런타임 상태')).toHaveTextContent(/시작: 활성화됨/)
     expect(screen.getByRole('dialog', { name: '로그 대상 선택' })).toBeInTheDocument()
-    expect(screen.getByLabelText('대상 검색')).toHaveAttribute('placeholder', 'context / namespace / pod / phase / container')
+    expect(screen.getByLabelText('대상 검색')).toHaveAttribute('placeholder', 'context / namespace / pod / phase / container / VM 이름 / IP')
     expect(screen.getByLabelText('선택된 대상')).toHaveTextContent('1개 선택됨')
   })
 

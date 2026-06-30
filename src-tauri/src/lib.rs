@@ -44,6 +44,7 @@ pub fn run() {
             commands::kube::list_contexts,
             commands::kube::list_namespaces,
             commands::kube::list_pods,
+            commands::vm::list_vm_targets,
             commands::settings::get_settings,
             commands::settings::save_settings,
             commands::settings::reset_settings,

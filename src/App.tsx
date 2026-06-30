@@ -60,8 +60,8 @@ function fallbackStalePod(meta: NonNullable<ReturnType<typeof fallbackRetryConte
   return { name: meta.pod, namespace: meta.namespace, phase: 'Running' as const, containers: [meta.container].filter(Boolean) }
 }
 
-function startFallbackStream(nextMeta: NonNullable<ReturnType<typeof fallbackRetryContext>>['meta']) {
-  void startLogStream({ streamId: nextMeta.streamId, context: nextMeta.context, namespace: nextMeta.namespace, pod: nextMeta.pod, container: nextMeta.container, sourceType: nextMeta.sourceType, filePath: nextMeta.filePath, initialTailLines: nextMeta.initialTailLines ?? 50 })
+function startFallbackStream(nextMeta: ActiveStreamMeta) {
+  void startLogStream({ streamId: nextMeta.streamId, targetKind: nextMeta.targetKind, context: nextMeta.context, namespace: nextMeta.namespace, pod: nextMeta.pod, container: nextMeta.container, sourceType: nextMeta.sourceType, filePath: nextMeta.filePath, initialTailLines: nextMeta.initialTailLines ?? 50, vm: nextMeta.vm })
     .then(() => useLogStore.getState().markRunning(nextMeta.streamId))
     .catch((error) => useLogStore.getState().markError(nextMeta.streamId, error instanceof Error ? error.message : String(error)))
 }
@@ -102,9 +102,7 @@ function reconnectStream(e: LogStreamExitEvent) {
   const nextMeta = { ...meta, streamId: nextReconnectStreamId(meta.streamId) }
   store.replaceStreamForReconnect(meta.streamId, nextMeta)
   store.recordActionDebug(`Reconnect scheduled: ${meta.sourceId}`)
-  void startLogStream({ streamId: nextMeta.streamId, context: nextMeta.context, namespace: nextMeta.namespace, pod: nextMeta.pod, container: nextMeta.container, sourceType: nextMeta.sourceType, filePath: nextMeta.filePath, initialTailLines: nextMeta.initialTailLines ?? 50 })
-    .then(() => useLogStore.getState().markRunning(nextMeta.streamId))
-    .catch((error) => useLogStore.getState().markError(nextMeta.streamId, error instanceof Error ? error.message : String(error)))
+  startFallbackStream(nextMeta)
   return true
 }
 

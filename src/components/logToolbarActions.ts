@@ -1,6 +1,7 @@
 import type { PodInfo } from '../types/kube'
 import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
+import type { VmTargetInfo } from '../types/vm'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
@@ -9,7 +10,9 @@ import { findFallbackPod } from '../utils/podFallback'
 
 export type LogStoreState = ReturnType<typeof useLogStore.getState>
 type KubeStoreState = ReturnType<typeof useKubeStore.getState>
-export type SelectedTarget = { context: string; namespace: string; pod: PodInfo }
+export type KubernetesSelectedTarget = { targetKind?: 'kubernetes'; context: string; namespace: string; pod: PodInfo }
+export type VmSelectedTarget = { targetKind: 'aws-vm'; vm: VmTargetInfo }
+export type SelectedTarget = KubernetesSelectedTarget | VmSelectedTarget
 export type ContainerResolver = (containers: string[]) => string
 type LaunchResult = { status: 'cancelled' | 'started' | 'failed'; container: string }
 
@@ -44,7 +47,7 @@ export function toolbarStatus(
   const startBusy = log.streamStatus === 'starting' || log.streamStatus === 'stopping'
   const stopBusy = log.streamStatus === 'stopping'
   const alreadyRunning = log.activeStreamIds.length > 0 || log.streamStatus === 'running'
-  const invalidTargets = targets.filter((target) => target.pod.phase !== 'Running' || target.pod.containers.length === 0)
+  const invalidTargets = targets.filter((target) => isKubernetesTarget(target) && (target.pod.phase !== 'Running' || target.pod.containers.length === 0))
   const missingSourceConfig = selectedSourceTypes.some((type) => !settings?.logSources[type])
   const disabledReason = startDisabledReason(settings, selectedSourceTypes, targets, invalidTargets, missingSourceConfig)
   const startBlockedReason = startBusy ? `Busy: ${log.streamStatus}` : alreadyRunning ? 'Stream is already running' : disabledReason
@@ -64,7 +67,7 @@ function startDisabledReason(
   if (!settings) return 'Settings are not loaded'
   if (selectedSourceTypes.length === 0) return 'Select at least one log type'
   if (missingSourceConfig) return 'Settings are not loaded'
-  if (targets.length === 0) return 'Select namespace and pod'
+  if (targets.length === 0) return 'Select a pod or VM target'
   if (invalidTargets.length > 0) return 'Every selected pod must be Running and have a container'
   return ''
 }
@@ -113,29 +116,36 @@ async function resolveLiveTargetsForStart(
   resolveContainer: ContainerResolver,
   log: LogStoreState,
 ) {
+  const vmTargets = targets.filter(isVmTarget)
+  const kubernetesTargets = targets.filter(isKubernetesTarget)
+  if (kubernetesTargets.length === 0) return vmTargets
   await useKubeStore.getState().refreshPodsForSelections()
   const state = useKubeStore.getState()
   const selectedEntries = Object.entries(state.selectedPods)
-  if (selectedEntries.length === 0) return useKubeStore.getState().getSelectedPodTargets()
+  if (selectedEntries.length === 0) return [...useKubeStore.getState().getSelectedPodTargets(), ...vmTargets]
 
-  const resolved: SelectedTarget[] = []
+  const resolved: KubernetesSelectedTarget[] = []
   for (const [key, selectedNames] of selectedEntries) {
-    resolved.push(...resolveSelectedPodsForScope(key, selectedNames, state, targets, resolveContainer, log))
+    resolved.push(...resolveSelectedPodsForScope(key, selectedNames, state, kubernetesTargets, resolveContainer, log))
   }
-  return resolved
+  if (resolved.length < kubernetesTargets.length) {
+    const skipped = kubernetesTargets.length - resolved.length
+    log.recordActionDebug(`Skipped ${skipped} stale Kubernetes target(s) with no live pod fallback`)
+  }
+  return [...resolved, ...vmTargets]
 }
 
 function resolveSelectedPodsForScope(
   key: string,
   selectedNames: string[],
   state: KubeStoreState,
-  targets: SelectedTarget[],
+  targets: KubernetesSelectedTarget[],
   resolveContainer: ContainerResolver,
   log: LogStoreState,
 ) {
   const [context, namespace] = key.split('\u0000')
   const pods = state.podsByScope[key] ?? []
-  const resolved: SelectedTarget[] = []
+  const resolved: KubernetesSelectedTarget[] = []
 
   for (const selectedName of selectedNames) {
     const exact = pods.find((pod) => pod.name === selectedName)
@@ -159,7 +169,7 @@ function fallbackForStaleSelection(
   namespace: string,
   selectedName: string,
   pods: PodInfo[],
-  targets: SelectedTarget[],
+  targets: KubernetesSelectedTarget[],
   resolveContainer: ContainerResolver,
 ) {
   const previousPod = targets.find((target) =>
@@ -169,7 +179,15 @@ function fallbackForStaleSelection(
   return findFallbackPod(stalePod, pods, resolveContainer(stalePod.containers))
 }
 
-async function resolveFallbackTarget(target: SelectedTarget, container: string, log: LogStoreState) {
+function isVmTarget(target: SelectedTarget): target is VmSelectedTarget {
+  return target.targetKind === 'aws-vm'
+}
+
+function isKubernetesTarget(target: SelectedTarget): target is KubernetesSelectedTarget {
+  return target.targetKind !== 'aws-vm'
+}
+
+async function resolveFallbackTarget(target: KubernetesSelectedTarget, container: string, log: LogStoreState) {
   await useKubeStore.getState().refreshPodsForSelections()
   const key = scopeKey(target.context, target.namespace)
   const refreshedPods = useKubeStore.getState().podsByScope[key] ?? []
@@ -190,6 +208,7 @@ async function launchLogStream(
   resolveContainer: ContainerResolver,
   log: LogStoreState,
 ): Promise<LaunchResult> {
+  if (isVmTarget(target)) return launchVmLogStream(target, selectedSourceType, settings, log)
   const container = resolveContainer(target.pod.containers)
   const filePath = filePathForSettings(settings, target.namespace, target.pod.name, selectedSourceType)
   const streamId = crypto.randomUUID()
@@ -198,6 +217,31 @@ async function launchLogStream(
 
   try {
     await startLogStream({ streamId, context: target.context, namespace: target.namespace, pod: target.pod.name, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines })
+    return await settleStartedStream(streamId, container, log)
+  } catch (error) {
+    log.markStartRejected(streamId, error)
+    return { status: 'failed', container }
+  }
+}
+
+async function launchVmLogStream(
+  target: VmSelectedTarget,
+  selectedSourceType: SourceLogType,
+  settings: PersistedSettings,
+  log: LogStoreState,
+): Promise<LaunchResult> {
+  const plugin = settings.targetPlugins.awsVm
+  const filePath = plugin.logPaths[selectedSourceType]
+  const streamId = crypto.randomUUID()
+  const namespace = 'aws-vm'
+  const pod = target.vm.name || target.vm.id
+  const container = 'ssh'
+  const sourceId = `aws-vm/${target.vm.id}/${selectedSourceType}/${filePath}`
+  const vm = { target: target.vm, plugin }
+  log.prepareStarting({ streamId, sourceId, targetKind: 'aws-vm', namespace, pod, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines, vm })
+
+  try {
+    await startLogStream({ streamId, targetKind: 'aws-vm', namespace, pod, container, filePath, sourceType: selectedSourceType, initialTailLines: settings.initialTailLines, vm })
     return await settleStartedStream(streamId, container, log)
   } catch (error) {
     log.markStartRejected(streamId, error)
@@ -269,7 +313,7 @@ function startDebugMessage(
   startBlockedReason: string,
 ) {
   const targetText = targets
-    .map((target) => `${target.context}/${target.namespace}/${target.pod.name}/${resolveContainer(target.pod.containers)}`)
+    .map((target) => isVmTarget(target) ? `aws-vm/${target.vm.name}/${target.vm.address}` : `${target.context}/${target.namespace}/${target.pod.name}/${resolveContainer(target.pod.containers)}`)
     .join(', ') || '(none)'
   return `Start clicked: status=${log.streamStatus}, targets=${targetText}, sources=${selectedSourceTypes.join(', ') || '(none)'}, startBlockedReason=${startBlockedReason || '(none)'}`
 }
@@ -287,6 +331,7 @@ async function startTargetStreams(
     if (result.status === 'cancelled') return true
     if (result.status === 'started') continue
 
+    if (isVmTarget(target)) continue
     const fallbackTarget = await resolveFallbackTarget(target, result.container, log)
     if (!fallbackTarget) continue
     target = fallbackTarget

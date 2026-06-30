@@ -2,6 +2,9 @@ import type { ParsedLogLine } from '../types/log'
 import type { LogViewerExtensionSnapshot, SdkLogFields, SdkLogRow } from '../sdk/log-viewer'
 import type { LogStoreState } from '../stores/logStore'
 import type { KubeStoreState } from '../stores/kubeStore'
+import { useVmStore } from '../stores/vmStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 
 const publicFieldKeys = [
   'timestamp',
@@ -54,10 +57,12 @@ export function toSdkLogRow(row: ParsedLogLine): SdkLogRow {
     timestamp: row.timestamp,
     summary: row.summary,
     target: {
+      kind: row.targetKind ?? 'kubernetes',
       context: row.context,
       namespace: row.namespace,
       pod: row.pod,
       container: row.container,
+      vm: row.targetKind === 'aws-vm' ? row.vm?.target : undefined,
     },
     correlationIds: {
       trId: row.trId,
@@ -79,7 +84,13 @@ export function toSdkLogRow(row: ParsedLogLine): SdkLogRow {
   }
 }
 
-export function toLogViewerExtensionSnapshot(log: LogStoreState, kube: KubeStoreState): LogViewerExtensionSnapshot {
+export function toLogViewerExtensionSnapshot(
+  log: LogStoreState,
+  kube: KubeStoreState,
+  vm = useVmStore.getState(),
+  settings = useSettingsStore.getState(),
+): LogViewerExtensionSnapshot {
+  const vmTargetsEnabled = isTargetPluginEnabled(settings.settings?.targetPlugins, 'awsVm')
   return {
     rows: log.rows.map(toSdkLogRow),
     visibleRows: log.visibleRows.map(toSdkLogRow),
@@ -91,6 +102,6 @@ export function toLogViewerExtensionSnapshot(log: LogStoreState, kube: KubeStore
     viewerPaused: log.viewerPaused,
     autoScrollEnabled: log.autoScrollEnabled,
     streamStatus: log.streamStatus,
-    selectedTargetCount: kube.getSelectedPodTargets().length,
+    selectedTargetCount: kube.getSelectedPodTargets().length + (vmTargetsEnabled ? vm.getSelectedVmTargets().length : 0),
   }
 }

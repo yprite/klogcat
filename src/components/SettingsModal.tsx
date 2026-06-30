@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { stopLogStream } from '../commands/tauriLogs'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLogStore } from '../stores/logStore'
 import { useKubeStore } from '../stores/kubeStore'
+import { useVmStore } from '../stores/vmStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
+import type { SourceLogType } from '../types/log'
 import { t } from '../utils/i18n'
 import {
   defaultLogSourcesFromPolicy,
@@ -113,6 +117,14 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setNotice(undefined)
     setDraft({ ...draft, shortcuts: { ...(draft.shortcuts ?? {}), [key]: value.trim() } })
   }
+  const updateAwsVmPlugin = (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => {
+    setNotice(undefined)
+    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, awsVm: { ...draft.targetPlugins.awsVm, ...patch } } })
+  }
+  const updateAwsVmLogPath = (sourceType: SourceLogType, path: string) => {
+    setNotice(undefined)
+    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, awsVm: { ...draft.targetPlugins.awsVm, logPaths: { ...draft.targetPlugins.awsVm.logPaths, [sourceType]: path } } } })
+  }
   const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
     setSelectedPolicyId('custom')
@@ -133,6 +145,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     const ok = await resetSettings()
     if (ok) {
       const saved = settingsOrDefault(useSettingsStore.getState().settings)
+      if (!isTargetPluginEnabled(saved.targetPlugins, 'awsVm')) await cleanupDisabledAwsVmPlugin()
       setDraft(saved)
       setSelectedPolicyId(policyIdForSettings(saved))
       setPolicyText(defaultPolicyText(saved))
@@ -148,8 +161,26 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       logPolicy: policyDraft,
       logSources: derivedLogSources,
     }
+    const wasAwsVmEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm')
     const ok = canSave ? await saveSettings(nextDraft) : false
-    if (ok) onClose()
+    if (ok) {
+      if (!isTargetPluginEnabled(nextDraft.targetPlugins, 'awsVm')) {
+        await cleanupDisabledAwsVmPlugin()
+      } else if (!wasAwsVmEnabled) {
+        await useVmStore.getState().loadTargets(nextDraft.targetPlugins)
+      }
+      onClose()
+    }
+  }
+  const cleanupDisabledAwsVmPlugin = async () => {
+    const logState = useLogStore.getState()
+    const vmStreamIds = Object.values(logState.activeStreamMetas).filter((meta) => meta.targetKind === 'aws-vm').map((meta) => meta.streamId)
+    await Promise.all(vmStreamIds.map(async (streamId) => {
+      logState.markStopping(streamId)
+      try { await stopLogStream(streamId); useLogStore.getState().markStopped(streamId) }
+      catch (error) { useLogStore.getState().markError(streamId, error instanceof Error ? error.message : String(error)) }
+    }))
+    useVmStore.getState().clearTargets()
   }
   const handleClearTargetCache = () => {
     recordActionDebug('Clear target cache clicked')
@@ -188,7 +219,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
         <SettingsNav activeSection={activeSection} language={language} onSectionChange={setActiveSection} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />
+          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
         </div>
       </div>
       <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />

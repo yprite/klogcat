@@ -3,6 +3,8 @@ import type { SourceLogType } from '../types/log'
 import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useVmStore } from '../stores/vmStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { AnimatedStatusPill, ProgressStripe } from './ProgressFeedback'
 import { t, type Language } from '../utils/i18n'
 import { LogTypeSelector } from './LogTypeSelector'
@@ -101,10 +103,12 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const selectedSourceTypes: SourceLogType[] = sourceTypes ?? [sourceType ?? 'info']
   const primarySourceType = selectedSourceTypes[0] ?? 'info'
   const kube = useKubeStore()
+  const vm = useVmStore()
   const { settings } = useSettingsStore()
   const language = settings?.language
   const log = useLogStore()
-  const targets = kube.getSelectedPodTargets()
+  const vmTargetsEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm')
+  const targets = [...kube.getSelectedPodTargets().map((target) => ({ ...target, targetKind: 'kubernetes' as const })), ...(vmTargetsEnabled ? vm.getSelectedVmTargets().map((target) => ({ targetKind: 'aws-vm' as const, vm: target })) : [])]
   const resolveContainer = containerResolver(settings, primarySourceType)
   const status = toolbarStatus(log, settings, selectedSourceTypes, targets)
   const operation = operationState(log, kube, targets, selectedSourceTypes)

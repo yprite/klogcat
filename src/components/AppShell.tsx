@@ -3,6 +3,8 @@ import type { SourceLogType } from '../types/log'
 import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useVmStore } from '../stores/vmStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { stopLogStream } from '../commands/tauriLogs'
 import { ErrorBanner } from './ErrorBanner'
 import { GrepBar } from './GrepBar'
@@ -38,7 +40,7 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const [sourceTypes, setSourceTypes] = useState<SourceLogType[]>(['info'])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [defaultNamespaceWarning, setDefaultNamespaceWarning] = useState<string>()
-  const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore()
+  const settings = useSettingsStore(); const kube = useKubeStore(); const log = useLogStore(); const vm = useVmStore()
   useEffect(() => { (async () => {
     await settings.loadSettings()
     const kubeStore = useKubeStore.getState()
@@ -46,6 +48,7 @@ export function AppShell({ eventError }: { eventError?: string }) {
     const refreshPromise = useKubeStore.getState().refreshAllTargets(false)
     void refreshPromise
     const s = useSettingsStore.getState().settings
+    if (isTargetPluginEnabled(s?.targetPlugins, 'awsVm')) void useVmStore.getState().loadTargets(s!.targetPlugins)
     if (s?.defaultNamespace) {
       if (!loadedCache && !useKubeStore.getState().selectedContext) await refreshPromise
       if (!useKubeStore.getState().namespaces.some(ns => ns.name === s.defaultNamespace)) await useKubeStore.getState().loadNamespaces()
@@ -73,10 +76,11 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const changeContext = async (contexts: string[]) => { log.recordActionDebug(`Contexts selected: ${contexts.join(', ') || '(empty)'}`); const selection = useKubeStore.getState().selectContexts(contexts); await stopAndClearIfActive(); await selection }
   const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); const selection = useKubeStore.getState().selectNamespaces(namespaces); await stopAndClearIfActive(); await selection }
   const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); useKubeStore.getState().selectPods(pods); await stopAndClearIfActive() }
+  const changeVmTarget = async (targets: string[]) => { log.recordActionDebug(`VM targets selected: ${targets.join(', ') || '(empty)'}`); useVmStore.getState().selectTargets(targets); await stopAndClearIfActive() }
   return <div className="flex h-screen flex-col overflow-hidden">
-    <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} />
+    <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} onVmTargetChange={changeVmTarget} />
     <main className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-2">
-      <ErrorBanner error={eventError || settings.error || kube.error || log.errorMessage} />
+      <ErrorBanner error={eventError || settings.error || kube.error || vm.error || log.errorMessage} />
       {settings.warning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{settings.warning.message}</div>}
       {defaultNamespaceWarning && <div className="rounded border border-yellow-700 bg-yellow-950 px-2 py-1 text-xs">{defaultNamespaceWarning}</div>}
       <LogViewerExtensionHost>

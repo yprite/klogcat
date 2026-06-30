@@ -1,4 +1,5 @@
 import type { PersistedSettings } from '../types/settings'
+import { defaultAwsVmTargetPluginSettings } from '../plugins/awsVmTargetPlugin'
 import { defaultLogSourcesFromPolicy, getLogPolicy } from '../utils/logPolicy'
 
 export const defaultSettings: PersistedSettings = {
@@ -15,4 +16,7 @@ export const defaultSettings: PersistedSettings = {
   },
   logPolicyId: 'scloud',
   logPolicy: getLogPolicy(),
+  targetPlugins: {
+    awsVm: defaultAwsVmTargetPluginSettings,
+  },
 }

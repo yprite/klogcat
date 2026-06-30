@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLogStore } from '../stores/logStore'
 import { useKubeStore } from '../stores/kubeStore'
+import { useVmStore } from '../stores/vmStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { t } from '../utils/i18n'
 import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
@@ -136,7 +138,9 @@ export function LogViewer() {
   const language = useSettingsStore((s) => s.settings?.language)
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
   const kube = useKubeStore()
-  const selectedTargetCount = kube.getSelectedPodTargets().length
+  const vm = useVmStore()
+  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
+  const selectedTargetCount = kube.getSelectedPodTargets().length + (vmTargetsEnabled ? vm.getSelectedVmTargets().length : 0)
   const parentRef = useRef<HTMLDivElement>(null)
   const seenRowIdsRef = useRef<Set<number> | null>(null)
   const highlightTimeoutsRef = useRef<number[]>([])
@@ -197,7 +201,7 @@ export function LogViewer() {
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleColumns, visibleRows])
   const emptyState = useMemo(() => {
-    if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Choose Target to choose a running pod, then start a stream.') }
+    if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Choose Target to choose a pod or VM target, then start a stream.') }
     if (rows.length === 0) return { title: t(language, 'Ready to stream logs'), detail: t(language, 'Targets selected: {count}. Press Start to begin tailing logs.', { count: selectedTargetCount }) }
     if (visibleRows.length === 0 || filteredRows.length === 0) return { title: t(language, 'No rows match current filters'), detail: t(language, 'Adjust Query or column filters to bring rows back into view.') }
     return undefined

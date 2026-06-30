@@ -6,12 +6,14 @@ export type SourceMeta = {
   streamId: string
   sourceId: string
   sourceType: SourceLogType
+  targetKind?: 'kubernetes' | 'aws-vm'
   context?: string
   namespace: string
   pod: string
   container: string
   filePath: string
   initialTailLines?: number
+  vm?: import('./vm').VmLogStreamConfig
 }
 
 export type ActiveStreamMeta = SourceMeta

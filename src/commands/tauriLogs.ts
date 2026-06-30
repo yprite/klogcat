@@ -1,7 +1,8 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { SourceLogType } from '../types/log'
+import type { VmLogStreamConfig } from '../types/vm'
 
-export type StartLogStreamRequest = { streamId: string; context?: string; namespace: string; pod: string; container: string; sourceType: SourceLogType; filePath: string; initialTailLines: number }
+export type StartLogStreamRequest = { streamId: string; targetKind?: 'kubernetes' | 'aws-vm'; context?: string; namespace: string; pod: string; container: string; sourceType: SourceLogType; filePath: string; initialTailLines: number; vm?: VmLogStreamConfig }
 export type CheckLogPathRequest = { context?: string; namespace: string; pod: string; container: string; sourceType: SourceLogType; filePath: string }
 export type CheckLogPathResult = { exists: boolean; message?: string }
 

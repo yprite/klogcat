@@ -25,10 +25,19 @@ export type SdkLogRow = {
   timestamp?: string
   summary: string
   target: {
+    kind?: 'kubernetes' | 'aws-vm'
     context?: string
     namespace: string
     pod: string
     container: string
+    vm?: {
+      id: string
+      name: string
+      address: string
+      service?: string
+      datacenter?: string
+      tags?: readonly string[]
+    }
   }
   correlationIds: {
     trId?: string
