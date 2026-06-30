@@ -202,6 +202,22 @@ describe('SettingsModal log policy selection', () => {
     })))
   })
 
+  it('accepts VM passwords directly and masks them after editing', () => {
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    openSettingsSection(/AWS VM/i)
+    const bastionPassword = screen.getByLabelText('Bastion password') as HTMLInputElement
+    expect(bastionPassword).toHaveAttribute('type', 'password')
+
+    fireEvent.focus(bastionPassword)
+    expect(bastionPassword).toHaveAttribute('type', 'text')
+    fireEvent.change(bastionPassword, { target: { value: 'direct-secret' } })
+    fireEvent.blur(bastionPassword)
+
+    expect(bastionPassword).toHaveAttribute('type', 'password')
+    expect(bastionPassword).toHaveValue('direct-secret')
+  })
+
   it('adds a custom log type and derives settings for it', async () => {
     const { saveSettings } = await import('../commands/tauriSettings')
     vi.stubGlobal('prompt', vi.fn(() => 'DEBUG'))

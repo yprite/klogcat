@@ -5,11 +5,11 @@ export type AwsVmTargetPluginSettings = {
   bastionHost: string
   bastionPort: number
   bastionUsername: string
-  bastionPasswordEnv: string
-  bastionTotpSecretEnv?: string
+  bastionPassword: string
+  bastionTotpSecret?: string
   bastionPasswordMode: 'password' | 'password-plus-totp'
   vmUsername: string
-  vmPasswordEnv: string
+  vmPassword: string
   consulCatalogCommand: string
   strictHostKeyChecking: boolean
   logPaths: Record<SourceLogType, string>

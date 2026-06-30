@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, env, fs, path::PathBuf};
 use tauri::Manager;
 
+mod secrets;
+mod target_plugins;
+
+use target_plugins::{default_target_plugins, validate_target_plugins};
+pub use target_plugins::{AwsVmTargetPluginSettings, TargetPluginSettings};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PersistedSettings {
@@ -26,28 +32,6 @@ pub struct LogSourceConfig {
     pub container: String,
     pub file_path: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TargetPluginSettings {
-    pub aws_vm: AwsVmTargetPluginSettings,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AwsVmTargetPluginSettings {
-    pub enabled: bool,
-    pub bastion_host: String,
-    pub bastion_port: u16,
-    pub bastion_username: String,
-    pub bastion_password_env: String,
-    #[serde(default)]
-    pub bastion_totp_secret_env: Option<String>,
-    pub bastion_password_mode: String,
-    pub vm_username: String,
-    pub vm_password_env: String,
-    pub consul_catalog_command: String,
-    pub strict_host_key_checking: bool,
-    pub log_paths: BTreeMap<String, String>,
-}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsWarning {
@@ -64,33 +48,6 @@ pub struct GetSettingsResponse {
 
 fn default_language() -> String {
     "en".into()
-}
-
-fn default_vm_log_paths() -> BTreeMap<String, String> {
-    BTreeMap::from([
-        ("info".into(), "/var/log/app/info.log".into()),
-        ("access".into(), "/var/log/app/access.log".into()),
-        ("error".into(), "/var/log/app/error.log".into()),
-    ])
-}
-
-fn default_target_plugins() -> TargetPluginSettings {
-    TargetPluginSettings {
-        aws_vm: AwsVmTargetPluginSettings {
-            enabled: false,
-            bastion_host: String::new(),
-            bastion_port: 22,
-            bastion_username: String::new(),
-            bastion_password_env: "KLOGCAT_BASTION_PASSWORD".into(),
-            bastion_totp_secret_env: Some("KLOGCAT_BASTION_TOTP_SECRET".into()),
-            bastion_password_mode: "password".into(),
-            vm_username: String::new(),
-            vm_password_env: "KLOGCAT_VM_PASSWORD".into(),
-            consul_catalog_command: "consul catalog nodes -format=json".into(),
-            strict_host_key_checking: true,
-            log_paths: default_vm_log_paths(),
-        },
-    }
 }
 
 pub fn default_settings() -> PersistedSettings {
@@ -144,7 +101,7 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
     validate_log_sources(s, &mut errors);
-    validate_target_plugins(s, &mut errors);
+    validate_target_plugins(&s.target_plugins, &mut errors);
     errors
 }
 
@@ -216,117 +173,6 @@ fn validate_log_source(
     }
 }
 
-fn validate_target_plugins(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
-    let plugin = &s.target_plugins.aws_vm;
-    if plugin.bastion_port == 0 {
-        errors.push(err(
-            "targetPlugins.awsVm.bastionPort",
-            "bastionPort must be 1..65535",
-        ));
-    }
-    if plugin.bastion_password_mode != "password"
-        && plugin.bastion_password_mode != "password-plus-totp"
-    {
-        errors.push(err(
-            "targetPlugins.awsVm.bastionPasswordMode",
-            "bastionPasswordMode must be password or password-plus-totp",
-        ));
-    }
-    if plugin.enabled {
-        for (field, value) in [
-            ("bastionHost", &plugin.bastion_host),
-            ("bastionUsername", &plugin.bastion_username),
-            ("bastionPasswordEnv", &plugin.bastion_password_env),
-            ("vmUsername", &plugin.vm_username),
-            ("vmPasswordEnv", &plugin.vm_password_env),
-            ("consulCatalogCommand", &plugin.consul_catalog_command),
-        ] {
-            if value.trim().is_empty() {
-                errors.push(err(
-                    format!("targetPlugins.awsVm.{field}"),
-                    format!("{field} is required when AWS VM plugin is enabled"),
-                ));
-            }
-        }
-    }
-    for (field, value) in [
-        ("bastionPasswordEnv", &plugin.bastion_password_env),
-        ("vmPasswordEnv", &plugin.vm_password_env),
-    ] {
-        if !is_env_name(value) {
-            errors.push(err(
-                format!("targetPlugins.awsVm.{field}"),
-                format!("{field} must be a valid environment variable name"),
-            ));
-        }
-    }
-    if let Some(secret_env) = plugin.bastion_totp_secret_env.as_deref().filter(|v| !v.trim().is_empty()) {
-        if !is_env_name(secret_env) {
-            errors.push(err(
-                "targetPlugins.awsVm.bastionTotpSecretEnv",
-                "bastionTotpSecretEnv must be a valid environment variable name",
-            ));
-        }
-    }
-    if plugin.enabled
-        && plugin.bastion_password_mode == "password-plus-totp"
-        && plugin
-            .bastion_totp_secret_env
-            .as_deref()
-            .is_none_or(|value| value.trim().is_empty())
-    {
-        errors.push(err(
-            "targetPlugins.awsVm.bastionTotpSecretEnv",
-            "bastionTotpSecretEnv is required for password-plus-totp mode",
-        ));
-    }
-    for (field, value) in [
-        ("bastionUsername", &plugin.bastion_username),
-        ("vmUsername", &plugin.vm_username),
-    ] {
-        if !value.trim().is_empty() && !is_ssh_username(value) {
-            errors.push(err(
-                format!("targetPlugins.awsVm.{field}"),
-                format!("{field} must be a safe SSH username"),
-            ));
-        }
-    }
-    let keys: Vec<_> = plugin.log_paths.keys().map(String::as_str).collect();
-    if keys.as_slice() != REQUIRED_LOG_SOURCE_KEYS {
-        errors.push(err(
-            "targetPlugins.awsVm.logPaths",
-            "logPaths must contain exactly info/access/error keys",
-        ));
-    }
-    for (key, path) in &plugin.log_paths {
-        if !path.starts_with('/') || path.contains('\0') {
-            errors.push(err(
-                format!("targetPlugins.awsVm.logPaths.{key}"),
-                "VM log path must be an absolute path without null bytes",
-            ));
-        }
-    }
-}
-
-fn is_env_name(value: &str) -> bool {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    (first == '_' || first.is_ascii_alphabetic())
-        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-}
-
-fn is_ssh_username(value: &str) -> bool {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    (first.is_ascii_alphanumeric() || first == '.' || first == '_')
-        && value.len() <= 64
-        && !value.contains('@')
-        && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
-}
 fn err(field: impl Into<String>, message: impl Into<String>) -> SettingsValidationError {
     SettingsValidationError {
         field: field.into(),
@@ -391,6 +237,7 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
     };
     migrate_legacy_app_log_source(&mut value);
     migrate_missing_target_plugins(&mut value);
+    secrets::decrypt_aws_vm_secrets(&mut value, &path)?;
     let settings = load_settings_from_value(value)?;
     let errors = validate_settings(&settings);
     if !errors.is_empty() {
@@ -422,10 +269,34 @@ fn migrate_missing_target_plugins(value: &mut serde_json::Value) -> bool {
         .get_mut("awsVm")
         .and_then(|plugin| plugin.as_object_mut())
     {
+        migrate_legacy_env_secret(aws_vm, "bastionPasswordEnv", "bastionPassword");
+        migrate_legacy_env_secret(aws_vm, "bastionTotpSecretEnv", "bastionTotpSecret");
+        migrate_legacy_env_secret(aws_vm, "vmPasswordEnv", "vmPassword");
         aws_vm.remove("bastionTotpProfile");
         aws_vm.remove("streamCommandTemplate");
     }
     true
+}
+
+fn migrate_legacy_env_secret(
+    aws_vm: &mut serde_json::Map<String, serde_json::Value>,
+    legacy_env_field: &str,
+    secret_field: &str,
+) {
+    let legacy_env = aws_vm
+        .remove(legacy_env_field)
+        .and_then(|value| value.as_str().map(str::to_owned));
+    let should_fill = aws_vm
+        .get(secret_field)
+        .and_then(|value| value.as_str())
+        .is_none_or(str::is_empty);
+    if should_fill {
+        let secret = legacy_env
+            .as_deref()
+            .and_then(|name| env::var(name).ok())
+            .unwrap_or_default();
+        aws_vm.insert(secret_field.into(), serde_json::Value::String(secret));
+    }
 }
 
 fn deep_merge_defaults(
@@ -524,7 +395,12 @@ fn ensure_settings_valid(settings: &PersistedSettings) -> Result<(), CommandErro
 fn persist_settings(path: PathBuf, settings: &PersistedSettings) -> Result<(), CommandError> {
     ensure_parent_directory(path.as_path())?;
     let tmp = path.with_extension("json.tmp");
-    let text = serde_json::to_string_pretty(settings).map_err(|e| {
+    let mut value = serde_json::to_value(settings).map_err(|e| {
+        CommandError::new("settings_save_failed", "failed to serialize settings")
+            .with_details(e.to_string())
+    })?;
+    secrets::encrypt_aws_vm_secrets(&mut value, &path)?;
+    let text = serde_json::to_string_pretty(&value).map_err(|e| {
         CommandError::new("settings_save_failed", "failed to serialize settings")
             .with_details(e.to_string())
     })?;
@@ -643,10 +519,7 @@ mod tests {
         let settings: PersistedSettings = serde_json::from_value(value).unwrap();
 
         assert_eq!(settings.target_plugins.aws_vm.bastion_port, 22);
-        assert_eq!(
-            settings.target_plugins.aws_vm.vm_password_env,
-            "KLOGCAT_VM_PASSWORD"
-        );
+        assert_eq!(settings.target_plugins.aws_vm.vm_password, "");
         assert!(validate_settings(&settings).is_empty());
     }
 
@@ -666,15 +539,17 @@ mod tests {
         s.target_plugins.aws_vm.enabled = true;
         s.target_plugins.aws_vm.bastion_host = "bastion.example.com".into();
         s.target_plugins.aws_vm.bastion_username = "ops".into();
+        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
         s.target_plugins.aws_vm.vm_username = "app".into();
+        s.target_plugins.aws_vm.vm_password = "vm-password".into();
         assert!(validate_settings(&s).is_empty());
 
-        s.target_plugins.aws_vm.bastion_password_env = "bad-name".into();
+        s.target_plugins.aws_vm.bastion_password = "bad\0secret".into();
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionPasswordEnv"));
+            .any(|error| error.field == "targetPlugins.awsVm.bastionPassword"));
 
-        s.target_plugins.aws_vm.bastion_password_env = "KLOGCAT_BASTION_PASSWORD".into();
+        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
         s.target_plugins.aws_vm.bastion_username = "-bad".into();
         assert!(validate_settings(&s)
             .iter()
@@ -682,9 +557,43 @@ mod tests {
 
         s.target_plugins.aws_vm.bastion_username = "ops".into();
         s.target_plugins.aws_vm.bastion_password_mode = "password-plus-totp".into();
-        s.target_plugins.aws_vm.bastion_totp_secret_env = Some(String::new());
+        s.target_plugins.aws_vm.bastion_totp_secret = Some(String::new());
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionTotpSecretEnv"));
+            .any(|error| error.field == "targetPlugins.awsVm.bastionTotpSecret"));
+    }
+
+    #[test]
+    fn encrypts_aws_vm_secrets_on_disk_and_decrypts_on_load() {
+        let dir = env::temp_dir().join(format!(
+            "klogcat-settings-secret-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        let mut s = default_settings();
+        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
+        s.target_plugins.aws_vm.bastion_totp_secret = Some("totp-secret".into());
+        s.target_plugins.aws_vm.vm_password = "vm-password".into();
+
+        save_to_path(path.clone(), s.clone()).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains(secrets::SECRET_PREFIX));
+        assert!(!text.contains("bastion-password"));
+        assert!(!text.contains("totp-secret"));
+        assert!(!text.contains("vm-password"));
+
+        let loaded = load_from_path(path.clone()).unwrap().settings;
+        assert_eq!(
+            loaded.target_plugins.aws_vm.bastion_password,
+            "bastion-password"
+        );
+        assert_eq!(
+            loaded.target_plugins.aws_vm.bastion_totp_secret.as_deref(),
+            Some("totp-secret")
+        );
+        assert_eq!(loaded.target_plugins.aws_vm.vm_password, "vm-password");
+        let _ = fs::remove_dir_all(&dir);
     }
 }
