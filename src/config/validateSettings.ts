@@ -1,4 +1,5 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
+import { validateTargetPluginSettings } from '../plugins/targetPluginRegistry'
 import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy, type LogPolicy } from '../utils/logPolicy'
 
 function sourceKeys(policy?: LogPolicy) { return sourceTypesFromPolicy(policy ?? getLogPolicy()) }
@@ -8,7 +9,7 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'targetPlugins'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
@@ -71,6 +72,7 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   const policy = validateEmbeddedLogPolicy(value, errors)
   validateShortcuts(value.shortcuts, errors)
   validateLogSources(value.logSources, errors, policy)
+  validateTargetPluginSettings(value.targetPlugins, errors)
   return errors
 }
 export function assertValidSettings(value: unknown): asserts value is PersistedSettings {

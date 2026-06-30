@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useKubeStore } from '../stores/kubeStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useVmStore } from '../stores/vmStore'
+import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { t, type Language } from '../utils/i18n'
 import { ActivityDots, ActivityRing } from './ProgressFeedback'
 import { selectedPodValues, TargetPickerDialog } from './TargetPickerDialog'
@@ -14,12 +16,14 @@ function targetStatusLabel(kube: ReturnType<typeof useKubeStore.getState>, selec
   return selectedCount > 0 ? t(language, 'Targets selected') : t(language, 'Select a target')
 }
 
-export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodChange }: { onSettings: () => void; onContextChange: (contexts: string[]) => void | Promise<void>; onNamespaceChange: (namespaces: string[]) => void | Promise<void>; onPodChange: (pods: string[]) => void | Promise<void> }) {
+export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodChange, onVmTargetChange = () => undefined }: { onSettings: () => void; onContextChange: (contexts: string[]) => void | Promise<void>; onNamespaceChange: (namespaces: string[]) => void | Promise<void>; onPodChange: (pods: string[]) => void | Promise<void>; onVmTargetChange?: (targets: string[]) => void | Promise<void> }) {
   const kube = useKubeStore()
+  const vm = useVmStore()
   const language = useSettingsStore((s) => s.settings?.language)
+  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
-  const selectedCount = selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)
-  const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing
+  const selectedCount = (selectedPodValues(kube.selectedPods).length || (kube.selectedPod ? 1 : 0)) + (vmTargetsEnabled ? vm.selectedTargetIds.length : 0)
+  const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing || vm.loading
   const statusLabel = targetStatusLabel(kube, selectedCount, language)
   useEffect(() => {
     const openTargetPicker = () => setTargetPickerOpen(true)
@@ -36,6 +40,6 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
       <span className="text-slate-500">{t(language, 'Targets: {count} selected', { count: selectedCount })}</span>
       {targetsLoading && <ActivityDots label={t(language, 'Target refresh progress')} />}
     </div>
-    {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} />}
+    {targetPickerOpen && <TargetPickerDialog onClose={() => setTargetPickerOpen(false)} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} onVmTargetChange={onVmTargetChange} />}
   </div>
 }

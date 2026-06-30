@@ -1,8 +1,11 @@
 import type { CommandError } from '../commands/types'
+import { TargetPluginSettingsPanels } from '../plugins/pluginSettingsPanels'
 import { useKubeStore } from '../stores/kubeStore'
+import type { SourceLogType } from '../types/log'
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
 import { t } from '../utils/i18n'
 import type { LogPolicy, LogPolicySelectionId } from '../utils/logPolicy'
+import { PluginInventoryPanel } from './PluginInventoryPanel'
 import { AdvancedSection, LogSourceSection, MaintenanceSection, RuntimeSection, ShortcutsSection, StatusMessages, type SettingsSectionId, type TestPathResult } from './SettingsModalSections'
 
 function AppearanceSection({ draft, language, setLanguage }: { draft: PersistedSettings; language: PersistedSettings['language']; setLanguage: (value: PersistedSettings['language']) => void }) {
@@ -48,15 +51,19 @@ type SettingsSectionContentProps = {
   sourceTypes: string[]
   testingPaths: boolean
   testResults: TestPathResult[]
+  updateAwsVmLogPath: (sourceType: SourceLogType, path: string) => void
+  updateAwsVmPlugin: (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => void
   warnings: string[]
 }
 
 export function SettingsSectionContent(props: SettingsSectionContentProps) {
-  const { activeSection, activeTarget, draft, error, errors, handleClearTargetCache, handlePolicySelect, handleRawPolicyTextChange, handleRestart, handleTestPaths, language, loading, notice, policyText, previewPolicy, selectedPolicyId, setCustomPolicy, setDefaultNamespace, setLanguage, setNum, setShortcut, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes, testingPaths, testResults, warnings } = props
+  const { activeSection, activeTarget, draft, error, errors, handleClearTargetCache, handlePolicySelect, handleRawPolicyTextChange, handleRestart, handleTestPaths, language, loading, notice, policyText, previewPolicy, selectedPolicyId, setCustomPolicy, setDefaultNamespace, setLanguage, setNum, setShortcut, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes, testingPaths, testResults, updateAwsVmLogPath, updateAwsVmPlugin, warnings } = props
   return <>
     {activeSection === 'runtime' && <RuntimeSection draft={draft} language={language} setDefaultNamespace={setDefaultNamespace} setNum={setNum} />}
     {activeSection === 'appearance' && <AppearanceSection draft={draft} language={language} setLanguage={setLanguage} />}
+    {activeSection === 'plugin-inventory' && <PluginInventoryPanel language={language} settings={draft} />}
     {activeSection === 'log-source' && <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />}
+    {activeSection.startsWith('target-plugin:') && <TargetPluginSettingsPanels draft={draft} language={language} sourceTypes={sourceTypes} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} />}
     {activeSection === 'advanced' && <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} language={language} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />}
     {activeSection === 'shortcuts' && <ShortcutsSection draft={draft} language={language} setShortcut={setShortcut} />}
     <StatusMessages error={error} errors={errors} language={language} notice={notice} />

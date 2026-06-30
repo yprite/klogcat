@@ -1843,6 +1843,7 @@ name = "klogcat"
 version = "0.0.7"
 dependencies = [
  "chrono",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

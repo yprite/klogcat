@@ -1,6 +1,8 @@
 use super::*;
 use crate::kubectl::kubectl_binary;
 use std::process::{Command, Stdio};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 pub(super) fn kubectl_tail_args(request: &StartLogStreamRequest) -> Vec<String> {
     let mut args = Vec::new();
@@ -35,6 +37,99 @@ pub(super) fn spawn_kubectl_tail(args: &[String]) -> Result<Child, CommandError>
             CommandError::new("stream_spawn_failed", "failed to spawn kubectl exec tail")
                 .with_details(e.to_string())
         })
+}
+
+pub(super) fn spawn_log_tail(request: &StartLogStreamRequest, debug: bool) -> Result<Child, CommandError> {
+    if request.target_kind.as_deref() == Some("aws-vm") {
+        let command = vm_tail_shell_command(request)?;
+        if debug {
+            eprintln!("[klogcat debug] command: sh -lc {}", command);
+        }
+        let mut command_builder = Command::new("sh");
+        command_builder
+            .arg("-lc")
+            .arg(command)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            command_builder.process_group(0);
+        }
+        return command_builder.spawn().map_err(|e| {
+                CommandError::new("stream_spawn_failed", "failed to spawn VM ssh tail")
+                    .with_details(e.to_string())
+            });
+    }
+    let args = kubectl_tail_args(request);
+    if debug {
+        eprintln!("[klogcat debug] command: kubectl {}", args.join(" "));
+    }
+    spawn_kubectl_tail(&args)
+}
+
+fn vm_tail_shell_command(request: &StartLogStreamRequest) -> Result<String, CommandError> {
+    let Some(vm) = &request.vm else {
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "VM stream request requires vm config",
+        ));
+    };
+    crate::commands::vm::validate_plugin_enabled(&vm.plugin)?;
+    crate::commands::vm::validate_aws_vm_plugin(&vm.plugin)?;
+    crate::commands::vm::validate_vm_target(&vm.target)?;
+    let vm_password_expr = crate::commands::vm::password_shell_expr(&vm.plugin.vm_password_env)?;
+    let vm_password_ready = format!("[ -n \"${{{}:-}}\" ]", vm.plugin.vm_password_env);
+    let bastion_password_setup = crate::commands::vm::bastion_sshpass_password_setup(&vm.plugin)?;
+    let bastion_password_ready = crate::commands::vm::bastion_password_ready_shell_condition(&vm.plugin)?;
+    let sshpass_proxy = format!(
+        "{} sshpass -e ssh {} -p {} -W '%h:%p' -- {}@{}",
+        bastion_password_setup,
+        vm_ssh_options(&vm.plugin, false),
+        vm.plugin.bastion_port,
+        shell_word(&vm.plugin.bastion_username),
+        shell_word(&vm.plugin.bastion_host),
+    );
+    let plain_proxy = format!(
+        "ssh {} -p {} -W '%h:%p' -- {}@{}",
+        vm_ssh_options(&vm.plugin, true),
+        vm.plugin.bastion_port,
+        shell_word(&vm.plugin.bastion_username),
+        shell_word(&vm.plugin.bastion_host),
+    );
+    let remote_tail = crate::commands::vm::shell_quote(&format!(
+        "tail -n {} -F {}",
+        request.initial_tail_lines,
+        shell_word(&request.file_path)
+    ));
+    let sshpass_command = format!(
+        "SSHPASS=\"{}\" sshpass -e ssh {} -o ProxyCommand={} -- {}@{} {}",
+        vm_password_expr,
+        vm_ssh_options(&vm.plugin, false),
+        crate::commands::vm::shell_quote(&sshpass_proxy),
+        shell_word(&vm.plugin.vm_username),
+        shell_word(&vm.target.address),
+        remote_tail
+    );
+    let plain_command = format!(
+        "ssh {} -o ProxyCommand={} -- {}@{} {}",
+        vm_ssh_options(&vm.plugin, true),
+        crate::commands::vm::shell_quote(&plain_proxy),
+        shell_word(&vm.plugin.vm_username),
+        shell_word(&vm.target.address),
+        remote_tail
+    );
+    Ok(format!(
+        "if command -v sshpass >/dev/null 2>&1 && {} && {}; then {}; else {}; fi",
+        vm_password_ready, bastion_password_ready, sshpass_command, plain_command
+    ))
+}
+
+fn vm_ssh_options(plugin: &crate::settings::AwsVmTargetPluginSettings, batch_mode: bool) -> String {
+    crate::commands::vm::ssh_options(plugin, batch_mode)
+}
+
+fn shell_word(value: &str) -> String {
+    crate::commands::vm::shell_quote(value)
 }
 
 pub(super) fn insert_active_process(

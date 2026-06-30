@@ -1,5 +1,4 @@
 use crate::error::CommandError;
-use crate::kubectl::kubectl_binary;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering as CmpOrdering,
@@ -23,8 +22,7 @@ mod timestamp;
 use readers::{spawn_stderr_reader, spawn_stdout_reader};
 use request_validation::validate;
 use start_stream::{
-    emit_stream_started, insert_active_process, kubectl_tail_args, spawn_exit_watcher,
-    spawn_kubectl_tail, spawn_stream_readers,
+    emit_stream_started, insert_active_process, spawn_exit_watcher, spawn_stream_readers,
 };
 use timestamp::{extract_log_time_ms, order_time_ms};
 
@@ -37,6 +35,8 @@ const STREAM_FLUSH_ACK_TIMEOUT_MS: u64 = 500;
 #[serde(rename_all = "camelCase")]
 pub struct StartLogStreamRequest {
     pub stream_id: String,
+    #[serde(default)]
+    pub target_kind: Option<String>,
     pub context: Option<String>,
     pub namespace: String,
     pub pod: String,
@@ -44,6 +44,14 @@ pub struct StartLogStreamRequest {
     pub source_type: String,
     pub file_path: String,
     pub initial_tail_lines: u32,
+    #[serde(default)]
+    pub vm: Option<VmLogStreamConfig>,
+}
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VmLogStreamConfig {
+    pub target: crate::commands::vm::VmTargetInfo,
+    pub plugin: crate::settings::AwsVmTargetPluginSettings,
 }
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -388,17 +396,11 @@ impl LogProcessState {
 
         let log_tx = self.ensure_merge_worker(app.clone());
         let debug = debug_enabled();
-        let args = kubectl_tail_args(&request);
         if debug {
             eprintln!("[klogcat debug] starting stream {}", request.stream_id);
             eprintln!("[klogcat debug] source type: {}", request.source_type);
-            eprintln!(
-                "[klogcat debug] command: {} {}",
-                kubectl_binary(),
-                args.join(" ")
-            );
         }
-        let mut child = spawn_kubectl_tail(&args)?;
+        let mut child = start_stream::spawn_log_tail(&request, debug)?;
         let readers = spawn_stream_readers(
             &mut child,
             app.clone(),
@@ -446,10 +448,12 @@ impl LogProcessState {
             .collect();
         for active in active {
             active.requested_stop.store(true, Ordering::SeqCst);
-            let _ = active.child.lock().unwrap().kill();
+            let mut child = active.child.lock().unwrap();
+            kill_child_tree(&mut child);
+            let _ = child.wait();
         }
-        if let Some(tx) = self.merge_sender() {
-            let _ = tx.send(MergeMessage::Shutdown);
+        if let Some(handle) = self.merge.lock().unwrap().take() {
+            let _ = handle.tx.send(MergeMessage::Shutdown);
         }
     }
 }
@@ -474,8 +478,15 @@ fn stream_has_stopped_or_was_killed(
     match child.try_wait() {
         Ok(Some(_)) => Ok(true),
         Ok(None) => {
+            let past_deadline = Instant::now() >= deadline;
             kill_if_needed(&mut child, deadline, sent_kill);
-            Ok(Instant::now() >= deadline)
+            if past_deadline {
+                return child.wait().map(|_| true).map_err(|e| {
+                    CommandError::new("stream_stop_failed", "failed to stop stream")
+                        .with_details(e.to_string())
+                });
+            }
+            Ok(false)
         }
         Err(e) => Err(
             CommandError::new("stream_stop_failed", "failed to stop stream")
@@ -486,9 +497,19 @@ fn stream_has_stopped_or_was_killed(
 
 fn kill_if_needed(child: &mut Child, deadline: Instant, sent_kill: &mut bool) {
     if !*sent_kill || Instant::now() >= deadline {
-        let _ = child.kill();
+        kill_child_tree(child);
         *sent_kill = true;
     }
+}
+
+fn kill_child_tree(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let pid = child.id() as i32;
+        // VM streams run through a shell wrapper in its own process group.
+        let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
+    }
+    let _ = child.kill();
 }
 
 #[cfg(test)]

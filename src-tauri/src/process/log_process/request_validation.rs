@@ -3,22 +3,46 @@ use crate::error::CommandError;
 
 pub(super) fn validate(r: &StartLogStreamRequest) -> Result<(), CommandError> {
     validate_required_fields(r)?;
+    validate_target_kind(r)?;
     validate_source_type(&r.source_type)?;
-    validate_kubernetes_names(&r.namespace, &r.pod)?;
+    if r.target_kind.as_deref() != Some("aws-vm") {
+        validate_kubernetes_required_fields(r)?;
+        validate_kubernetes_names(&r.namespace, &r.pod)?;
+    } else if r.vm.is_none() {
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "VM stream request requires vm config",
+        ));
+    }
     validate_log_file_path(&r.file_path)?;
     validate_initial_tail_lines(r.initial_tail_lines)
 }
 
 fn validate_required_fields(r: &StartLogStreamRequest) -> Result<(), CommandError> {
-    if r.stream_id.trim().is_empty()
-        || r.namespace.trim().is_empty()
-        || r.pod.trim().is_empty()
-        || r.container.trim().is_empty()
-        || r.file_path.trim().is_empty()
-    {
+    if r.stream_id.trim().is_empty() || r.file_path.trim().is_empty() {
         return Err(CommandError::new(
             "invalid_source_config",
             "stream request fields must be non-empty",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_target_kind(r: &StartLogStreamRequest) -> Result<(), CommandError> {
+    if matches!(r.target_kind.as_deref(), None | Some("kubernetes") | Some("aws-vm")) {
+        return Ok(());
+    }
+    Err(CommandError::new(
+        "invalid_source_config",
+        "targetKind must be kubernetes or aws-vm",
+    ))
+}
+
+fn validate_kubernetes_required_fields(r: &StartLogStreamRequest) -> Result<(), CommandError> {
+    if r.namespace.trim().is_empty() || r.pod.trim().is_empty() || r.container.trim().is_empty() {
+        return Err(CommandError::new(
+            "invalid_source_config",
+            "Kubernetes stream request fields must be non-empty",
         ));
     }
     Ok(())

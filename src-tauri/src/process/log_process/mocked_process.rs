@@ -3,6 +3,7 @@ use super::*;
 fn request() -> StartLogStreamRequest {
     StartLogStreamRequest {
         stream_id: "s".into(),
+        target_kind: None,
         context: Some("ctx".into()),
         namespace: "ns".into(),
         pod: "pod-1".into(),
@@ -10,6 +11,7 @@ fn request() -> StartLogStreamRequest {
         source_type: "info".into(),
         file_path: "/x".into(),
         initial_tail_lines: 1,
+        vm: None,
     }
 }
 

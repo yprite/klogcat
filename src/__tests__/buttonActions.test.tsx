@@ -69,8 +69,8 @@ describe('button actions', () => {
 
     const start = screen.getByRole('button', { name: 'Start' })
     expect(start).toBeDisabled()
-    expect(start).toHaveAttribute('title', expect.stringMatching(/select namespace and pod/i))
-    expect(screen.getByText(/Start: unavailable \(Select namespace and pod\)/)).toBeInTheDocument()
+    expect(start).toHaveAttribute('title', expect.stringMatching(/select a pod or VM target/i))
+    expect(screen.getByText(/Start: unavailable \(Select a pod or VM target\)/)).toBeInTheDocument()
   })
 
   it('groups log source toggles with stream controls while keeping viewer and status groups separate', () => {
@@ -104,7 +104,7 @@ describe('button actions', () => {
 
     const start = screen.getByRole('button', { name: 'Start' })
     expect(start).toBeDisabled()
-    expect(start).toHaveAttribute('title', expect.stringMatching(/select namespace and pod/i))
+    expect(start).toHaveAttribute('title', expect.stringMatching(/select a pod or VM target/i))
   })
 
   it('reports empty stop attempts through the shared stream action helper', async () => {

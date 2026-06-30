@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useVmStore } from '../stores/vmStore'
 import { DEFAULT_LOG_VIEWER_EXTENSION_ID, findLogViewerExtension, useLogViewerExtensions } from '../extensions/logViewerExtensions'
 import { toLogViewerExtensionSnapshot } from '../extensions/logViewerSdkAdapter'
 import { createLogViewerExtensionHostApi } from '../sdk/log-viewer'
@@ -11,6 +13,8 @@ export function LogViewerExtensionHost({ children }: { children: ReactNode }) {
   const [investigationMode, setInvestigationMode] = useState<InvestigationMode>(DEFAULT_LOG_VIEWER_EXTENSION_ID)
   const kube = useKubeStore()
   const log = useLogStore()
+  const vm = useVmStore()
+  const settings = useSettingsStore()
   const logViewerExtensions = useLogViewerExtensions()
   useEffect(() => {
     if (!findLogViewerExtension(investigationMode, logViewerExtensions)) setInvestigationMode(DEFAULT_LOG_VIEWER_EXTENSION_ID)
@@ -18,17 +22,21 @@ export function LogViewerExtensionHost({ children }: { children: ReactNode }) {
 
   const activeLogViewerExtension = findLogViewerExtension(investigationMode, logViewerExtensions) ?? logViewerExtensions[0]
   const ActiveLogViewer = activeLogViewerExtension.component
-  const extensionSnapshot = toLogViewerExtensionSnapshot(log, kube)
+  const extensionSnapshot = toLogViewerExtensionSnapshot(log, kube, vm, settings)
   const extensionSdk = useMemo(() => createLogViewerExtensionHostApi({
     capabilities: activeLogViewerExtension.requestedCapabilities,
-    getSnapshot: () => toLogViewerExtensionSnapshot(useLogStore.getState(), useKubeStore.getState()),
+    getSnapshot: () => toLogViewerExtensionSnapshot(useLogStore.getState(), useKubeStore.getState(), useVmStore.getState(), useSettingsStore.getState()),
     subscribe: (listener) => {
       let sequence = 0
       const unsubscribeLog = useLogStore.subscribe(() => listener({ type: 'snapshot', reason: 'log-state', sequence: sequence += 1 }))
       const unsubscribeKube = useKubeStore.subscribe(() => listener({ type: 'snapshot', reason: 'target-state', sequence: sequence += 1 }))
+      const unsubscribeVm = useVmStore.subscribe(() => listener({ type: 'snapshot', reason: 'target-state', sequence: sequence += 1 }))
+      const unsubscribeSettings = useSettingsStore.subscribe(() => listener({ type: 'snapshot', reason: 'target-state', sequence: sequence += 1 }))
       return () => {
         unsubscribeLog()
         unsubscribeKube()
+        unsubscribeVm()
+        unsubscribeSettings()
       }
     },
     actions: {

@@ -1,6 +1,7 @@
 import type { SourceLogType } from './log'
 import type { LogPolicy, LogPolicySelectionId } from '../utils/logPolicy'
 import type { Language } from '../utils/i18n'
+import type { TargetPluginSettings } from './vm'
 
 export type LogSourceConfig = { container: string; filePath: string }
 export type KeyboardShortcuts = {
@@ -19,6 +20,7 @@ export type PersistedSettings = {
   shortcuts?: KeyboardShortcuts
   logPolicyId?: LogPolicySelectionId
   logPolicy?: LogPolicy
+  targetPlugins: TargetPluginSettings
 }
 export type SettingsWarning = { code: 'read_failed' | 'parse_failed'; message: string; details?: string }
 export type GetSettingsResponse = { settings: PersistedSettings; warning?: SettingsWarning }
