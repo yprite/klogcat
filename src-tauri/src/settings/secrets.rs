@@ -105,7 +105,7 @@ where
     transform(secret).map(Some)
 }
 
-fn encrypt_secret(settings_path: &PathBuf, plain: &str) -> Result<String, CommandError> {
+fn encrypt_secret(settings_path: &Path, plain: &str) -> Result<String, CommandError> {
     let key = settings_encryption_key(settings_path)?;
     let mut nonce_bytes = [0_u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -120,7 +120,7 @@ fn encrypt_secret(settings_path: &PathBuf, plain: &str) -> Result<String, Comman
     ))
 }
 
-fn decrypt_secret(settings_path: &PathBuf, value: &str) -> Result<String, CommandError> {
+fn decrypt_secret(settings_path: &Path, value: &str) -> Result<String, CommandError> {
     let Some(encoded) = value.strip_prefix(SECRET_PREFIX) else {
         return Ok(value.to_owned());
     };
