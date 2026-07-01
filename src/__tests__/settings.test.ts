@@ -49,6 +49,7 @@ describe('settings validation', () => {
     const settings = {
       ...defaultSettings,
       targetPlugins: {
+        ...defaultSettings.targetPlugins,
         awsVm: {
           ...defaultSettings.targetPlugins.awsVm,
           enabled: true,
