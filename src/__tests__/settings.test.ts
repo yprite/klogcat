@@ -33,14 +33,16 @@ describe('settings validation', () => {
   it('validates AWS VM target plugin settings', () => {
     const enabled = { ...defaultSettings.targetPlugins.awsVm, enabled: true }
     const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret' }
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionHost: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionHost' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPort: 0 } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPort' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPassword: 'bad\0secret' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPassword' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionUsername: '-bad' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPasswordMode: 'password-plus-totp', bastionTotpSecret: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionTotpSecret' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, logPaths: { info: '/x' } } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.logPaths' }))
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, vmUsername: 'operator@example.com' } } })).toEqual([])
-    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, bastionHost: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionHost' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, bastionPort: 0 } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPort' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, bastionPassword: 'bad\0secret' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPassword' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, bastionUsername: '-bad' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, bastionPasswordMode: 'password-plus-totp', bastionTotpSecret: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionTotpSecret' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...enabled, logPaths: { info: '/x' } } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.logPaths' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...validEnabled, vmUsername: 'operator@example.com' } } })).toEqual([])
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, csvFile: { enabled: true, csvText: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.csvFile.csvText' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { ...defaultSettings.targetPlugins, csvFile: { enabled: true, csvText: 'name,address\napi,10.0.0.7' } } })).toEqual([])
   })
 
   it('accepts AWS VM bastion groups and module overrides', () => {

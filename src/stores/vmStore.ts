@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { listVmTargets } from '../commands/tauriVm'
 import type { CommandError } from '../commands/types'
+import { csvTargetsFromText } from '../plugins/csvFileTargetPlugin'
 import type { TargetPluginSettings, VmTargetInfo } from '../types/vm'
 
 type VmState = {
@@ -21,16 +22,28 @@ export const useVmStore = create<VmState>((set, get) => ({
   selectedTargetIds: [],
   loading: false,
   async loadTargets(plugin) {
-    if (!plugin.awsVm.enabled) {
+    if (!plugin.awsVm.enabled && !plugin.csvFile.enabled) {
       set({ targets: [], selectedTargetIds: [], error: undefined, loading: false })
+      return
+    }
+    const csvTargets = plugin.csvFile.enabled ? csvTargetsFromText(plugin.csvFile.csvText) : []
+    if (!plugin.awsVm.enabled) {
+      const ids = new Set(csvTargets.map(vmTargetValue))
+      set((state) => ({
+        targets: csvTargets,
+        selectedTargetIds: state.selectedTargetIds.filter((id) => ids.has(id)),
+        error: undefined,
+        loading: false,
+      }))
       return
     }
     set({ loading: true, error: undefined })
     try {
       const res = await listVmTargets(plugin)
-      const ids = new Set(res.targets.map(vmTargetValue))
+      const targets = [...res.targets, ...csvTargets]
+      const ids = new Set(targets.map(vmTargetValue))
       set((state) => ({
-        targets: res.targets,
+        targets,
         selectedTargetIds: state.selectedTargetIds.filter((id) => ids.has(id)),
         loading: false,
         error: undefined,

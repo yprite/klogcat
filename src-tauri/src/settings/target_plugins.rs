@@ -12,6 +12,7 @@ const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TargetPluginSettings {
     pub aws_vm: AwsVmTargetPluginSettings,
+    pub csv_file: CsvFileTargetPluginSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +35,13 @@ pub struct AwsVmTargetPluginSettings {
     pub target_groups: Vec<AwsVmTargetGroupSettings>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CsvFileTargetPluginSettings {
+    pub enabled: bool,
+    pub csv_text: String,
+}
+
 pub(crate) fn default_target_plugins() -> TargetPluginSettings {
     TargetPluginSettings {
         aws_vm: AwsVmTargetPluginSettings {
@@ -50,6 +58,10 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
             strict_host_key_checking: true,
             log_paths: default_vm_log_paths(),
             target_groups: Vec::new(),
+        },
+        csv_file: CsvFileTargetPluginSettings {
+            enabled: false,
+            csv_text: String::new(),
         },
     }
 }
@@ -75,6 +87,7 @@ pub(crate) fn validate_target_plugins(
     validate_target_groups(plugin, errors);
     validate_effective_target_groups(plugin, errors);
     validate_log_paths(plugin, errors);
+    validate_csv_file_plugin(&settings.csv_file, errors);
 }
 
 fn validate_bastion_port(
@@ -264,6 +277,43 @@ fn is_safe_email_label(value: &str) -> bool {
         && first.is_ascii_alphanumeric()
         && !value.ends_with('-')
         && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+}
+
+fn validate_csv_file_plugin(
+    plugin: &CsvFileTargetPluginSettings,
+    errors: &mut Vec<SettingsValidationError>,
+) {
+    if plugin.enabled && !csv_has_address_row(&plugin.csv_text) {
+        errors.push(err(
+            "targetPlugins.csvFile.csvText",
+            "csvText must include a header and at least one row with address/ip/host",
+        ));
+    }
+}
+
+fn csv_has_address_row(csv_text: &str) -> bool {
+    let mut lines = csv_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let Some(header) = lines.next() else {
+        return false;
+    };
+    let headers = header
+        .split(',')
+        .map(|value| value.trim().to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let Some(address_index) = headers
+        .iter()
+        .position(|header| matches!(header.as_str(), "address" | "ip" | "host"))
+    else {
+        return false;
+    };
+    lines.any(|line| {
+        line.split(',')
+            .nth(address_index)
+            .is_some_and(|value| !value.trim().is_empty())
+    })
 }
 
 fn err(field: impl Into<String>, message: impl Into<String>) -> SettingsValidationError {
