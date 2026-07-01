@@ -1,10 +1,12 @@
 import type { SettingsValidationError } from '../types/settings'
 import type { TargetPluginSettings } from '../types/vm'
 import { awsVmTargetPlugin } from './awsVmTargetPlugin'
+import { csvFileTargetPlugin } from './csvFileTargetPlugin'
 import { TARGET_PLUGIN_RUNTIME_CAPABILITIES, type TargetPluginDefinition } from './pluginModel'
 
 export const targetPluginDefinitions = Object.freeze([
   awsVmTargetPlugin,
+  csvFileTargetPlugin,
 ])
 const knownTargetCapabilities = new Set(TARGET_PLUGIN_RUNTIME_CAPABILITIES)
 

@@ -41,8 +41,14 @@ export type AwsVmTargetPluginSettings = {
   targetGroups: AwsVmTargetGroupSettings[]
 }
 
+export type CsvFileTargetPluginSettings = {
+  enabled: boolean
+  csvText: string
+}
+
 export type TargetPluginSettings = {
   awsVm: AwsVmTargetPluginSettings
+  csvFile: CsvFileTargetPluginSettings
 }
 
 export type VmTargetInfo = {

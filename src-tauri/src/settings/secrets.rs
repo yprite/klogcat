@@ -7,7 +7,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::Path};
 
 pub(crate) const SECRET_PREFIX: &str = "klogcat-secret:v1:";
 const SECRET_FIELDS: [&str; 3] = ["bastionPassword", "bastionTotpSecret", "vmPassword"];
@@ -16,14 +16,14 @@ const KEY_LEN: usize = 32;
 
 pub(crate) fn decrypt_aws_vm_secrets(
     value: &mut serde_json::Value,
-    settings_path: &PathBuf,
+    settings_path: &Path,
 ) -> Result<(), CommandError> {
     transform_aws_vm_secrets(value, |secret| decrypt_secret(settings_path, secret))
 }
 
 pub(crate) fn encrypt_aws_vm_secrets(
     value: &mut serde_json::Value,
-    settings_path: &PathBuf,
+    settings_path: &Path,
 ) -> Result<(), CommandError> {
     transform_aws_vm_secrets(value, |secret| match should_encrypt(secret) {
         true => encrypt_secret(settings_path, secret),
@@ -102,7 +102,7 @@ where
     transform(secret).map(Some)
 }
 
-fn encrypt_secret(settings_path: &PathBuf, plain: &str) -> Result<String, CommandError> {
+fn encrypt_secret(settings_path: &Path, plain: &str) -> Result<String, CommandError> {
     let key = settings_encryption_key(settings_path)?;
     let mut nonce_bytes = [0_u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -117,7 +117,7 @@ fn encrypt_secret(settings_path: &PathBuf, plain: &str) -> Result<String, Comman
     ))
 }
 
-fn decrypt_secret(settings_path: &PathBuf, value: &str) -> Result<String, CommandError> {
+fn decrypt_secret(settings_path: &Path, value: &str) -> Result<String, CommandError> {
     let Some(encoded) = value.strip_prefix(SECRET_PREFIX) else {
         return Ok(value.to_owned());
     };
@@ -155,7 +155,7 @@ fn cipher_for_key(key: &[u8; KEY_LEN]) -> Result<Aes256Gcm, CommandError> {
     })
 }
 
-fn settings_encryption_key(settings_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn settings_encryption_key(settings_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     if let Some(key) = key_from_env()? {
         return Ok(key);
     }
@@ -180,7 +180,7 @@ fn key_from_env() -> Result<Option<[u8; KEY_LEN]>, CommandError> {
         .map(Some)
 }
 
-fn read_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn read_key_file(key_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     let encoded = fs::read_to_string(key_path).map_err(|e| {
         secret_key_error("failed to read settings encryption key").with_details(e.to_string())
     })?;
@@ -192,7 +192,7 @@ fn read_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
         .and_then(|decoded| key_from_slice(&decoded))
 }
 
-fn create_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn create_key_file(key_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     let mut key = [0_u8; KEY_LEN];
     OsRng.fill_bytes(&mut key);
     ensure_key_parent(key_path)?;
@@ -203,7 +203,7 @@ fn create_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
     Ok(key)
 }
 
-fn ensure_key_parent(key_path: &std::path::Path) -> Result<(), CommandError> {
+fn ensure_key_parent(key_path: &Path) -> Result<(), CommandError> {
     let Some(parent) = key_path.parent() else {
         return Ok(());
     };
@@ -212,7 +212,7 @@ fn ensure_key_parent(key_path: &std::path::Path) -> Result<(), CommandError> {
     })
 }
 
-fn protect_key_file(key_path: &PathBuf) -> Result<(), CommandError> {
+fn protect_key_file(key_path: &Path) -> Result<(), CommandError> {
     #[cfg(unix)]
     fs::set_permissions(key_path, fs::Permissions::from_mode(0o600)).map_err(|e| {
         secret_key_error("failed to protect settings encryption key").with_details(e.to_string())

@@ -11,7 +11,9 @@ mod vm_target_group_tests;
 
 pub use target_plugin_groups::{AwsVmTargetGroupSettings, AwsVmTargetModuleSettings};
 use target_plugins::{default_target_plugins, validate_target_plugins};
-pub use target_plugins::{AwsVmTargetPluginSettings, TargetPluginSettings};
+pub use target_plugins::{
+    AwsVmTargetPluginSettings, CsvFileTargetPluginSettings, TargetPluginSettings,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

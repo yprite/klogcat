@@ -26,7 +26,7 @@ const label = {
   failedRequests: /^(Failed Requests|실패 요청)$/,
   rawLogs: /^(Raw Logs|원본 로그)$/,
   start: /^(Start|시작)$/,
-  startUnavailable: /Start: unavailable \(Select namespace and pod\)|시작: 사용 불가 \(Namespace와 Pod 선택\)/,
+  startUnavailable: /Start: unavailable \(Select a pod or VM target\)|시작: 사용 불가 \(Pod 또는 VM target 선택\)/,
   filterUrl: /^(Filter url|필터 url)$/,
   filterStatus: /^(Filter status|필터 status)$/,
   filterTrId: /^(Filter trId|필터 trId)$/,

@@ -3,12 +3,13 @@ import type { TargetPluginSettings } from '../types/vm'
 
 export type KlogcatPluginKind = 'target' | 'viewer'
 export type KlogcatPluginSource = 'core' | 'third-party'
-export type TargetPluginRuntimeCapability = 'target.discovery' | 'process.spawn' | 'network.ssh'
+export type TargetPluginRuntimeCapability = 'target.discovery' | 'process.spawn' | 'network.ssh' | 'file.read'
 
 export const TARGET_PLUGIN_RUNTIME_CAPABILITIES: readonly TargetPluginRuntimeCapability[] = [
   'target.discovery',
   'process.spawn',
   'network.ssh',
+  'file.read',
 ]
 
 export type KlogcatPluginManifest = {

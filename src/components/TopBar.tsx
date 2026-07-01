@@ -40,7 +40,7 @@ export function TopBar({ onSettings, onContextChange, onNamespaceChange, onPodCh
   const kube = useKubeStore()
   const vm = useVmStore()
   const language = useSettingsStore((s) => s.settings?.language)
-  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
+  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm') || isTargetPluginEnabled(s.settings?.targetPlugins, 'csvFile'))
   const [targetPickerOpen, setTargetPickerOpen] = useState(false)
   const selectedCount = selectedTargetCount(kube, vm, vmTargetsEnabled)
   const targetsLoading = kube.loadingContexts || kube.loadingNamespaces || kube.loadingPods || kube.cacheRefreshing || vm.loading

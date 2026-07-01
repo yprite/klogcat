@@ -30,6 +30,10 @@ function languageForDraft(draft: PersistedSettings, settings: PersistedSettings 
   return draft.language ?? settings?.language ?? 'en'
 }
 
+function hasVmLikeTargetPlugin(settings: PersistedSettings | undefined) {
+  return isTargetPluginEnabled(settings?.targetPlugins, 'awsVm') || isTargetPluginEnabled(settings?.targetPlugins, 'csvFile')
+}
+
 function policyIdForSettings(settings: PersistedSettings) {
   return settings.logPolicyId ?? 'scloud'
 }
@@ -125,6 +129,10 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setNotice(undefined)
     setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, awsVm: { ...draft.targetPlugins.awsVm, logPaths: { ...draft.targetPlugins.awsVm.logPaths, [sourceType]: path } } } })
   }
+  const updateCsvFilePlugin = (patch: Partial<PersistedSettings['targetPlugins']['csvFile']>) => {
+    setNotice(undefined)
+    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, csvFile: { ...draft.targetPlugins.csvFile, ...patch } } })
+  }
   const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
     setSelectedPolicyId('custom')
@@ -145,7 +153,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     const ok = await resetSettings()
     if (ok) {
       const saved = settingsOrDefault(useSettingsStore.getState().settings)
-      if (!isTargetPluginEnabled(saved.targetPlugins, 'awsVm')) await cleanupDisabledAwsVmPlugin()
+      if (!hasVmLikeTargetPlugin(saved)) await cleanupDisabledAwsVmPlugin()
       setDraft(saved)
       setSelectedPolicyId(policyIdForSettings(saved))
       setPolicyText(defaultPolicyText(saved))
@@ -162,11 +170,12 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       logSources: derivedLogSources,
     }
     const wasAwsVmEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm')
+    const hadVmLikeTargets = hasVmLikeTargetPlugin(settings)
     const ok = canSave ? await saveSettings(nextDraft) : false
     if (ok) {
-      if (!isTargetPluginEnabled(nextDraft.targetPlugins, 'awsVm')) {
+      if (!hasVmLikeTargetPlugin(nextDraft)) {
         await cleanupDisabledAwsVmPlugin()
-      } else if (!wasAwsVmEnabled) {
+      } else if (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.targetPlugins, 'csvFile')) {
         await useVmStore.getState().loadTargets(nextDraft.targetPlugins)
       }
       onClose()
@@ -219,7 +228,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
         <SettingsNav activeSection={activeSection} language={language} onSectionChange={setActiveSection} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
+          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
         </div>
       </div>
       <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />
