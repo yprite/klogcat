@@ -4,7 +4,13 @@ use super::{
 use crate::error::SettingsValidationError;
 
 const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
-const REQUIRED_AWS_VM_FIELDS: [(&str, fn(&AwsVmTargetPluginSettings) -> &str); 6] = [
+
+type AwsVmTextField = (
+    &'static str,
+    for<'a> fn(&'a AwsVmTargetPluginSettings) -> &'a str,
+);
+
+const REQUIRED_AWS_VM_FIELDS: [AwsVmTextField; 6] = [
     ("bastionHost", |plugin| &plugin.bastion_host),
     ("bastionUsername", |plugin| &plugin.bastion_username),
     ("bastionPasswordEnv", |plugin| &plugin.bastion_password_env),
@@ -14,11 +20,11 @@ const REQUIRED_AWS_VM_FIELDS: [(&str, fn(&AwsVmTargetPluginSettings) -> &str); 6
         &plugin.consul_catalog_command
     }),
 ];
-const ENV_FIELDS: [(&str, fn(&AwsVmTargetPluginSettings) -> &str); 2] = [
+const ENV_FIELDS: [AwsVmTextField; 2] = [
     ("bastionPasswordEnv", |plugin| &plugin.bastion_password_env),
     ("vmPasswordEnv", |plugin| &plugin.vm_password_env),
 ];
-const SSH_USERNAME_FIELDS: [(&str, fn(&AwsVmTargetPluginSettings) -> &str); 2] = [
+const SSH_USERNAME_FIELDS: [AwsVmTextField; 2] = [
     ("bastionUsername", |plugin| &plugin.bastion_username),
     ("vmUsername", |plugin| &plugin.vm_username),
 ];

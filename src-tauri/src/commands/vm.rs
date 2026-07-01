@@ -370,10 +370,9 @@ fn wait_for_shell(
     deadline: Instant,
 ) -> Result<Output, CommandError> {
     loop {
-        let output = try_collect_finished_shell(&mut child, &pipes).map_err(|error| {
+        let output = try_collect_finished_shell(&mut child, &pipes).inspect_err(|_| {
             kill_process_group(pid);
             let _ = child.kill();
-            error
         })?;
         if let Some(output) = output {
             return Ok(output);
