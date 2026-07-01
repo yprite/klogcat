@@ -110,44 +110,15 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
       </label>
     </div>
 
-    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-      <label className="block text-sm">{t(language, 'Bastion host')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionHost} onChange={(event) => updateAwsVmPlugin({ bastionHost: event.target.value })} /></label>
-      <label className="block text-sm">{t(language, 'Bastion port')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" type="number" value={plugin.bastionPort} onChange={(event) => updateAwsVmPlugin({ bastionPort: Number(event.target.value) })} /></label>
-      <label className="block text-sm">{t(language, 'Bastion username')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionUsername} onChange={(event) => updateAwsVmPlugin({ bastionUsername: event.target.value })} /></label>
-      <SecretInput label="Bastion password" language={language} value={plugin.bastionPassword} onChange={(value) => updateAwsVmPlugin({ bastionPassword: value })} />
-      <SecretInput label="Bastion TOTP secret" language={language} value={plugin.bastionTotpSecret ?? ''} onChange={(value) => updateAwsVmPlugin({ bastionTotpSecret: value })} />
-      <label className="block text-sm">{t(language, 'Bastion password mode')}<select className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionPasswordMode} onChange={(event) => updateAwsVmPlugin({ bastionPasswordMode: event.target.value as PersistedSettings['targetPlugins']['awsVm']['bastionPasswordMode'] })}>
-        <option value="password">{t(language, 'Password only')}</option>
-        <option value="password-plus-totp">{t(language, 'Password + current TOTP')}</option>
-      </select></label>
-      <label className="block text-sm">{t(language, 'VM username')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.vmUsername} onChange={(event) => updateAwsVmPlugin({ vmUsername: event.target.value })} /></label>
-      <SecretInput label="VM password" language={language} value={plugin.vmPassword} onChange={(value) => updateAwsVmPlugin({ vmPassword: value })} />
-    </div>
-
-    <label className="mt-3 block text-sm">{t(language, 'Consul catalog command')}
-      <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.consulCatalogCommand} onChange={(event) => updateAwsVmPlugin({ consulCatalogCommand: event.target.value })} />
-    </label>
-    <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-200">
-      <input type="checkbox" checked={plugin.strictHostKeyChecking} onChange={(event) => updateAwsVmPlugin({ strictHostKeyChecking: event.target.checked })} />
-      {t(language, 'Strict host key checking')}
-    </label>
-
-    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-      {sourceTypes.map((sourceType) => <label className="block rounded border border-slate-700 p-2 text-sm" key={sourceType}>
-        <span className="text-xs font-semibold uppercase text-slate-300">{t(language, '{sourceType} VM log path', { sourceType })}</span>
-        <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.logPaths[sourceType] ?? ''} onChange={(event) => updateAwsVmLogPath(sourceType, event.target.value)} />
-      </label>)}
-    </div>
-
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 space-y-3 rounded border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h4 className="text-sm font-semibold text-white">{t(language, 'Bastion and module targets')}</h4>
-          <p className="mt-1 text-xs text-slate-400">{t(language, 'Groups inherit the common settings above. Override only the bastion or module fields that differ.')}</p>
+          <h4 className="text-sm font-semibold text-white">{t(language, 'Bastion groups and modules')}</h4>
+          <p className="mt-1 text-xs text-slate-400">{t(language, 'Add each bastion once, then add modules under that bastion. Values below inherit from shared defaults unless overridden.')}</p>
         </div>
         <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addTargetGroup}>{t(language, 'Add bastion group')}</button>
       </div>
-      {targetGroups.length === 0 && <p className="rounded border border-dashed border-slate-700 bg-slate-900/50 p-2 text-xs text-slate-500">{t(language, 'No bastion groups configured. The single common VM target setup is used.')}</p>}
+      {targetGroups.length === 0 && <p className="rounded border border-dashed border-slate-700 bg-slate-950 p-2 text-xs text-slate-500">{t(language, 'No bastion groups configured yet.')}</p>}
       {targetGroups.map((group, index) => <AwsVmTargetGroupPanel
         group={group}
         index={index}
@@ -156,6 +127,39 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
         removeGroup={() => removeTargetGroup(index)}
         updateGroup={(nextGroup) => updateTargetGroup(index, nextGroup)}
       />)}
+    </div>
+
+    <div className="mt-4 rounded border border-slate-800 bg-slate-900/60 p-3">
+      <h4 className="text-sm font-semibold text-white">{t(language, 'Shared defaults')}</h4>
+      <p className="mt-1 text-xs text-slate-400">{t(language, 'Used by every bastion group and module unless that item overrides the field.')}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <label className="block text-sm">{t(language, 'Bastion host')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionHost} onChange={(event) => updateAwsVmPlugin({ bastionHost: event.target.value })} /></label>
+        <label className="block text-sm">{t(language, 'Bastion port')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" type="number" value={plugin.bastionPort} onChange={(event) => updateAwsVmPlugin({ bastionPort: Number(event.target.value) })} /></label>
+        <label className="block text-sm">{t(language, 'Bastion username')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionUsername} onChange={(event) => updateAwsVmPlugin({ bastionUsername: event.target.value })} /></label>
+        <SecretInput label="Bastion password" language={language} value={plugin.bastionPassword} onChange={(value) => updateAwsVmPlugin({ bastionPassword: value })} />
+        <SecretInput label="Bastion TOTP secret" language={language} value={plugin.bastionTotpSecret ?? ''} onChange={(value) => updateAwsVmPlugin({ bastionTotpSecret: value })} />
+        <label className="block text-sm">{t(language, 'Bastion password mode')}<select className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionPasswordMode} onChange={(event) => updateAwsVmPlugin({ bastionPasswordMode: event.target.value as PersistedSettings['targetPlugins']['awsVm']['bastionPasswordMode'] })}>
+          <option value="password">{t(language, 'Password only')}</option>
+          <option value="password-plus-totp">{t(language, 'Password + current TOTP')}</option>
+        </select></label>
+        <label className="block text-sm">{t(language, 'VM username')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.vmUsername} onChange={(event) => updateAwsVmPlugin({ vmUsername: event.target.value })} /></label>
+        <SecretInput label="VM password" language={language} value={plugin.vmPassword} onChange={(value) => updateAwsVmPlugin({ vmPassword: value })} />
+      </div>
+
+      <label className="mt-3 block text-sm">{t(language, 'Consul catalog command')}
+        <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.consulCatalogCommand} onChange={(event) => updateAwsVmPlugin({ consulCatalogCommand: event.target.value })} />
+      </label>
+      <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-200">
+        <input type="checkbox" checked={plugin.strictHostKeyChecking} onChange={(event) => updateAwsVmPlugin({ strictHostKeyChecking: event.target.checked })} />
+        {t(language, 'Strict host key checking')}
+      </label>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {sourceTypes.map((sourceType) => <label className="block rounded border border-slate-700 p-2 text-sm" key={sourceType}>
+          <span className="text-xs font-semibold uppercase text-slate-300">{t(language, '{sourceType} VM log path', { sourceType })}</span>
+          <input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.logPaths[sourceType] ?? ''} onChange={(event) => updateAwsVmLogPath(sourceType, event.target.value)} />
+        </label>)}
+      </div>
     </div>
 
     <p className="mt-2 text-xs text-slate-500">{t(language, 'After saving, open the VM tab in target selection to load Consul catalog results.')}</p>
