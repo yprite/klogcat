@@ -2,6 +2,7 @@ import type { PodInfo } from '../types/kube'
 import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
 import type { VmTargetInfo } from '../types/vm'
+import { awsVmPluginForTarget } from '../plugins/awsVmTargetPlugin'
 import { scopeKey, useKubeStore } from '../stores/kubeStore'
 import { useLogStore } from '../stores/logStore'
 import { startLogStream, stopLogStream } from '../commands/tauriLogs'
@@ -230,7 +231,7 @@ async function launchVmLogStream(
   settings: PersistedSettings,
   log: LogStoreState,
 ): Promise<LaunchResult> {
-  const plugin = settings.targetPlugins.awsVm
+  const plugin = awsVmPluginForTarget(settings.targetPlugins.awsVm, target.vm)
   const filePath = plugin.logPaths[selectedSourceType]
   const streamId = crypto.randomUUID()
   const namespace = 'aws-vm'

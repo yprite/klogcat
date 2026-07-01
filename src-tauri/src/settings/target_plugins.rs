@@ -1,3 +1,7 @@
+use super::target_plugin_groups::{
+    validate_effective_target_groups, validate_group_log_paths, validate_group_secret_values,
+    validate_group_usernames, validate_target_groups, AwsVmTargetGroupSettings,
+};
 use crate::error::SettingsValidationError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -26,6 +30,8 @@ pub struct AwsVmTargetPluginSettings {
     pub consul_catalog_command: String,
     pub strict_host_key_checking: bool,
     pub log_paths: BTreeMap<String, String>,
+    #[serde(default)]
+    pub target_groups: Vec<AwsVmTargetGroupSettings>,
 }
 
 pub(crate) fn default_target_plugins() -> TargetPluginSettings {
@@ -43,6 +49,7 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
             consul_catalog_command: "consul catalog nodes -format=json".into(),
             strict_host_key_checking: true,
             log_paths: default_vm_log_paths(),
+            target_groups: Vec::new(),
         },
     }
 }
@@ -65,6 +72,8 @@ pub(crate) fn validate_target_plugins(
     validate_required_fields(plugin, errors);
     validate_secret_values(plugin, errors);
     validate_usernames(plugin, errors);
+    validate_target_groups(plugin, errors);
+    validate_effective_target_groups(plugin, errors);
     validate_log_paths(plugin, errors);
 }
 
@@ -100,7 +109,7 @@ fn validate_required_fields(
     plugin: &AwsVmTargetPluginSettings,
     errors: &mut Vec<SettingsValidationError>,
 ) {
-    if !plugin.enabled {
+    if !plugin.enabled || !plugin.target_groups.is_empty() {
         return;
     }
     for (field, value) in required_field_values(plugin) {
@@ -140,6 +149,7 @@ fn validate_secret_values(
         }
     }
     validate_totp_secret(plugin, errors);
+    validate_group_secret_values(plugin, errors);
 }
 
 fn validate_totp_secret(
@@ -174,6 +184,7 @@ fn validate_usernames(
     if !plugin.vm_username.trim().is_empty() && !is_vm_username(&plugin.vm_username) {
         errors.push(username_error("vmUsername"));
     }
+    validate_group_usernames(plugin, errors);
 }
 
 fn username_error(field: &str) -> SettingsValidationError {
@@ -188,6 +199,10 @@ fn validate_log_paths(
     errors: &mut Vec<SettingsValidationError>,
 ) {
     if !plugin.enabled {
+        return;
+    }
+    if !plugin.target_groups.is_empty() {
+        validate_group_log_paths(plugin, errors);
         return;
     }
     let keys: Vec<_> = plugin.log_paths.keys().map(String::as_str).collect();

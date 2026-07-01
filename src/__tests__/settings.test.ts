@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
+import { awsVmPluginForTarget } from '../plugins/awsVmTargetPlugin'
 
 describe('settings validation', () => {
   it('accepts default settings', () => { expect(validateSettings(defaultSettings)).toEqual([]) })
@@ -40,5 +41,42 @@ describe('settings validation', () => {
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, logPaths: { info: '/x' } } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.logPaths' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, vmUsername: 'operator@example.com' } } })).toEqual([])
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
+  })
+
+  it('accepts AWS VM bastion groups and module overrides', () => {
+    const settings = {
+      ...defaultSettings,
+      targetPlugins: {
+        awsVm: {
+          ...defaultSettings.targetPlugins.awsVm,
+          enabled: true,
+          bastionUsername: 'ops',
+          bastionPassword: 'bastion-secret',
+          vmUsername: 'operator@example.com',
+          vmPassword: 'vm-secret',
+          targetGroups: [{
+            id: 'prod',
+            name: 'Prod',
+            enabled: true,
+            bastionHost: 'bastion-prod.example.com',
+            modules: [{ id: 'api', name: 'API', consulCatalogCommand: 'consul catalog nodes -service api -format=json' }],
+          }],
+        },
+      },
+    }
+
+    expect(validateSettings(settings)).toEqual([])
+    const plugin = awsVmPluginForTarget(settings.targetPlugins.awsVm, {
+      id: 'prod:api:api-1',
+      name: 'api-1',
+      address: '10.0.0.7',
+      bastionId: 'prod',
+      bastionName: 'Prod',
+      moduleId: 'api',
+      moduleName: 'API',
+    })
+    expect(plugin.bastionHost).toBe('bastion-prod.example.com')
+    expect(plugin.consulCatalogCommand).toBe('consul catalog nodes -service api -format=json')
+    expect(plugin.targetGroups).toEqual([])
   })
 })

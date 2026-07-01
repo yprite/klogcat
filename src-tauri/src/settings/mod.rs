@@ -4,8 +4,12 @@ use std::{collections::BTreeMap, env, fs, path::PathBuf};
 use tauri::Manager;
 
 mod secrets;
+mod target_plugin_groups;
 mod target_plugins;
+#[cfg(test)]
+mod vm_target_group_tests;
 
+pub use target_plugin_groups::{AwsVmTargetGroupSettings, AwsVmTargetModuleSettings};
 use target_plugins::{default_target_plugins, validate_target_plugins};
 pub use target_plugins::{AwsVmTargetPluginSettings, TargetPluginSettings};
 
