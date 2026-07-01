@@ -5,6 +5,7 @@ import { getSettings as getSettingsCommand, resetSettings as resetSettingsComman
 import type { CommandError } from '../commands/types'
 import type { PersistedSettings, SettingsWarning } from '../types/settings'
 import { defaultAwsVmTargetPluginSettings } from '../plugins/awsVmTargetPlugin'
+import { defaultCsvFileTargetPluginSettings } from '../plugins/csvFileTargetPlugin'
 import { assertValidLogPolicy, getLogPolicy, setActiveLogPolicy } from '../utils/logPolicy'
 import { useLogStore } from './logStore'
 
@@ -12,6 +13,7 @@ function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
   const defaultNamespace = typeof settings.defaultNamespace === 'string' && settings.defaultNamespace.trim() ? settings.defaultNamespace.trim() : undefined
   const { bastionTotpProfile: _legacyTotpProfile, streamCommandTemplate: _legacyStreamTemplate, ...awsVmPatch } = (settings.targetPlugins?.awsVm ?? {}) as PersistedSettings['targetPlugins']['awsVm'] & { bastionTotpProfile?: string; streamCommandTemplate?: string }
   const awsVm = { ...defaultAwsVmTargetPluginSettings, ...awsVmPatch, logPaths: { ...defaultAwsVmTargetPluginSettings.logPaths, ...(awsVmPatch.logPaths ?? {}) } }
+  const csvFile = { ...defaultCsvFileTargetPluginSettings, ...(settings.targetPlugins?.csvFile ?? {}) }
   return {
     ...settings,
     defaultNamespace,
@@ -19,7 +21,7 @@ function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
     shortcuts: settings.shortcuts ?? defaultSettings.shortcuts,
     logPolicyId: settings.logPolicyId ?? 'scloud',
     logPolicy: settings.logPolicy ?? getLogPolicy(),
-    targetPlugins: { ...defaultSettings.targetPlugins, ...(settings.targetPlugins ?? {}), awsVm },
+    targetPlugins: { ...defaultSettings.targetPlugins, ...(settings.targetPlugins ?? {}), awsVm, csvFile },
   }
 }
 

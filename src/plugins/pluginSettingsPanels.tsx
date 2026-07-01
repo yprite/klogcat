@@ -6,6 +6,7 @@ type PluginSettingsPanelProps = {
   draft: PersistedSettings
   language?: Language
   sourceTypes: SourceLogType[]
+  updateCsvFilePlugin: (patch: Partial<PersistedSettings['targetPlugins']['csvFile']>) => void
   updateAwsVmLogPath: (sourceType: SourceLogType, path: string) => void
   updateAwsVmPlugin: (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => void
 }
@@ -57,8 +58,36 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
   </section>
 }
 
+function CsvFileTargetPluginSettingsPanel({ draft, language, updateCsvFilePlugin }: PluginSettingsPanelProps) {
+  const plugin = draft.targetPlugins.csvFile
+  const loadFile = (file: File | undefined) => {
+    if (!file) return
+    void file.text().then((csvText) => updateCsvFilePlugin({ csvText }))
+  }
+  return <section id="settings-csv-file-plugin" className="rounded border border-slate-700 bg-slate-950/60 p-3">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h3 className="text-sm font-semibold text-white">{t(language, 'CSV File Target Plugin')}</h3>
+        <p className="mt-1 text-xs text-slate-400">{t(language, 'Load VM log targets from a CSV file. Required header: address or ip or host. Optional headers: id, name, service, datacenter, tags.')}</p>
+      </div>
+      <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
+        <input type="checkbox" checked={plugin.enabled} onChange={(event) => updateCsvFilePlugin({ enabled: event.target.checked })} />
+        {t(language, 'Enabled')}
+      </label>
+    </div>
+    <label className="mt-3 block text-sm">{t(language, 'CSV file')}
+      <input accept=".csv,text/csv" className="mt-1 block w-full text-xs text-slate-300 file:mr-3 file:rounded file:border-0 file:bg-sky-500 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white" type="file" onChange={(event) => loadFile(event.currentTarget.files?.[0])} />
+    </label>
+    <label className="mt-3 block text-sm">{t(language, 'CSV content')}
+      <textarea className="mt-1 h-40 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.csvText} onChange={(event) => updateCsvFilePlugin({ csvText: event.target.value })} placeholder="id,name,address,service,datacenter,tags&#10;api-1,api-1,10.0.0.7,api,prod,blue|critical" />
+    </label>
+    <p className="mt-2 text-xs text-slate-500">{t(language, 'CSV targets use the VM SSH/log path settings when streams are started.')}</p>
+  </section>
+}
+
 export const pluginSettingsPanels = Object.freeze({
   awsVm: AwsVmPluginSettingsPanel,
+  csvFile: CsvFileTargetPluginSettingsPanel,
 })
 
 export function TargetPluginSettingsPanels(props: PluginSettingsPanelProps) {

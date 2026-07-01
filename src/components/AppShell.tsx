@@ -48,7 +48,7 @@ export function AppShell({ eventError }: { eventError?: string }) {
     const refreshPromise = useKubeStore.getState().refreshAllTargets(false)
     void refreshPromise
     const s = useSettingsStore.getState().settings
-    if (isTargetPluginEnabled(s?.targetPlugins, 'awsVm')) void useVmStore.getState().loadTargets(s!.targetPlugins)
+    if (isTargetPluginEnabled(s?.targetPlugins, 'awsVm') || isTargetPluginEnabled(s?.targetPlugins, 'csvFile')) void useVmStore.getState().loadTargets(s!.targetPlugins)
     if (s?.defaultNamespace) {
       if (!loadedCache && !useKubeStore.getState().selectedContext) await refreshPromise
       if (!useKubeStore.getState().namespaces.some(ns => ns.name === s.defaultNamespace)) await useKubeStore.getState().loadNamespaces()

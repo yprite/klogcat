@@ -33,6 +33,7 @@ pub struct LogSourceConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TargetPluginSettings {
     pub aws_vm: AwsVmTargetPluginSettings,
+    pub csv_file: CsvFileTargetPluginSettings,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -50,6 +51,12 @@ pub struct AwsVmTargetPluginSettings {
     pub consul_catalog_command: String,
     pub strict_host_key_checking: bool,
     pub log_paths: BTreeMap<String, String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CsvFileTargetPluginSettings {
+    pub enabled: bool,
+    pub csv_text: String,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +99,10 @@ fn default_target_plugins() -> TargetPluginSettings {
             consul_catalog_command: "consul catalog nodes -format=json".into(),
             strict_host_key_checking: true,
             log_paths: default_vm_log_paths(),
+        },
+        csv_file: CsvFileTargetPluginSettings {
+            enabled: false,
+            csv_text: String::new(),
         },
     }
 }

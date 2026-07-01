@@ -1,5 +1,6 @@
 import type { PersistedSettings } from '../types/settings'
 import { defaultAwsVmTargetPluginSettings } from '../plugins/awsVmTargetPlugin'
+import { defaultCsvFileTargetPluginSettings } from '../plugins/csvFileTargetPlugin'
 import { defaultLogSourcesFromPolicy, getLogPolicy } from '../utils/logPolicy'
 
 export const defaultSettings: PersistedSettings = {
@@ -18,5 +19,6 @@ export const defaultSettings: PersistedSettings = {
   logPolicy: getLogPolicy(),
   targetPlugins: {
     awsVm: defaultAwsVmTargetPluginSettings,
+    csvFile: defaultCsvFileTargetPluginSettings,
   },
 }

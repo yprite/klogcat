@@ -6,6 +6,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useVmStore, vmTargetValue } from '../stores/vmStore'
 import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { targetSelectionPanels } from '../plugins/targetSelectionPanels'
+import { isCsvTargetId } from '../plugins/csvFileTargetPlugin'
 import { t, translatePhase, type Language } from '../utils/i18n'
 
 type TargetSelectionHandlers = {
@@ -338,6 +339,7 @@ function SelectedTargetButton({ onPodChange, runSelectionChange, selectedPods, s
 function SelectedVmTargetButton({ onVmTargetChange, runSelectionChange, selectedVmTargets, selectionPending, setDraftSelectedVmTargets, value }: Pick<SelectedTargetsProps, 'onVmTargetChange' | 'runSelectionChange' | 'selectedVmTargets' | 'selectionPending' | 'setDraftSelectedVmTargets'> & { value: string }) {
   const target = useVmStore.getState().targets.find((item) => vmTargetValue(item) === value)
   const label = target ? `${target.name} / ${target.address}` : value
+  const targetLabel = isCsvTargetId(value) ? 'CSV' : 'AWS VM'
   const removeTarget = () => {
     const next = selectedVmTargets.filter((item) => item !== value)
     setDraftSelectedVmTargets(next)
@@ -345,14 +347,16 @@ function SelectedVmTargetButton({ onVmTargetChange, runSelectionChange, selected
   }
 
   return <button disabled={selectionPending} className="block w-full rounded border border-sky-400/40 bg-sky-400/10 px-2 py-1 text-left text-xs text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-70" onClick={removeTarget}>
-    AWS VM / {label} ×
+    {targetLabel} / {label} ×
   </button>
 }
 
 export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange, onPodChange, onVmTargetChange = () => undefined }: TargetSelectionHandlers) {
   const [query, setQuery] = useState('')
   const language = useSettingsStore((s) => s.settings?.language)
-  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
+  const awsVmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
+  const csvTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'csvFile'))
+  const vmTargetsEnabled = awsVmTargetsEnabled || csvTargetsEnabled
   const [selectionPending, setSelectionPending] = useState(false)
   const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
   const { kube, contextValues, namespaceValues, selectedPods, setDraftContextValues, setDraftNamespaceValues, setDraftSelectedPods } = useSelectionDrafts(selectionPending)
@@ -364,6 +368,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
   const contextsToProbe = contextsToProbeFromStore(kube, contextValues)
   const { discoveryActive, podRefreshActive } = getDiscoverySummaryState(kube)
   const AwsVmTargetSelectionPanel = targetSelectionPanels.awsVm
+  const CsvFileTargetSelectionPanel = targetSelectionPanels.csvFile
   const progressLabel = getProgressLabelFromKube(kube, language)
   const emptyState = resolveTargetSearchState(kube, normalizedQuery, language)
 
@@ -377,14 +382,14 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
   const handleDialogKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') onClose()
   }
-  const [targetTab, setTargetTab] = useState<'kubernetes' | 'aws-vm'>('kubernetes')
+  const [targetTab, setTargetTab] = useState<'kubernetes' | 'aws-vm' | 'csv-file'>('kubernetes')
 
   useEffect(() => {
-    if (!vmTargetsEnabled && targetTab === 'aws-vm') setTargetTab('kubernetes')
-  }, [targetTab, vmTargetsEnabled])
+    if ((!awsVmTargetsEnabled && targetTab === 'aws-vm') || (!csvTargetsEnabled && targetTab === 'csv-file')) setTargetTab('kubernetes')
+  }, [targetTab, awsVmTargetsEnabled, csvTargetsEnabled])
 
   useEffect(() => {
-    if (targetTab !== 'aws-vm' || !vmTargetsEnabled) return
+    if ((targetTab !== 'aws-vm' && targetTab !== 'csv-file') || !vmTargetsEnabled) return
     const pluginSettings = useSettingsStore.getState().settings?.targetPlugins
     const vmState = useVmStore.getState()
     if (pluginSettings && !vmState.loading && vmState.targets.length === 0) void vmState.loadTargets(pluginSettings)
@@ -411,13 +416,16 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
         <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / phase / container / VM name / IP')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
         {vmTargetsEnabled && <div className="mt-3 inline-flex rounded border border-slate-700 bg-slate-900 p-1" role="tablist" aria-label={t(language, 'Target source')}>
           <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'kubernetes' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'kubernetes'} onClick={() => setTargetTab('kubernetes')}>{t(language, 'Kubernetes')}</button>
-          <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'aws-vm' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'aws-vm'} onClick={() => setTargetTab('aws-vm')}>{t(language, 'AWS VM')}</button>
+          {awsVmTargetsEnabled && <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'aws-vm' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'aws-vm'} onClick={() => setTargetTab('aws-vm')}>{t(language, 'AWS VM')}</button>}
+          {csvTargetsEnabled && <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'csv-file' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'csv-file'} onClick={() => setTargetTab('csv-file')}>{t(language, 'CSV File')}</button>}
         </div>}
       </div>
       <div data-testid="target-picker-layout" className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-h-0 flex-col overflow-hidden">
           {activeTargetTab === 'aws-vm'
             ? <AwsVmTargetSelectionPanel language={language} normalizedQuery={normalizedQuery} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedVmTargets={setDraftSelectedVmTargets} />
+            : activeTargetTab === 'csv-file'
+              ? <CsvFileTargetSelectionPanel language={language} normalizedQuery={normalizedQuery} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedVmTargets={setDraftSelectedVmTargets} />
             : <TargetTree collapsedContexts={collapsedContexts} contextValues={contextValues} namespaceValues={namespaceValues} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} progressLabel={progressLabel} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setCollapsedContexts={setCollapsedContexts} setDraftContextValues={setDraftContextValues} setDraftNamespaceValues={setDraftNamespaceValues} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} emptyState={emptyState} language={language} />}
         </div>
         <SelectedTargetsPanel onPodChange={onPodChange} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} setDraftSelectedVmTargets={setDraftSelectedVmTargets} />

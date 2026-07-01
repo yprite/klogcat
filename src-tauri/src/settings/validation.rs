@@ -1,4 +1,6 @@
-use super::{AwsVmTargetPluginSettings, LogSourceConfig, PersistedSettings};
+use super::{
+    AwsVmTargetPluginSettings, CsvFileTargetPluginSettings, LogSourceConfig, PersistedSettings,
+};
 use crate::error::SettingsValidationError;
 
 const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
@@ -108,6 +110,7 @@ fn validate_target_plugins(s: &PersistedSettings, errors: &mut Vec<SettingsValid
     validate_aws_vm_totp(plugin, errors);
     validate_aws_vm_usernames(plugin, errors);
     validate_aws_vm_log_paths(plugin, errors);
+    validate_csv_file_plugin(&s.target_plugins.csv_file, errors);
 }
 
 fn validate_aws_vm_base(
@@ -222,6 +225,43 @@ fn validate_aws_vm_log_paths(
             ));
         }
     }
+}
+
+fn validate_csv_file_plugin(
+    plugin: &CsvFileTargetPluginSettings,
+    errors: &mut Vec<SettingsValidationError>,
+) {
+    if plugin.enabled && !csv_has_address_row(&plugin.csv_text) {
+        errors.push(err(
+            "targetPlugins.csvFile.csvText",
+            "csvText must include a header and at least one row with address/ip/host",
+        ));
+    }
+}
+
+fn csv_has_address_row(csv_text: &str) -> bool {
+    let mut lines = csv_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let Some(header) = lines.next() else {
+        return false;
+    };
+    let headers = header
+        .split(',')
+        .map(|value| value.trim().to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let Some(address_index) = headers
+        .iter()
+        .position(|header| matches!(header.as_str(), "address" | "ip" | "host"))
+    else {
+        return false;
+    };
+    lines.any(|line| {
+        line.split(',')
+            .nth(address_index)
+            .is_some_and(|value| !value.trim().is_empty())
+    })
 }
 
 fn sorted_keys<'a>(keys: impl Iterator<Item = &'a String>) -> Vec<&'a str> {

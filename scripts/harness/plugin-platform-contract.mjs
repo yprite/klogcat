@@ -52,6 +52,7 @@ check(
 check(
   'target registry registers aws vm target plugin',
   includes('src/plugins/targetPluginRegistry.ts', 'awsVmTargetPlugin') &&
+    includes('src/plugins/targetPluginRegistry.ts', 'csvFileTargetPlugin') &&
     includes('src/plugins/targetPluginRegistry.ts', 'targetPluginDefinitions') &&
     includes('src/plugins/targetPluginRegistry.ts', 'validateTargetPluginSettings') &&
     includes('src/plugins/targetPluginRegistry.ts', 'isTargetPluginEnabled') &&
@@ -62,7 +63,8 @@ check(
 check(
   'default settings consumes target plugin defaults',
   includes('src/config/defaultSettings.ts', 'defaultAwsVmTargetPluginSettings') &&
-    includes('src/config/defaultSettings.ts', 'awsVm: defaultAwsVmTargetPluginSettings'),
+    includes('src/config/defaultSettings.ts', 'awsVm: defaultAwsVmTargetPluginSettings') &&
+    includes('src/config/defaultSettings.ts', 'csvFile: defaultCsvFileTargetPluginSettings'),
 )
 
 check(
@@ -95,11 +97,12 @@ for (const file of [
 
 check(
   'target picker exposes kubernetes and aws vm tabs',
-  includes('src/components/TargetPickerDialog.tsx', "useState<'kubernetes' | 'aws-vm'>") &&
+  includes('src/components/TargetPickerDialog.tsx', "useState<'kubernetes' | 'aws-vm' | 'csv-file'>") &&
     includes('src/components/TargetPickerDialog.tsx', "role=\"tablist\"") &&
     includes('src/components/TargetPickerDialog.tsx', "role=\"tab\"") &&
     includes('src/components/TargetPickerDialog.tsx', "'Kubernetes'") &&
-    includes('src/components/TargetPickerDialog.tsx', "'AWS VM'"),
+    includes('src/components/TargetPickerDialog.tsx', "'AWS VM'") &&
+    includes('src/components/TargetPickerDialog.tsx', "'CSV File'"),
 )
 
 check(
@@ -121,7 +124,9 @@ check(
   'target selection panels are registered outside target picker',
   includes('src/plugins/targetSelectionPanels.tsx', 'targetSelectionPanels') &&
     includes('src/plugins/targetSelectionPanels.tsx', 'awsVm: AwsVmTargetSelectionPanel') &&
+    includes('src/plugins/targetSelectionPanels.tsx', 'csvFile: CsvFileTargetSelectionPanel') &&
     includes('src/components/TargetPickerDialog.tsx', 'targetSelectionPanels.awsVm') &&
+    includes('src/components/TargetPickerDialog.tsx', 'targetSelectionPanels.csvFile') &&
     notIncludes('src/components/TargetPickerDialog.tsx', 'function VmTargetsPanel') &&
     notIncludes('src/components/TargetPickerDialog.tsx', "type { VmTargetInfo }"),
 )
