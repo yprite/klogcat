@@ -72,7 +72,7 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   const policy = validateEmbeddedLogPolicy(value, errors)
   validateShortcuts(value.shortcuts, errors)
   validateLogSources(value.logSources, errors, policy)
-  validateTargetPluginSettings(value.targetPlugins, errors)
+  validateTargetPluginSettings(value.targetPlugins, errors, sourceKeys(policy))
   return errors
 }
 export function assertValidSettings(value: unknown): asserts value is PersistedSettings {

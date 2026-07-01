@@ -1,4 +1,5 @@
 import type { SettingsValidationError } from '../types/settings'
+import type { SourceLogType } from '../types/log'
 import type { TargetPluginSettings } from '../types/vm'
 import { awsVmTargetPlugin } from './awsVmTargetPlugin'
 import { TARGET_PLUGIN_RUNTIME_CAPABILITIES, type TargetPluginDefinition } from './pluginModel'
@@ -25,13 +26,13 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
   }
 }
 
-export function validateTargetPluginSettings(value: unknown, errors: SettingsValidationError[]) {
+export function validateTargetPluginSettings(value: unknown, errors: SettingsValidationError[], sourceTypes?: SourceLogType[]) {
   if (!isRecord(value)) {
     errors.push({ field: 'targetPlugins', message: 'targetPlugins must be an object' })
     return
   }
   rejectExtraKeys(value, targetPluginDefinitions.map((plugin) => plugin.settingsKey), 'targetPlugins', errors)
-  for (const plugin of targetPluginDefinitions) plugin.validate(value[plugin.settingsKey], errors)
+  for (const plugin of targetPluginDefinitions) plugin.validate(value[plugin.settingsKey], errors, sourceTypes)
 }
 
 export function getEnabledTargetPluginDefinitions(settings: TargetPluginSettings | undefined) {

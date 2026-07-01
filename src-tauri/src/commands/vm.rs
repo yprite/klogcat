@@ -2,9 +2,16 @@ use crate::error::CommandError;
 use crate::settings::{AwsVmTargetPluginSettings, TargetPluginSettings};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{io::Read, net::{IpAddr, Ipv4Addr}, process::{Command, Output}, sync::mpsc, thread, time::{Duration, Instant}};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+use std::{
+    io::Read,
+    net::{IpAddr, Ipv4Addr},
+    process::{Child, Command, Output},
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -78,34 +85,65 @@ pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(),
 }
 
 pub fn validate_aws_vm_plugin(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
+    validate_bastion_port(plugin)?;
+    validate_bastion_password_mode(plugin)?;
+    validate_plugin_env_names(plugin)?;
+    validate_consul_catalog_command(plugin)?;
+    validate_plugin_usernames(plugin)
+}
+
+fn validate_bastion_port(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
     if plugin.bastion_port == 0 {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
             "bastionPort must be 1..65535",
         ));
     }
-    if plugin.bastion_password_mode != "password"
-        && plugin.bastion_password_mode != "password-plus-totp"
-    {
-        return Err(CommandError::new(
-            "vm_plugin_config_invalid",
-            "bastionPasswordMode must be password or password-plus-totp",
-        ));
+    Ok(())
+}
+
+fn validate_bastion_password_mode(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
+    if matches!(
+        plugin.bastion_password_mode.as_str(),
+        "password" | "password-plus-totp"
+    ) {
+        return Ok(());
     }
+    Err(CommandError::new(
+        "vm_plugin_config_invalid",
+        "bastionPasswordMode must be password or password-plus-totp",
+    ))
+}
+
+fn validate_plugin_env_names(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
     validate_env_name(&plugin.bastion_password_env)?;
     validate_env_name(&plugin.vm_password_env)?;
-    if let Some(secret_env) = plugin.bastion_totp_secret_env.as_deref().filter(|v| !v.trim().is_empty()) {
+    if let Some(secret_env) = non_empty_totp_secret_env(plugin) {
         validate_env_name(secret_env)?;
     }
+    Ok(())
+}
+
+fn validate_consul_catalog_command(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
     if plugin.consul_catalog_command.trim().is_empty() {
         return Err(CommandError::new(
             "vm_plugin_config_invalid",
             "consulCatalogCommand is required",
         ));
     }
-    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
-    validate_ssh_username("vmUsername", &plugin.vm_username)?;
     Ok(())
+}
+
+fn validate_plugin_usernames(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
+    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
+    validate_ssh_username("vmUsername", &plugin.vm_username)
+}
+
+fn non_empty_totp_secret_env(plugin: &AwsVmTargetPluginSettings) -> Option<&str> {
+    plugin
+        .bastion_totp_secret_env
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
 }
 
 pub fn bastion_shell_command(
@@ -141,7 +179,8 @@ pub fn bastion_shell_command(
 pub fn ssh_options(plugin: &AwsVmTargetPluginSettings, batch_mode: bool) -> String {
     let batch = if batch_mode { "yes" } else { "no" };
     let prompts = if batch_mode { "0" } else { "1" };
-    let base = format!("-o BatchMode={batch} -o ConnectTimeout=10 -o NumberOfPasswordPrompts={prompts}");
+    let base =
+        format!("-o BatchMode={batch} -o ConnectTimeout=10 -o NumberOfPasswordPrompts={prompts}");
     if plugin.strict_host_key_checking {
         base
     } else {
@@ -285,6 +324,19 @@ pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
 }
 
 fn run_shell_with_timeout(command: &str, timeout: Duration) -> Result<Output, CommandError> {
+    let mut child = spawn_shell(command)?;
+    let pid = child.id();
+    let pipes = capture_child_pipes(&mut child)?;
+    let deadline = Instant::now() + timeout;
+    wait_for_shell(child, pid, pipes, deadline)
+}
+
+struct ShellPipes {
+    stdout: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    stderr: mpsc::Receiver<std::io::Result<Vec<u8>>>,
+}
+
+fn spawn_shell(command: &str) -> Result<Child, CommandError> {
     let mut child_command = Command::new("sh");
     child_command
         .arg("-lc")
@@ -292,54 +344,68 @@ fn run_shell_with_timeout(command: &str, timeout: Duration) -> Result<Output, Co
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     #[cfg(unix)]
-    {
-        child_command.process_group(0);
-    }
-    let mut child = child_command.spawn()
-        .map_err(|e| {
-            CommandError::new("vm_discovery_spawn_failed", "failed to spawn VM discovery command")
-                .with_details(e.to_string())
-        })?;
-    let pid = child.id();
-    let stdout = child.stdout.take().ok_or_else(|| {
-        CommandError::new("vm_discovery_failed", "failed to capture VM discovery stdout")
-    })?;
-    let stderr = child.stderr.take().ok_or_else(|| {
-        CommandError::new("vm_discovery_failed", "failed to capture VM discovery stderr")
-    })?;
-    let stdout_rx = read_pipe(stdout);
-    let stderr_rx = read_pipe(stderr);
-    let deadline = Instant::now() + timeout;
+    child_command.process_group(0);
+    child_command.spawn().map_err(|e| {
+        CommandError::new(
+            "vm_discovery_spawn_failed",
+            "failed to spawn VM discovery command",
+        )
+        .with_details(e.to_string())
+    })
+}
 
+fn capture_child_pipes(child: &mut Child) -> Result<ShellPipes, CommandError> {
+    let stdout = child.stdout.take().ok_or_else(|| capture_error("stdout"))?;
+    let stderr = child.stderr.take().ok_or_else(|| capture_error("stderr"))?;
+    Ok(ShellPipes {
+        stdout: read_pipe(stdout),
+        stderr: read_pipe(stderr),
+    })
+}
+
+fn wait_for_shell(
+    mut child: Child,
+    pid: u32,
+    pipes: ShellPipes,
+    deadline: Instant,
+) -> Result<Output, CommandError> {
     loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = collect_pipe(stdout_rx, "stdout")?;
-                let stderr = collect_pipe(stderr_rx, "stderr")?;
-                return Ok(Output { status, stdout, stderr });
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                kill_process_group(pid);
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(CommandError::new(
-                    "vm_discovery_timeout",
-                    "VM discovery timed out",
-                )
-                .with_details("Timed out while running Consul catalog command through bastion"));
-            }
-            Ok(None) => thread::sleep(Duration::from_millis(25)),
-            Err(e) => {
-                kill_process_group(pid);
-                let _ = child.kill();
-                return Err(CommandError::new(
-                    "vm_discovery_failed",
-                    "failed to wait for VM discovery command",
-                )
-                .with_details(e.to_string()));
-            }
+        let output = try_collect_finished_shell(&mut child, &pipes).map_err(|error| {
+            kill_process_group(pid);
+            let _ = child.kill();
+            error
+        })?;
+        if let Some(output) = output {
+            return Ok(output);
         }
+        if Instant::now() >= deadline {
+            return Err(stop_timed_out_shell(&mut child, pid));
+        }
+        thread::sleep(Duration::from_millis(25));
     }
+}
+
+fn try_collect_finished_shell(
+    child: &mut Child,
+    pipes: &ShellPipes,
+) -> Result<Option<Output>, CommandError> {
+    let status = match child.try_wait().map_err(wait_error)? {
+        Some(status) => status,
+        None => return Ok(None),
+    };
+    Ok(Some(Output {
+        status,
+        stdout: collect_pipe(&pipes.stdout, "stdout")?,
+        stderr: collect_pipe(&pipes.stderr, "stderr")?,
+    }))
+}
+
+fn stop_timed_out_shell(child: &mut Child, pid: u32) -> CommandError {
+    kill_process_group(pid);
+    let _ = child.kill();
+    let _ = child.wait();
+    CommandError::new("vm_discovery_timeout", "VM discovery timed out")
+        .with_details("Timed out while running Consul catalog command through bastion")
 }
 
 fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> mpsc::Receiver<std::io::Result<Vec<u8>>> {
@@ -352,7 +418,10 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> mpsc::Receiver<std::io:
     rx
 }
 
-fn collect_pipe(rx: mpsc::Receiver<std::io::Result<Vec<u8>>>, name: &str) -> Result<Vec<u8>, CommandError> {
+fn collect_pipe(
+    rx: &mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    name: &str,
+) -> Result<Vec<u8>, CommandError> {
     match rx.recv_timeout(Duration::from_secs(1)) {
         Ok(Ok(buffer)) => Ok(buffer),
         Ok(Err(e)) => Err(CommandError::new(
@@ -366,6 +435,21 @@ fn collect_pipe(rx: mpsc::Receiver<std::io::Result<Vec<u8>>>, name: &str) -> Res
         )
         .with_details(e.to_string())),
     }
+}
+
+fn capture_error(name: &str) -> CommandError {
+    CommandError::new(
+        "vm_discovery_failed",
+        format!("failed to capture VM discovery {name}"),
+    )
+}
+
+fn wait_error(error: std::io::Error) -> CommandError {
+    CommandError::new(
+        "vm_discovery_failed",
+        "failed to wait for VM discovery command",
+    )
+    .with_details(error.to_string())
 }
 
 fn kill_process_group(pid: u32) {
@@ -387,20 +471,24 @@ fn is_safe_host(value: &str) -> bool {
 
 fn is_allowed_vm_ip(ip: IpAddr) -> bool {
     match ip {
-        IpAddr::V4(address) => {
-            !address.is_loopback()
-                && !address.is_link_local()
-                && !address.is_unspecified()
-                && !address.is_multicast()
-                && address != Ipv4Addr::BROADCAST
-        }
-        IpAddr::V6(address) => {
-            !address.is_loopback()
-                && !address.is_unicast_link_local()
-                && !address.is_unspecified()
-                && !address.is_multicast()
-        }
+        IpAddr::V4(address) => is_allowed_ipv4(address),
+        IpAddr::V6(address) => is_allowed_ipv6(address),
     }
+}
+
+fn is_allowed_ipv4(address: Ipv4Addr) -> bool {
+    !address.is_loopback()
+        && !address.is_link_local()
+        && !address.is_unspecified()
+        && !address.is_multicast()
+        && address != Ipv4Addr::BROADCAST
+}
+
+fn is_allowed_ipv6(address: std::net::Ipv6Addr) -> bool {
+    !address.is_loopback()
+        && !address.is_unicast_link_local()
+        && !address.is_unspecified()
+        && !address.is_multicast()
 }
 
 fn is_safe_dns_name(value: &str) -> bool {
@@ -454,16 +542,43 @@ fn parse_vm_targets_json(input: &str) -> Result<Vec<VmTargetInfo>, CommandError>
 }
 
 fn vm_target_from_json(value: &Value) -> Option<VmTargetInfo> {
-    let address = first_string(value, &["Address", "address", "ServiceAddress", "serviceAddress", "ip"])?;
-    let name = first_string(value, &["Node", "node", "ServiceName", "serviceName", "name", "ID", "id"])
-        .unwrap_or_else(|| address.clone());
-    let id = first_string(value, &["ID", "id", "Node", "node", "name"]).unwrap_or_else(|| name.clone());
+    let address = first_string(
+        value,
+        &[
+            "Address",
+            "address",
+            "ServiceAddress",
+            "serviceAddress",
+            "ip",
+        ],
+    )?;
+    let name = first_string(
+        value,
+        &[
+            "Node",
+            "node",
+            "ServiceName",
+            "serviceName",
+            "name",
+            "ID",
+            "id",
+        ],
+    )
+    .unwrap_or_else(|| address.clone());
+    let id =
+        first_string(value, &["ID", "id", "Node", "node", "name"]).unwrap_or_else(|| name.clone());
     let tags = value
         .get("ServiceTags")
         .or_else(|| value.get("serviceTags"))
         .or_else(|| value.get("tags"))
         .and_then(Value::as_array)
-        .map(|items| items.iter().filter_map(Value::as_str).map(String::from).collect());
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        });
     Some(VmTargetInfo {
         id,
         name,
@@ -486,7 +601,10 @@ fn parse_vm_targets_lines(input: &str) -> Vec<VmTargetInfo> {
         .lines()
         .filter_map(|line| {
             let parts = line.split_whitespace().collect::<Vec<_>>();
-            let address = parts.iter().find(|part| looks_like_address(part))?.to_string();
+            let address = parts
+                .iter()
+                .find(|part| looks_like_address(part))?
+                .to_string();
             let name = parts.first().copied().unwrap_or(&address).to_string();
             let target = VmTargetInfo {
                 id: name.clone(),

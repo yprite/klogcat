@@ -1,4 +1,5 @@
 import type { SettingsValidationError } from '../types/settings'
+import type { SourceLogType } from '../types/log'
 import type { TargetPluginSettings } from '../types/vm'
 
 export type KlogcatPluginKind = 'target' | 'viewer'
@@ -28,7 +29,7 @@ export type TargetPluginDefinition<TSettings = unknown> = {
   requiredCapabilities: readonly TargetPluginRuntimeCapability[]
   defaultSettings: TSettings
   isEnabled(settings: TargetPluginSettings | undefined): boolean
-  validate(value: unknown, errors: SettingsValidationError[]): void
+  validate(value: unknown, errors: SettingsValidationError[], sourceTypes?: SourceLogType[]): void
 }
 
 export type ViewerPluginDefinition = {

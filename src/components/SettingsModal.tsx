@@ -39,15 +39,31 @@ function resolvePolicyState(selectedPolicyId: LogPolicySelectionId, parsedCustom
   return { policyDraft: logPolicyForBuiltinId(selectedPolicyId), policyError: undefined }
 }
 
+function defaultVmLogPath(sourceType: SourceLogType) {
+  return defaultSettings.targetPlugins.awsVm.logPaths[sourceType] ?? `/var/log/app/${sourceType}.log`
+}
+
+function syncTargetPluginLogPaths(draft: PersistedSettings, sourceTypes: SourceLogType[]) {
+  const logPaths = Object.fromEntries(sourceTypes.map((sourceType) => [
+    sourceType,
+    draft.targetPlugins.awsVm.logPaths[sourceType] || defaultVmLogPath(sourceType),
+  ])) as PersistedSettings['targetPlugins']['awsVm']['logPaths']
+  return {
+    ...draft.targetPlugins,
+    awsVm: { ...draft.targetPlugins.awsVm, logPaths },
+  }
+}
+
 function buildSaveState({ draft, selectedPolicyId, policyDraft, policyError, warnings, language }: { draft: PersistedSettings; selectedPolicyId: LogPolicySelectionId; policyDraft: LogPolicy | undefined; policyError: string | undefined; warnings: string[]; language: PersistedSettings['language'] }) {
   const derivedLogSources = policyDraft ? defaultLogSourcesFromPolicy(policyDraft) : draft.logSources
-  const validationErrors = validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy, logSources: derivedLogSources })
+  const derivedTargetPlugins = policyDraft ? syncTargetPluginLogPaths(draft, sourceTypesFromPolicy(policyDraft)) : draft.targetPlugins
+  const validationErrors = validateSettings({ ...draft, logPolicyId: selectedPolicyId, logPolicy: policyDraft ?? draft.logPolicy, logSources: derivedLogSources, targetPlugins: derivedTargetPlugins })
   const errors = policyError ? [...validationErrors, { field: 'logPolicy', message: policyError }] : validationErrors
   const canSave = policyDraft !== undefined && errors.length === 0 && warnings.length === 0
   const saveBlockedReason = canSave
     ? undefined
     : t(language, errors.length > 0 ? 'Fix validation errors before saving.' : 'Fix path warnings before saving.')
-  return { canSave, derivedLogSources, errors, saveBlockedReason }
+  return { canSave, derivedLogSources, derivedTargetPlugins, errors, saveBlockedReason }
 }
 
 export function SettingsModal({ open, onClose, onRestart = () => window.location.reload() }: { open: boolean; onClose: () => void; onRestart?: () => void }) {
@@ -108,7 +124,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const sourceTypes = sourceTypesFromPolicy(previewPolicy)
   const activeTarget = useKubeStore.getState().getSelectedPodTargets()[0]
   const warnings = buildPreviewWarnings(previewPolicy, sourceTypes, language)
-  const { canSave, derivedLogSources, errors, saveBlockedReason } = buildSaveState({ draft, selectedPolicyId, policyDraft, policyError, warnings, language })
+  const { canSave, derivedLogSources, derivedTargetPlugins, errors, saveBlockedReason } = buildSaveState({ draft, selectedPolicyId, policyDraft, policyError, warnings, language })
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
   const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
@@ -160,6 +176,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       logPolicyId: selectedPolicyId,
       logPolicy: policyDraft,
       logSources: derivedLogSources,
+      targetPlugins: derivedTargetPlugins,
     }
     const wasAwsVmEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm')
     const ok = canSave ? await saveSettings(nextDraft) : false

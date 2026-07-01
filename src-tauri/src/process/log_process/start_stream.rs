@@ -1,8 +1,8 @@
 use super::*;
 use crate::kubectl::kubectl_binary;
-use std::process::{Command, Stdio};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+use std::process::{Command, Stdio};
 
 pub(super) fn kubectl_tail_args(request: &StartLogStreamRequest) -> Vec<String> {
     let mut args = Vec::new();
@@ -39,7 +39,10 @@ pub(super) fn spawn_kubectl_tail(args: &[String]) -> Result<Child, CommandError>
         })
 }
 
-pub(super) fn spawn_log_tail(request: &StartLogStreamRequest, debug: bool) -> Result<Child, CommandError> {
+pub(super) fn spawn_log_tail(
+    request: &StartLogStreamRequest,
+    debug: bool,
+) -> Result<Child, CommandError> {
     if request.target_kind.as_deref() == Some("aws-vm") {
         let command = vm_tail_shell_command(request)?;
         if debug {
@@ -56,9 +59,9 @@ pub(super) fn spawn_log_tail(request: &StartLogStreamRequest, debug: bool) -> Re
             command_builder.process_group(0);
         }
         return command_builder.spawn().map_err(|e| {
-                CommandError::new("stream_spawn_failed", "failed to spawn VM ssh tail")
-                    .with_details(e.to_string())
-            });
+            CommandError::new("stream_spawn_failed", "failed to spawn VM ssh tail")
+                .with_details(e.to_string())
+        });
     }
     let args = kubectl_tail_args(request);
     if debug {
@@ -80,7 +83,8 @@ fn vm_tail_shell_command(request: &StartLogStreamRequest) -> Result<String, Comm
     let vm_password_expr = crate::commands::vm::password_shell_expr(&vm.plugin.vm_password_env)?;
     let vm_password_ready = format!("[ -n \"${{{}:-}}\" ]", vm.plugin.vm_password_env);
     let bastion_password_setup = crate::commands::vm::bastion_sshpass_password_setup(&vm.plugin)?;
-    let bastion_password_ready = crate::commands::vm::bastion_password_ready_shell_condition(&vm.plugin)?;
+    let bastion_password_ready =
+        crate::commands::vm::bastion_password_ready_shell_condition(&vm.plugin)?;
     let sshpass_proxy = format!(
         "{} sshpass -e ssh {} -p {} -W '%h:%p' -- {}@{}",
         bastion_password_setup,

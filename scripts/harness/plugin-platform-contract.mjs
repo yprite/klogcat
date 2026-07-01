@@ -32,7 +32,7 @@ check(
     includes('src/plugins/pluginModel.ts', "manifest: KlogcatPluginManifest & { kind: 'target' }") &&
     includes('src/plugins/pluginModel.ts', 'settingsKey: string') &&
     includes('src/plugins/pluginModel.ts', 'requiredCapabilities: readonly TargetPluginRuntimeCapability[]') &&
-    includes('src/plugins/pluginModel.ts', 'validate(value: unknown, errors: SettingsValidationError[]): void'),
+    includes('src/plugins/pluginModel.ts', 'validate(value: unknown, errors: SettingsValidationError[], sourceTypes?: SourceLogType[]): void'),
 )
 
 check(
@@ -68,7 +68,7 @@ check(
 check(
   'settings validation delegates target plugins to registry',
   includes('src/config/validateSettings.ts', 'validateTargetPluginSettings') &&
-    includes('src/config/validateSettings.ts', 'validateTargetPluginSettings(value.targetPlugins, errors)') &&
+    includes('src/config/validateSettings.ts', 'validateTargetPluginSettings(value.targetPlugins, errors, sourceKeys(policy))') &&
     notIncludes('src/config/validateSettings.ts', 'function validateAwsVmPlugin'),
 )
 
