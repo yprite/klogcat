@@ -7,7 +7,10 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 pub(crate) const SECRET_PREFIX: &str = "klogcat-secret:v1:";
 const SECRET_FIELDS: [&str; 3] = ["bastionPassword", "bastionTotpSecret", "vmPassword"];
@@ -155,7 +158,7 @@ fn cipher_for_key(key: &[u8; KEY_LEN]) -> Result<Aes256Gcm, CommandError> {
     })
 }
 
-fn settings_encryption_key(settings_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn settings_encryption_key(settings_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     if let Some(key) = key_from_env()? {
         return Ok(key);
     }
@@ -180,7 +183,7 @@ fn key_from_env() -> Result<Option<[u8; KEY_LEN]>, CommandError> {
         .map(Some)
 }
 
-fn read_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn read_key_file(key_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     let encoded = fs::read_to_string(key_path).map_err(|e| {
         secret_key_error("failed to read settings encryption key").with_details(e.to_string())
     })?;
@@ -192,7 +195,7 @@ fn read_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
         .and_then(|decoded| key_from_slice(&decoded))
 }
 
-fn create_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
+fn create_key_file(key_path: &Path) -> Result<[u8; KEY_LEN], CommandError> {
     let mut key = [0_u8; KEY_LEN];
     OsRng.fill_bytes(&mut key);
     ensure_key_parent(key_path)?;
@@ -203,7 +206,7 @@ fn create_key_file(key_path: &PathBuf) -> Result<[u8; KEY_LEN], CommandError> {
     Ok(key)
 }
 
-fn ensure_key_parent(key_path: &std::path::Path) -> Result<(), CommandError> {
+fn ensure_key_parent(key_path: &Path) -> Result<(), CommandError> {
     let Some(parent) = key_path.parent() else {
         return Ok(());
     };
@@ -212,7 +215,7 @@ fn ensure_key_parent(key_path: &std::path::Path) -> Result<(), CommandError> {
     })
 }
 
-fn protect_key_file(key_path: &PathBuf) -> Result<(), CommandError> {
+fn protect_key_file(key_path: &Path) -> Result<(), CommandError> {
     #[cfg(unix)]
     fs::set_permissions(key_path, fs::Permissions::from_mode(0o600)).map_err(|e| {
         secret_key_error("failed to protect settings encryption key").with_details(e.to_string())
