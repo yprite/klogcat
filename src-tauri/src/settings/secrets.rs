@@ -7,10 +7,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{env, fs, path::Path};
 
 pub(crate) const SECRET_PREFIX: &str = "klogcat-secret:v1:";
 const SECRET_FIELDS: [&str; 3] = ["bastionPassword", "bastionTotpSecret", "vmPassword"];
@@ -19,14 +16,14 @@ const KEY_LEN: usize = 32;
 
 pub(crate) fn decrypt_aws_vm_secrets(
     value: &mut serde_json::Value,
-    settings_path: &PathBuf,
+    settings_path: &Path,
 ) -> Result<(), CommandError> {
     transform_aws_vm_secrets(value, |secret| decrypt_secret(settings_path, secret))
 }
 
 pub(crate) fn encrypt_aws_vm_secrets(
     value: &mut serde_json::Value,
-    settings_path: &PathBuf,
+    settings_path: &Path,
 ) -> Result<(), CommandError> {
     transform_aws_vm_secrets(value, |secret| match should_encrypt(secret) {
         true => encrypt_secret(settings_path, secret),
