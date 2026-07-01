@@ -31,8 +31,31 @@ function newTargetConfigId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function AwsVmTargetGroupPanel({ group, index, language, updateGroup, removeGroup }: { group: AwsVmTargetGroupSettings; index: number; language?: Language; updateGroup: (group: AwsVmTargetGroupSettings) => void; removeGroup: () => void }) {
+const awsVmTargetGroupJsonTemplate = JSON.stringify({
+  targetGroups: [{
+    id: 'prod-bastion',
+    name: 'Prod Bastion',
+    enabled: true,
+    bastionHost: 'bastion-prod.example.com',
+    bastionPort: 22,
+    modules: [
+      {
+        id: 'api',
+        name: 'API',
+        consulCatalogCommand: 'consul catalog nodes -service api -format=json',
+      },
+      {
+        id: 'worker',
+        name: 'Worker',
+        consulCatalogCommand: 'consul catalog nodes -service worker -format=json',
+      },
+    ],
+  }],
+}, null, 2)
+
+function AwsVmTargetGroupPanel({ collapsed, group, index, language, toggleCollapsed, updateGroup, removeGroup }: { collapsed: boolean; group: AwsVmTargetGroupSettings; index: number; language?: Language; toggleCollapsed: () => void; updateGroup: (group: AwsVmTargetGroupSettings) => void; removeGroup: () => void }) {
   const modules = group.modules ?? []
+  const groupLabel = group.name || `${t(language, 'Bastion group')} ${index + 1}`
   const updateModule = (moduleIndex: number, patch: Partial<AwsVmTargetGroupSettings['modules'][number]>) => {
     updateGroup({ ...group, modules: modules.map((module, itemIndex) => itemIndex === moduleIndex ? { ...module, ...patch } : module) })
   }
@@ -46,10 +69,21 @@ function AwsVmTargetGroupPanel({ group, index, language, updateGroup, removeGrou
     <div className="flex flex-wrap items-center justify-between gap-2">
       <label className="inline-flex items-center gap-2 text-sm text-slate-200">
         <input type="checkbox" checked={group.enabled} onChange={(event) => updateGroup({ ...group, enabled: event.target.checked })} />
-        {t(language, 'Bastion group')} {index + 1}
+        <span>{groupLabel}</span>
+        <span className="text-xs text-slate-500">({modules.length} {t(language, modules.length === 1 ? 'module' : 'modules')})</span>
       </label>
-      <button className="rounded border border-red-500/60 px-2 py-1 text-xs text-red-100 hover:bg-red-500/10" type="button" onClick={removeGroup}>{t(language, 'Remove')}</button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={toggleCollapsed}>{t(language, collapsed ? 'Expand' : 'Collapse')}</button>
+        <button className="rounded border border-red-500/60 px-2 py-1 text-xs text-red-100 hover:bg-red-500/10" type="button" onClick={removeGroup}>{t(language, 'Remove')}</button>
+      </div>
     </div>
+    {collapsed && <p className="mt-2 truncate text-xs text-slate-500">{[group.bastionHost, group.bastionUsername, group.vmUsername].filter(Boolean).join(' · ') || t(language, 'Using shared defaults')}</p>}
+    {!collapsed && <AwsVmTargetGroupDetails addModule={addModule} group={group} language={language} modules={modules} removeModule={removeModule} updateGroup={updateGroup} updateModule={updateModule} />}
+  </div>
+}
+
+function AwsVmTargetGroupDetails({ addModule, group, language, modules, removeModule, updateGroup, updateModule }: { addModule: () => void; group: AwsVmTargetGroupSettings; language?: Language; modules: AwsVmTargetGroupSettings['modules']; removeModule: (moduleIndex: number) => void; updateGroup: (group: AwsVmTargetGroupSettings) => void; updateModule: (moduleIndex: number, patch: Partial<AwsVmTargetGroupSettings['modules'][number]>) => void }) {
+  return <>
     <div className="mt-2 grid gap-2 sm:grid-cols-3">
       <label className="block text-sm">{t(language, 'Group name')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={group.name} onChange={(event) => updateGroup({ ...group, name: event.target.value })} /></label>
       <label className="block text-sm">{t(language, 'Bastion host override')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={group.bastionHost ?? ''} onChange={(event) => updateGroup({ ...group, bastionHost: event.target.value })} /></label>
@@ -72,12 +106,68 @@ function AwsVmTargetGroupPanel({ group, index, language, updateGroup, removeGrou
         <button className="self-end rounded border border-red-500/60 px-2 py-2 text-xs text-red-100 hover:bg-red-500/10" type="button" onClick={() => removeModule(moduleIndex)}>{t(language, 'Remove')}</button>
       </div>)}
     </div>
-  </div>
+  </>
+}
+
+function parseTargetGroupsJson(input: string): AwsVmTargetGroupSettings[] {
+  const parsed = JSON.parse(input) as unknown
+  const groups = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.targetGroups)
+      ? parsed.targetGroups
+      : undefined
+  if (!groups) throw new Error('JSON must be an array or an object with targetGroups')
+  return groups.map((group, index) => normalizeImportedGroup(group, index))
+}
+
+function normalizeImportedGroup(value: unknown, index: number): AwsVmTargetGroupSettings {
+  if (!isRecord(value)) throw new Error(`targetGroups[${index}] must be an object`)
+  return {
+    id: stringValue(value.id) || newTargetConfigId('bastion'),
+    name: stringValue(value.name) || `${'Bastion'} ${index + 1}`,
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : true,
+    bastionHost: optionalString(value.bastionHost),
+    bastionPort: typeof value.bastionPort === 'number' ? value.bastionPort : undefined,
+    bastionUsername: optionalString(value.bastionUsername),
+    bastionPassword: optionalString(value.bastionPassword),
+    bastionTotpSecret: optionalString(value.bastionTotpSecret),
+    bastionPasswordMode: value.bastionPasswordMode === 'password-plus-totp' ? 'password-plus-totp' : value.bastionPasswordMode === 'password' ? 'password' : undefined,
+    vmUsername: optionalString(value.vmUsername),
+    vmPassword: optionalString(value.vmPassword),
+    consulCatalogCommand: optionalString(value.consulCatalogCommand),
+    strictHostKeyChecking: typeof value.strictHostKeyChecking === 'boolean' ? value.strictHostKeyChecking : undefined,
+    modules: Array.isArray(value.modules) ? value.modules.map((module, moduleIndex) => normalizeImportedModule(module, moduleIndex)) : [],
+  }
+}
+
+function normalizeImportedModule(value: unknown, index: number): AwsVmTargetGroupSettings['modules'][number] {
+  if (!isRecord(value)) throw new Error(`modules[${index}] must be an object`)
+  return {
+    id: stringValue(value.id) || newTargetConfigId('module'),
+    name: stringValue(value.name) || `${'Module'} ${index + 1}`,
+    consulCatalogCommand: optionalString(value.consulCatalogCommand),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value : undefined
 }
 
 function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLogPath, updateAwsVmPlugin }: PluginSettingsPanelProps) {
   const plugin = draft.targetPlugins.awsVm
   const targetGroups = plugin.targetGroups ?? []
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set())
+  const [showJsonImport, setShowJsonImport] = useState(false)
+  const [jsonImportText, setJsonImportText] = useState(awsVmTargetGroupJsonTemplate)
+  const [jsonImportError, setJsonImportError] = useState<string>()
   const updateTargetGroup = (index: number, group: AwsVmTargetGroupSettings) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.map((item, itemIndex) => itemIndex === index ? group : item) })
   }
@@ -98,6 +188,25 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
   const removeTargetGroup = (index: number) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.filter((_, itemIndex) => itemIndex !== index) })
   }
+  const toggleCollapsedGroup = (groupId: string) => {
+    setCollapsedGroupIds((current) => {
+      const next = new Set(current)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }
+  const importTargetGroups = () => {
+    try {
+      const importedGroups = parseTargetGroupsJson(jsonImportText)
+      updateAwsVmPlugin({ targetGroups: importedGroups })
+      setCollapsedGroupIds(new Set())
+      setJsonImportError(undefined)
+      setShowJsonImport(false)
+    } catch (error) {
+      setJsonImportError(error instanceof Error ? error.message : String(error))
+    }
+  }
   return <section id="settings-aws-vm-plugin" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
@@ -116,15 +225,29 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
           <h4 className="text-sm font-semibold text-white">{t(language, 'Bastion groups and modules')}</h4>
           <p className="mt-1 text-xs text-slate-400">{t(language, 'Add each bastion once, then add modules under that bastion. Values below inherit from shared defaults unless overridden.')}</p>
         </div>
-        <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addTargetGroup}>{t(language, 'Add bastion group')}</button>
+        <div className="flex flex-wrap gap-2">
+          <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={() => setShowJsonImport((value) => !value)}>{t(language, 'Import JSON template')}</button>
+          <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addTargetGroup}>{t(language, 'Add bastion group')}</button>
+        </div>
       </div>
+      {showJsonImport && <div className="rounded border border-slate-800 bg-slate-950 p-2">
+        <label className="block text-xs font-semibold uppercase text-slate-400">{t(language, 'Target groups JSON')}</label>
+        <textarea className="mt-2 h-56 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-100" spellCheck={false} value={jsonImportText} onChange={(event) => { setJsonImportText(event.target.value); setJsonImportError(undefined) }} />
+        {jsonImportError && <p className="mt-2 text-xs text-red-300">{jsonImportError}</p>}
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={importTargetGroups}>{t(language, 'Import target groups')}</button>
+          <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={() => setJsonImportText(awsVmTargetGroupJsonTemplate)}>{t(language, 'Reset template')}</button>
+        </div>
+      </div>}
       {targetGroups.length === 0 && <p className="rounded border border-dashed border-slate-700 bg-slate-950 p-2 text-xs text-slate-500">{t(language, 'No bastion groups configured yet.')}</p>}
       {targetGroups.map((group, index) => <AwsVmTargetGroupPanel
+        collapsed={collapsedGroupIds.has(group.id)}
         group={group}
         index={index}
         key={group.id}
         language={language}
         removeGroup={() => removeTargetGroup(index)}
+        toggleCollapsed={() => toggleCollapsedGroup(group.id)}
         updateGroup={(nextGroup) => updateTargetGroup(index, nextGroup)}
       />)}
     </div>
