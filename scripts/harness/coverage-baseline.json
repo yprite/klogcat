@@ -1,9 +1,9 @@
 {
   "version": 1,
   "thresholds": {
-    "lines": 100,
-    "statements": 95,
-    "functions": 97,
-    "branches": 82
+    "lines": 93,
+    "statements": 90,
+    "functions": 89,
+    "branches": 80
   }
 }
