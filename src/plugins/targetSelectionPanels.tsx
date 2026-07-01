@@ -33,7 +33,7 @@ function AwsVmTargetSelectionPanel({ language, normalizedQuery, onVmTargetChange
   }
   const visibleTargets = vm.targets.filter((target) => {
     if (!normalizedQuery) return true
-    return [target.id, target.name, target.address, target.service, target.datacenter, ...(target.tags ?? [])].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
+    return [target.id, target.name, target.address, target.service, target.datacenter, target.bastionName, target.moduleName, ...(target.tags ?? [])].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
   })
   return <div className="border-b border-slate-800 p-3">
     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -53,7 +53,7 @@ function AwsVmTargetSelectionPanel({ language, normalizedQuery, onVmTargetChange
       {visibleTargets.map((target) => {
         const value = vmTargetValue(target)
         const checked = selectedVmTargets.includes(value)
-        const metadata = [target.id, target.service, target.datacenter, ...(target.tags ?? [])].filter(Boolean)
+        const metadata = [target.bastionName, target.moduleName, target.id, target.service, target.datacenter, ...(target.tags ?? [])].filter(Boolean)
         return <label className={`flex min-w-0 items-start gap-2 rounded border px-2 py-1 text-sm ${checked ? 'border-yellow-400/40 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 bg-slate-950 text-slate-200'}`} key={value}>
           <input type="checkbox" checked={checked} disabled={selectionPending} onChange={() => toggleVm(target)} />
           <span className="min-w-0 flex-1">

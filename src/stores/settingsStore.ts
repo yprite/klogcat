@@ -11,7 +11,8 @@ import { useLogStore } from './logStore'
 function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
   const defaultNamespace = typeof settings.defaultNamespace === 'string' && settings.defaultNamespace.trim() ? settings.defaultNamespace.trim() : undefined
   const { bastionTotpProfile: _legacyTotpProfile, streamCommandTemplate: _legacyStreamTemplate, bastionPasswordEnv: _legacyBastionPasswordEnv, bastionTotpSecretEnv: _legacyBastionTotpSecretEnv, vmPasswordEnv: _legacyVmPasswordEnv, ...awsVmPatch } = (settings.targetPlugins?.awsVm ?? {}) as PersistedSettings['targetPlugins']['awsVm'] & { bastionTotpProfile?: string; streamCommandTemplate?: string; bastionPasswordEnv?: string; bastionTotpSecretEnv?: string; vmPasswordEnv?: string }
-  const awsVm = { ...defaultAwsVmTargetPluginSettings, ...awsVmPatch, logPaths: { ...defaultAwsVmTargetPluginSettings.logPaths, ...(awsVmPatch.logPaths ?? {}) } }
+  const targetGroups = Array.isArray(awsVmPatch.targetGroups) ? awsVmPatch.targetGroups : []
+  const awsVm = { ...defaultAwsVmTargetPluginSettings, ...awsVmPatch, logPaths: { ...defaultAwsVmTargetPluginSettings.logPaths, ...(awsVmPatch.logPaths ?? {}) }, targetGroups }
   return {
     ...settings,
     defaultNamespace,

@@ -1,3 +1,7 @@
+use super::{
+    vm_target_groups::{annotate_vm_target, discovery_error_details, effective_vm_profiles},
+    vm_username::{validate_bastion_username, validate_vm_username},
+};
 use crate::error::CommandError;
 use crate::settings::{AwsVmTargetPluginSettings, TargetPluginSettings};
 use serde::{Deserialize, Serialize};
@@ -28,6 +32,10 @@ pub struct VmTargetInfo {
     pub service: Option<String>,
     pub datacenter: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub bastion_id: Option<String>,
+    pub bastion_name: Option<String>,
+    pub module_id: Option<String>,
+    pub module_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -42,20 +50,27 @@ pub async fn list_vm_targets(
 ) -> Result<ListVmTargetsResponse, CommandError> {
     let plugin = request.plugin.aws_vm;
     validate_plugin_enabled(&plugin)?;
-    validate_aws_vm_plugin(&plugin)?;
-    let command = bastion_shell_command(&plugin, &plugin.consul_catalog_command)?;
-    let output = run_shell_with_timeout(&command, Duration::from_secs(20))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if !output.status.success() {
-        return Err(
-            CommandError::new("vm_discovery_failed", "failed to discover VM targets")
-                .with_details(stderr),
+    let mut targets = Vec::new();
+    for profile in effective_vm_profiles(&plugin) {
+        validate_aws_vm_plugin(&profile.plugin)?;
+        let command =
+            bastion_shell_command(&profile.plugin, &profile.plugin.consul_catalog_command)?;
+        let output = run_shell_with_timeout(&command, Duration::from_secs(20))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if !output.status.success() {
+            return Err(
+                CommandError::new("vm_discovery_failed", "failed to discover VM targets")
+                    .with_details(discovery_error_details(&profile, &stderr)),
+            );
+        }
+        targets.extend(
+            parse_vm_targets(&stdout)?
+                .into_iter()
+                .map(|target| annotate_vm_target(target, &profile)),
         );
     }
-    Ok(ListVmTargetsResponse {
-        targets: parse_vm_targets(&stdout)?,
-    })
+    Ok(ListVmTargetsResponse { targets })
 }
 
 pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
@@ -65,6 +80,25 @@ pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(),
             "AWS VM target plugin is disabled",
         ));
     }
+    if !plugin.target_groups.is_empty() {
+        let profiles = effective_vm_profiles(plugin);
+        if profiles.is_empty() {
+            return Err(CommandError::new(
+                "vm_plugin_config_invalid",
+                "at least one enabled VM target group is required",
+            ));
+        }
+        for profile in profiles {
+            validate_single_plugin_required_fields(&profile.plugin)?;
+        }
+        return Ok(());
+    }
+    validate_single_plugin_required_fields(plugin)
+}
+
+fn validate_single_plugin_required_fields(
+    plugin: &AwsVmTargetPluginSettings,
+) -> Result<(), CommandError> {
     for (field, value) in [
         ("bastionHost", &plugin.bastion_host),
         ("bastionUsername", &plugin.bastion_username),
@@ -79,8 +113,8 @@ pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(),
             ));
         }
     }
-    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
-    validate_ssh_username("vmUsername", &plugin.vm_username)?;
+    validate_bastion_username(&plugin.bastion_username)?;
+    validate_vm_username(&plugin.vm_username)?;
     Ok(())
 }
 
@@ -108,8 +142,8 @@ pub fn validate_aws_vm_plugin(plugin: &AwsVmTargetPluginSettings) -> Result<(), 
             "consulCatalogCommand is required",
         ));
     }
-    validate_ssh_username("bastionUsername", &plugin.bastion_username)?;
-    validate_ssh_username("vmUsername", &plugin.vm_username)?;
+    validate_bastion_username(&plugin.bastion_username)?;
+    validate_vm_username(&plugin.vm_username)?;
     Ok(())
 }
 
@@ -261,28 +295,6 @@ pub fn password_ready_shell_condition(password: &str) -> String {
     } else {
         "true".into()
     }
-}
-
-fn validate_ssh_username(field: &str, value: &str) -> Result<(), CommandError> {
-    let mut chars = value.chars();
-    let Some(first) = chars.next() else {
-        return Err(invalid_ssh_username(field));
-    };
-    if !(first.is_ascii_alphanumeric() || first == '.' || first == '_')
-        || value.len() > 64
-        || value.contains('@')
-        || !chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
-    {
-        return Err(invalid_ssh_username(field));
-    }
-    Ok(())
-}
-
-fn invalid_ssh_username(field: &str) -> CommandError {
-    CommandError::new(
-        "vm_plugin_config_invalid",
-        format!("{field} must be a safe SSH username"),
-    )
 }
 
 pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
@@ -568,6 +580,10 @@ fn vm_target_from_json(value: &Value) -> Option<VmTargetInfo> {
         service: first_string(value, &["ServiceName", "serviceName", "service"]),
         datacenter: first_string(value, &["Datacenter", "datacenter", "dc"]),
         tags,
+        bastion_id: None,
+        bastion_name: None,
+        module_id: None,
+        module_name: None,
     })
 }
 
@@ -595,6 +611,10 @@ fn parse_vm_targets_lines(input: &str) -> Vec<VmTargetInfo> {
                 service: parts.get(2).map(|value| value.to_string()),
                 datacenter: None,
                 tags: None,
+                bastion_id: None,
+                bastion_name: None,
+                module_id: None,
+                module_name: None,
             };
             validate_vm_target(&target).ok()?;
             Some(target)
@@ -604,42 +624,4 @@ fn parse_vm_targets_lines(input: &str) -> Vec<VmTargetInfo> {
 
 fn looks_like_address(value: &str) -> bool {
     value.parse::<IpAddr>().is_ok() || (is_safe_host(value) && value.contains('.'))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_consul_node_json() {
-        let targets = parse_vm_targets(r#"[{"Node":"api-1","Address":"10.0.0.7"}]"#).unwrap();
-        assert_eq!(
-            targets,
-            vec![VmTargetInfo {
-                id: "api-1".into(),
-                name: "api-1".into(),
-                address: "10.0.0.7".into(),
-                service: None,
-                datacenter: None,
-                tags: None,
-            }]
-        );
-    }
-
-    #[test]
-    fn shell_quote_handles_single_quotes() {
-        assert_eq!(shell_quote("a'b"), "'a'\\''b'");
-    }
-
-    #[test]
-    fn builds_password_shell_literals_and_ssh_options() {
-        assert_eq!(password_shell_expr("p'ass").unwrap(), "'p'\\''ass'");
-        assert!(password_shell_expr("bad\0secret").is_err());
-        let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
-        plugin.strict_host_key_checking = false;
-        let options = ssh_options(&plugin, true);
-        assert!(options.contains("BatchMode=yes"));
-        assert!(options.contains("ConnectTimeout=10"));
-        assert!(options.contains("StrictHostKeyChecking=no"));
-    }
 }

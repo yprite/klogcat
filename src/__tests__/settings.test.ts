@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
+import { awsVmPluginForTarget } from '../plugins/awsVmTargetPlugin'
 
 describe('settings validation', () => {
   it('accepts default settings', () => { expect(validateSettings(defaultSettings)).toEqual([]) })
@@ -31,11 +32,51 @@ describe('settings validation', () => {
   })
   it('validates AWS VM target plugin settings', () => {
     const enabled = { ...defaultSettings.targetPlugins.awsVm, enabled: true }
+    const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret' }
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionHost: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionHost' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPort: 0 } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPort' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPassword: 'bad\0secret' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionPassword' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionUsername: '-bad' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, bastionPasswordMode: 'password-plus-totp', bastionTotpSecret: '' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionTotpSecret' }))
     expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...enabled, logPaths: { info: '/x' } } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.logPaths' }))
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, vmUsername: 'operator@example.com' } } })).toEqual([])
+    expect(validateSettings({ ...defaultSettings, targetPlugins: { awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } } })).toContainEqual(expect.objectContaining({ field: 'targetPlugins.awsVm.bastionUsername' }))
+  })
+
+  it('accepts AWS VM bastion groups and module overrides', () => {
+    const settings = {
+      ...defaultSettings,
+      targetPlugins: {
+        awsVm: {
+          ...defaultSettings.targetPlugins.awsVm,
+          enabled: true,
+          bastionUsername: 'ops',
+          bastionPassword: 'bastion-secret',
+          vmUsername: 'operator@example.com',
+          vmPassword: 'vm-secret',
+          targetGroups: [{
+            id: 'prod',
+            name: 'Prod',
+            enabled: true,
+            bastionHost: 'bastion-prod.example.com',
+            modules: [{ id: 'api', name: 'API', consulCatalogCommand: 'consul catalog nodes -service api -format=json' }],
+          }],
+        },
+      },
+    }
+
+    expect(validateSettings(settings)).toEqual([])
+    const plugin = awsVmPluginForTarget(settings.targetPlugins.awsVm, {
+      id: 'prod:api:api-1',
+      name: 'api-1',
+      address: '10.0.0.7',
+      bastionId: 'prod',
+      bastionName: 'Prod',
+      moduleId: 'api',
+      moduleName: 'API',
+    })
+    expect(plugin.bastionHost).toBe('bastion-prod.example.com')
+    expect(plugin.consulCatalogCommand).toBe('consul catalog nodes -service api -format=json')
+    expect(plugin.targetGroups).toEqual([])
   })
 })

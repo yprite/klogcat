@@ -49,8 +49,39 @@ where
     else {
         return Ok(());
     };
+    transform_secret_fields(aws_vm, &mut transform)?;
+    transform_target_group_secrets(aws_vm, &mut transform)?;
+    Ok(())
+}
+
+fn transform_target_group_secrets<F>(
+    aws_vm: &mut serde_json::Map<String, serde_json::Value>,
+    transform: &mut F,
+) -> Result<(), CommandError>
+where
+    F: FnMut(&str) -> Result<String, CommandError>,
+{
+    let Some(groups) = aws_vm
+        .get_mut("targetGroups")
+        .and_then(|value| value.as_array_mut())
+    else {
+        return Ok(());
+    };
+    for group in groups.iter_mut().filter_map(|group| group.as_object_mut()) {
+        transform_secret_fields(group, transform)?;
+    }
+    Ok(())
+}
+
+fn transform_secret_fields<F>(
+    aws_vm: &mut serde_json::Map<String, serde_json::Value>,
+    transform: &mut F,
+) -> Result<(), CommandError>
+where
+    F: FnMut(&str) -> Result<String, CommandError>,
+{
     for field in SECRET_FIELDS {
-        if let Some(transformed) = transformed_secret(aws_vm, field, &mut transform)? {
+        if let Some(transformed) = transformed_secret(aws_vm, field, transform)? {
             aws_vm.insert(field.into(), serde_json::Value::String(transformed));
         }
     }
