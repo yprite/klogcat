@@ -9,7 +9,7 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'targetPlugins'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'plugins'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
@@ -19,6 +19,15 @@ function validateTopLevelFields(value: Record<string, unknown>, errors: Settings
     ['logPolicyId', value.logPolicyId !== undefined && value.logPolicyId !== 'scloud' && value.logPolicyId !== 'custom', 'logPolicyId must be scloud or custom'],
   ]
   for (const [field, invalid, message] of validators) if (invalid) errors.push({ field, message })
+}
+
+function validatePlugins(value: unknown, errors: SettingsValidationError[]) {
+  if (!isRecord(value)) {
+    errors.push({ field: 'plugins', message: 'plugins must be an object' })
+    return
+  }
+  rejectExtraKeys(value, ['targets'], 'plugins', errors)
+  validateTargetPluginSettings(value.targets, errors)
 }
 
 function integerInRange(value: unknown, min: number, max: number) {
@@ -72,7 +81,7 @@ export function validateSettings(value: unknown): SettingsValidationError[] {
   const policy = validateEmbeddedLogPolicy(value, errors)
   validateShortcuts(value.shortcuts, errors)
   validateLogSources(value.logSources, errors, policy)
-  validateTargetPluginSettings(value.targetPlugins, errors)
+  validatePlugins(value.plugins, errors)
   return errors
 }
 export function assertValidSettings(value: unknown): asserts value is PersistedSettings {

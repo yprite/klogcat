@@ -29,7 +29,7 @@ fn shell_quote_handles_single_quotes() {
 fn builds_password_shell_literals_and_ssh_options() {
     assert_eq!(password_shell_expr("p'ass").unwrap(), "'p'\\''ass'");
     assert!(password_shell_expr("bad\0secret").is_err());
-    let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
+    let mut plugin = crate::settings::default_settings().plugins.targets.aws_vm;
     plugin.strict_host_key_checking = false;
     let options = ssh_options(&plugin, true);
     assert!(options.contains("BatchMode=yes"));
@@ -39,7 +39,7 @@ fn builds_password_shell_literals_and_ssh_options() {
 
 #[test]
 fn allows_email_vm_username_but_not_bastion_username() {
-    let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
+    let mut plugin = crate::settings::default_settings().plugins.targets.aws_vm;
     plugin.enabled = true;
     plugin.bastion_host = "bastion.example.com".into();
     plugin.bastion_username = "ops".into();

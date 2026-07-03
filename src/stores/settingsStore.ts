@@ -4,25 +4,38 @@ import { validateSettings } from '../config/validateSettings'
 import { getSettings as getSettingsCommand, resetSettings as resetSettingsCommand, saveSettings as saveSettingsCommand } from '../commands/tauriSettings'
 import type { CommandError } from '../commands/types'
 import type { PersistedSettings, SettingsWarning } from '../types/settings'
+import type { TargetPluginSettings } from '../types/vm'
 import { defaultAwsVmTargetPluginSettings } from '../plugins/awsVmTargetPlugin'
 import { defaultCsvFileTargetPluginSettings } from '../plugins/csvFileTargetPlugin'
 import { assertValidLogPolicy, getLogPolicy, setActiveLogPolicy } from '../utils/logPolicy'
 import { useLogStore } from './logStore'
 
+type LegacySettingsShape = Omit<PersistedSettings, 'plugins'> & {
+  targetPlugins?: TargetPluginSettings
+  plugins?: Partial<PersistedSettings['plugins']>
+}
+
 function withActiveLogPolicy(settings: PersistedSettings): PersistedSettings {
+  const legacySettings = settings as LegacySettingsShape
+  const { targetPlugins: _legacyTargetPlugins, ...settingsWithoutLegacyTargetPlugins } = legacySettings
   const defaultNamespace = typeof settings.defaultNamespace === 'string' && settings.defaultNamespace.trim() ? settings.defaultNamespace.trim() : undefined
-  const { bastionTotpProfile: _legacyTotpProfile, streamCommandTemplate: _legacyStreamTemplate, bastionPasswordEnv: _legacyBastionPasswordEnv, bastionTotpSecretEnv: _legacyBastionTotpSecretEnv, vmPasswordEnv: _legacyVmPasswordEnv, ...awsVmPatch } = (settings.targetPlugins?.awsVm ?? {}) as PersistedSettings['targetPlugins']['awsVm'] & { bastionTotpProfile?: string; streamCommandTemplate?: string; bastionPasswordEnv?: string; bastionTotpSecretEnv?: string; vmPasswordEnv?: string }
+  const targetPluginPatch = (legacySettings.plugins?.targets ?? legacySettings.targetPlugins ?? {}) as Partial<TargetPluginSettings>
+  const { bastionTotpProfile: _legacyTotpProfile, streamCommandTemplate: _legacyStreamTemplate, bastionPasswordEnv: _legacyBastionPasswordEnv, bastionTotpSecretEnv: _legacyBastionTotpSecretEnv, vmPasswordEnv: _legacyVmPasswordEnv, ...awsVmPatch } = (targetPluginPatch.awsVm ?? {}) as PersistedSettings['plugins']['targets']['awsVm'] & { bastionTotpProfile?: string; streamCommandTemplate?: string; bastionPasswordEnv?: string; bastionTotpSecretEnv?: string; vmPasswordEnv?: string }
   const targetGroups = Array.isArray(awsVmPatch.targetGroups) ? awsVmPatch.targetGroups : []
   const awsVm = { ...defaultAwsVmTargetPluginSettings, ...awsVmPatch, logPaths: { ...defaultAwsVmTargetPluginSettings.logPaths, ...(awsVmPatch.logPaths ?? {}) }, targetGroups }
-  const csvFile = { ...defaultCsvFileTargetPluginSettings, ...(settings.targetPlugins?.csvFile ?? {}) }
+  const csvFile = { ...defaultCsvFileTargetPluginSettings, ...(targetPluginPatch.csvFile ?? {}) }
   return {
-    ...settings,
+    ...settingsWithoutLegacyTargetPlugins,
     defaultNamespace,
     language: settings.language ?? 'en',
     shortcuts: settings.shortcuts ?? defaultSettings.shortcuts,
     logPolicyId: settings.logPolicyId ?? 'scloud',
     logPolicy: settings.logPolicy ?? getLogPolicy(),
-    targetPlugins: { ...defaultSettings.targetPlugins, ...(settings.targetPlugins ?? {}), awsVm, csvFile },
+    plugins: {
+      ...defaultSettings.plugins,
+      ...(legacySettings.plugins ?? {}),
+      targets: { ...defaultSettings.plugins.targets, ...targetPluginPatch, awsVm, csvFile },
+    },
   }
 }
 

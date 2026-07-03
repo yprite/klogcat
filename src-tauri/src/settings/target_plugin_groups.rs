@@ -58,7 +58,7 @@ pub(crate) fn validate_group_secret_values(
     errors: &mut Vec<SettingsValidationError>,
 ) {
     for (index, group) in plugin.target_groups.iter().enumerate() {
-        let prefix = format!("targetPlugins.awsVm.targetGroups.{index}");
+        let prefix = format!("plugins.targets.awsVm.targetGroups.{index}");
         validate_optional_secret(&group.bastion_password, &prefix, "bastionPassword", errors);
         validate_optional_secret(&group.vm_password, &prefix, "vmPassword", errors);
         validate_optional_secret(
@@ -89,7 +89,7 @@ pub(crate) fn validate_group_usernames(
     errors: &mut Vec<SettingsValidationError>,
 ) {
     for (index, group) in plugin.target_groups.iter().enumerate() {
-        let prefix = format!("targetPlugins.awsVm.targetGroups.{index}");
+        let prefix = format!("plugins.targets.awsVm.targetGroups.{index}");
         validate_optional_username(
             group.bastion_username.as_deref(),
             &prefix,
@@ -129,14 +129,14 @@ pub(crate) fn validate_group_log_paths(
     for (group_index, group) in plugin.target_groups.iter().enumerate() {
         validate_partial_log_paths(
             &group.log_paths,
-            &format!("targetPlugins.awsVm.targetGroups.{group_index}.logPaths"),
+            &format!("plugins.targets.awsVm.targetGroups.{group_index}.logPaths"),
             errors,
         );
         for (module_index, module) in group.modules.iter().enumerate() {
             validate_partial_log_paths(
                 &module.log_paths,
                 &format!(
-                    "targetPlugins.awsVm.targetGroups.{group_index}.modules.{module_index}.logPaths"
+                    "plugins.targets.awsVm.targetGroups.{group_index}.modules.{module_index}.logPaths"
                 ),
                 errors,
             );
@@ -187,7 +187,7 @@ pub(crate) fn validate_target_groups(
     errors: &mut Vec<SettingsValidationError>,
 ) {
     for (index, group) in plugin.target_groups.iter().enumerate() {
-        let prefix = format!("targetPlugins.awsVm.targetGroups.{index}");
+        let prefix = format!("plugins.targets.awsVm.targetGroups.{index}");
         validate_group_identity(group, &prefix, errors);
         validate_group_port(group, &prefix, errors);
         validate_group_password_mode(group, &prefix, errors);
@@ -276,7 +276,7 @@ pub(crate) fn validate_effective_target_groups(
         .count();
     if enabled_count == 0 {
         errors.push(err(
-            "targetPlugins.awsVm.targetGroups",
+            "plugins.targets.awsVm.targetGroups",
             "at least one enabled VM target group is required",
         ));
     }
@@ -292,7 +292,7 @@ fn validate_effective_group(
     if group.modules.is_empty() {
         validate_effective_plugin(
             &base,
-            &format!("targetPlugins.awsVm.targetGroups.{group_index}"),
+            &format!("plugins.targets.awsVm.targetGroups.{group_index}"),
             errors,
         );
         return;
@@ -300,7 +300,7 @@ fn validate_effective_group(
     for (module_index, module) in group.modules.iter().enumerate() {
         validate_effective_plugin(
             &effective_module_plugin(&base, module),
-            &format!("targetPlugins.awsVm.targetGroups.{group_index}.modules.{module_index}"),
+            &format!("plugins.targets.awsVm.targetGroups.{group_index}.modules.{module_index}"),
             errors,
         );
     }

@@ -139,7 +139,7 @@ export function LogViewer() {
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
   const kube = useKubeStore()
   const vm = useVmStore()
-  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
+  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.plugins.targets, 'awsVm'))
   const selectedTargetCount = kube.getSelectedPodTargets().length + (vmTargetsEnabled ? vm.getSelectedVmTargets().length : 0)
   const parentRef = useRef<HTMLDivElement>(null)
   const seenRowIdsRef = useRef<Set<number> | null>(null)

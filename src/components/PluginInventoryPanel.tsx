@@ -6,7 +6,7 @@ import { t, type Language } from '../utils/i18n'
 function pluginEnabledState(pluginId: string, settings: PersistedSettings) {
   const targetPlugin = targetPluginDefinitions.find((plugin) => plugin.manifest.id === pluginId)
   if (!targetPlugin) return 'active'
-  return targetPlugin.isEnabled(settings.targetPlugins) ? 'enabled' : 'disabled'
+  return targetPlugin.isEnabled(settings.plugins.targets) ? 'enabled' : 'disabled'
 }
 
 export function PluginInventoryPanel({ language, settings }: { language?: Language; settings: PersistedSettings }) {

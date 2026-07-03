@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, env, fs, path::PathBuf};
 use tauri::Manager;
 
+mod plugin_migration;
 mod secrets;
 mod target_plugin_groups;
 mod target_plugins;
@@ -10,9 +11,9 @@ mod target_plugins;
 mod vm_target_group_tests;
 
 pub use target_plugin_groups::{AwsVmTargetGroupSettings, AwsVmTargetModuleSettings};
-use target_plugins::{default_target_plugins, validate_target_plugins};
+use target_plugins::{default_plugins, validate_target_plugins};
 pub use target_plugins::{
-    AwsVmTargetPluginSettings, CsvFileTargetPluginSettings, TargetPluginSettings,
+    AwsVmTargetPluginSettings, CsvFileTargetPluginSettings, PluginSettings, TargetPluginSettings,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,8 +30,8 @@ pub struct PersistedSettings {
     pub log_policy_id: Option<String>,
     #[serde(default)]
     pub log_policy: Option<serde_json::Value>,
-    #[serde(default = "default_target_plugins")]
-    pub target_plugins: TargetPluginSettings,
+    #[serde(default = "default_plugins")]
+    pub plugins: PluginSettings,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -88,7 +89,7 @@ pub fn default_settings() -> PersistedSettings {
         ]),
         log_policy_id: Some("scloud".into()),
         log_policy: None,
-        target_plugins: default_target_plugins(),
+        plugins: default_plugins(),
     }
 }
 
@@ -107,7 +108,7 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
     validate_log_sources(s, &mut errors);
-    validate_target_plugins(&s.target_plugins, &mut errors);
+    validate_target_plugins(&s.plugins.targets, &mut errors);
     errors
 }
 
@@ -242,7 +243,7 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
         }
     };
     migrate_legacy_app_log_source(&mut value);
-    migrate_missing_target_plugins(&mut value);
+    plugin_migration::migrate_missing_plugins(&mut value);
     secrets::decrypt_aws_vm_secrets(&mut value, &path)?;
     let settings = load_settings_from_value(value)?;
     let errors = validate_settings(&settings);
@@ -258,73 +259,6 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
     })
 }
 
-fn migrate_missing_target_plugins(value: &mut serde_json::Value) -> bool {
-    let Some(settings) = value.as_object_mut() else {
-        return false;
-    };
-    let default_plugins =
-        serde_json::to_value(default_target_plugins()).unwrap_or(serde_json::Value::Null);
-    let Some(default_plugins_obj) = default_plugins.as_object() else {
-        return false;
-    };
-    let target_plugins = settings
-        .entry("targetPlugins")
-        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
-    deep_merge_defaults(target_plugins, default_plugins_obj);
-    if let Some(aws_vm) = target_plugins
-        .get_mut("awsVm")
-        .and_then(|plugin| plugin.as_object_mut())
-    {
-        migrate_legacy_env_secret(aws_vm, "bastionPasswordEnv", "bastionPassword");
-        migrate_legacy_env_secret(aws_vm, "bastionTotpSecretEnv", "bastionTotpSecret");
-        migrate_legacy_env_secret(aws_vm, "vmPasswordEnv", "vmPassword");
-        aws_vm.remove("bastionTotpProfile");
-        aws_vm.remove("streamCommandTemplate");
-    }
-    true
-}
-
-fn migrate_legacy_env_secret(
-    aws_vm: &mut serde_json::Map<String, serde_json::Value>,
-    legacy_env_field: &str,
-    secret_field: &str,
-) {
-    let legacy_env = aws_vm
-        .remove(legacy_env_field)
-        .and_then(|value| value.as_str().map(str::to_owned));
-    let should_fill = aws_vm
-        .get(secret_field)
-        .and_then(|value| value.as_str())
-        .is_none_or(str::is_empty);
-    if should_fill {
-        let secret = legacy_env
-            .as_deref()
-            .and_then(|name| env::var(name).ok())
-            .unwrap_or_default();
-        aws_vm.insert(secret_field.into(), serde_json::Value::String(secret));
-    }
-}
-
-fn deep_merge_defaults(
-    value: &mut serde_json::Value,
-    defaults: &serde_json::Map<String, serde_json::Value>,
-) {
-    if !value.is_object() {
-        *value = serde_json::Value::Object(serde_json::Map::new());
-    }
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    for (key, default_value) in defaults {
-        match (object.get_mut(key), default_value.as_object()) {
-            (Some(existing), Some(default_object)) => deep_merge_defaults(existing, default_object),
-            (Some(_), None) => {}
-            (None, _) => {
-                object.insert(key.clone(), default_value.clone());
-            }
-        }
-    }
-}
 pub fn save_to_path(
     path: PathBuf,
     settings: PersistedSettings,
@@ -521,11 +455,11 @@ mod tests {
             }
         });
 
-        assert!(migrate_missing_target_plugins(&mut value));
+        assert!(plugin_migration::migrate_missing_plugins(&mut value));
         let settings: PersistedSettings = serde_json::from_value(value).unwrap();
 
-        assert_eq!(settings.target_plugins.aws_vm.bastion_port, 22);
-        assert_eq!(settings.target_plugins.aws_vm.vm_password, "");
+        assert_eq!(settings.plugins.targets.aws_vm.bastion_port, 22);
+        assert_eq!(settings.plugins.targets.aws_vm.vm_password, "");
         assert!(validate_settings(&settings).is_empty());
     }
 
@@ -542,40 +476,40 @@ mod tests {
     #[test]
     fn validates_aws_vm_plugin_security_fields() {
         let mut s = default_settings();
-        s.target_plugins.aws_vm.enabled = true;
-        s.target_plugins.aws_vm.bastion_host = "bastion.example.com".into();
-        s.target_plugins.aws_vm.bastion_username = "ops".into();
-        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
-        s.target_plugins.aws_vm.vm_username = "app".into();
-        s.target_plugins.aws_vm.vm_password = "vm-password".into();
+        s.plugins.targets.aws_vm.enabled = true;
+        s.plugins.targets.aws_vm.bastion_host = "bastion.example.com".into();
+        s.plugins.targets.aws_vm.bastion_username = "ops".into();
+        s.plugins.targets.aws_vm.bastion_password = "bastion-password".into();
+        s.plugins.targets.aws_vm.vm_username = "app".into();
+        s.plugins.targets.aws_vm.vm_password = "vm-password".into();
         assert!(validate_settings(&s).is_empty());
 
-        s.target_plugins.aws_vm.vm_username = "operator@example.com".into();
+        s.plugins.targets.aws_vm.vm_username = "operator@example.com".into();
         assert!(validate_settings(&s).is_empty());
 
-        s.target_plugins.aws_vm.bastion_password = "bad\0secret".into();
+        s.plugins.targets.aws_vm.bastion_password = "bad\0secret".into();
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionPassword"));
+            .any(|error| error.field == "plugins.targets.awsVm.bastionPassword"));
 
-        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
-        s.target_plugins.aws_vm.vm_username = "app".into();
-        s.target_plugins.aws_vm.bastion_username = "-bad".into();
+        s.plugins.targets.aws_vm.bastion_password = "bastion-password".into();
+        s.plugins.targets.aws_vm.vm_username = "app".into();
+        s.plugins.targets.aws_vm.bastion_username = "-bad".into();
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionUsername"));
+            .any(|error| error.field == "plugins.targets.awsVm.bastionUsername"));
 
-        s.target_plugins.aws_vm.bastion_username = "operator@example.com".into();
+        s.plugins.targets.aws_vm.bastion_username = "operator@example.com".into();
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionUsername"));
+            .any(|error| error.field == "plugins.targets.awsVm.bastionUsername"));
 
-        s.target_plugins.aws_vm.bastion_username = "ops".into();
-        s.target_plugins.aws_vm.bastion_password_mode = "password-plus-totp".into();
-        s.target_plugins.aws_vm.bastion_totp_secret = Some(String::new());
+        s.plugins.targets.aws_vm.bastion_username = "ops".into();
+        s.plugins.targets.aws_vm.bastion_password_mode = "password-plus-totp".into();
+        s.plugins.targets.aws_vm.bastion_totp_secret = Some(String::new());
         assert!(validate_settings(&s)
             .iter()
-            .any(|error| error.field == "targetPlugins.awsVm.bastionTotpSecret"));
+            .any(|error| error.field == "plugins.targets.awsVm.bastionTotpSecret"));
     }
 
     #[test]
@@ -588,9 +522,9 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("settings.json");
         let mut s = default_settings();
-        s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
-        s.target_plugins.aws_vm.bastion_totp_secret = Some("totp-secret".into());
-        s.target_plugins.aws_vm.vm_password = "vm-password".into();
+        s.plugins.targets.aws_vm.bastion_password = "bastion-password".into();
+        s.plugins.targets.aws_vm.bastion_totp_secret = Some("totp-secret".into());
+        s.plugins.targets.aws_vm.vm_password = "vm-password".into();
 
         save_to_path(path.clone(), s.clone()).unwrap();
         let text = fs::read_to_string(&path).unwrap();
@@ -601,14 +535,14 @@ mod tests {
 
         let loaded = load_from_path(path.clone()).unwrap().settings;
         assert_eq!(
-            loaded.target_plugins.aws_vm.bastion_password,
+            loaded.plugins.targets.aws_vm.bastion_password,
             "bastion-password"
         );
         assert_eq!(
-            loaded.target_plugins.aws_vm.bastion_totp_secret.as_deref(),
+            loaded.plugins.targets.aws_vm.bastion_totp_secret.as_deref(),
             Some("totp-secret")
         );
-        assert_eq!(loaded.target_plugins.aws_vm.vm_password, "vm-password");
+        assert_eq!(loaded.plugins.targets.aws_vm.vm_password, "vm-password");
         let _ = fs::remove_dir_all(&dir);
     }
 }

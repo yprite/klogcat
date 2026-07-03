@@ -81,14 +81,14 @@ export function csvTargetsFromText(csvText: string): VmTargetInfo[] {
 
 export function validateCsvFileTargetPluginSettings(value: unknown, errors: SettingsValidationError[]) {
   if (!isRecord(value)) {
-    errors.push({ field: 'targetPlugins.csvFile', message: 'csvFile plugin config must be an object' })
+    errors.push({ field: 'plugins.targets.csvFile', message: 'csvFile plugin config must be an object' })
     return
   }
-  rejectExtraKeys(value, ['enabled', 'csvText'], 'targetPlugins.csvFile', errors)
-  if (typeof value.enabled !== 'boolean') errors.push({ field: 'targetPlugins.csvFile.enabled', message: 'enabled must be a boolean' })
-  if (typeof value.csvText !== 'string') errors.push({ field: 'targetPlugins.csvFile.csvText', message: 'csvText must be a string' })
+  rejectExtraKeys(value, ['enabled', 'csvText'], 'plugins.targets.csvFile', errors)
+  if (typeof value.enabled !== 'boolean') errors.push({ field: 'plugins.targets.csvFile.enabled', message: 'enabled must be a boolean' })
+  if (typeof value.csvText !== 'string') errors.push({ field: 'plugins.targets.csvFile.csvText', message: 'csvText must be a string' })
   if (value.enabled === true && typeof value.csvText === 'string' && csvTargetsFromText(value.csvText).length === 0) {
-    errors.push({ field: 'targetPlugins.csvFile.csvText', message: 'csvText must include a header and at least one row with address/ip/host' })
+    errors.push({ field: 'plugins.targets.csvFile.csvText', message: 'csvText must include a header and at least one row with address/ip/host' })
   }
 }
 

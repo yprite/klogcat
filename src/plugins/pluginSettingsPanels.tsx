@@ -8,9 +8,9 @@ type PluginSettingsPanelProps = {
   draft: PersistedSettings
   language?: Language
   sourceTypes: SourceLogType[]
-  updateCsvFilePlugin: (patch: Partial<PersistedSettings['targetPlugins']['csvFile']>) => void
+  updateCsvFilePlugin: (patch: Partial<PersistedSettings['plugins']['targets']['csvFile']>) => void
   updateAwsVmLogPath: (sourceType: SourceLogType, path: string) => void
-  updateAwsVmPlugin: (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => void
+  updateAwsVmPlugin: (patch: Partial<PersistedSettings['plugins']['targets']['awsVm']>) => void
 }
 
 function SecretInput({ label, language, value, onChange }: { label: string; language?: Language; value: string; onChange: (value: string) => void }) {
@@ -163,7 +163,7 @@ function optionalString(value: unknown) {
 }
 
 function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLogPath, updateAwsVmPlugin }: PluginSettingsPanelProps) {
-  const plugin = draft.targetPlugins.awsVm
+  const plugin = draft.plugins.targets.awsVm
   const targetGroups = plugin.targetGroups ?? []
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set())
   const [showJsonImport, setShowJsonImport] = useState(false)
@@ -262,7 +262,7 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
         <label className="block text-sm">{t(language, 'Bastion username')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionUsername} onChange={(event) => updateAwsVmPlugin({ bastionUsername: event.target.value })} /></label>
         <SecretInput label="Bastion password" language={language} value={plugin.bastionPassword} onChange={(value) => updateAwsVmPlugin({ bastionPassword: value })} />
         <SecretInput label="Bastion TOTP secret" language={language} value={plugin.bastionTotpSecret ?? ''} onChange={(value) => updateAwsVmPlugin({ bastionTotpSecret: value })} />
-        <label className="block text-sm">{t(language, 'Bastion password mode')}<select className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionPasswordMode} onChange={(event) => updateAwsVmPlugin({ bastionPasswordMode: event.target.value as PersistedSettings['targetPlugins']['awsVm']['bastionPasswordMode'] })}>
+        <label className="block text-sm">{t(language, 'Bastion password mode')}<select className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={plugin.bastionPasswordMode} onChange={(event) => updateAwsVmPlugin({ bastionPasswordMode: event.target.value as PersistedSettings['plugins']['targets']['awsVm']['bastionPasswordMode'] })}>
           <option value="password">{t(language, 'Password only')}</option>
           <option value="password-plus-totp">{t(language, 'Password + current TOTP')}</option>
         </select></label>
@@ -291,7 +291,7 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
 }
 
 function CsvFileTargetPluginSettingsPanel({ draft, language, updateCsvFilePlugin }: PluginSettingsPanelProps) {
-  const plugin = draft.targetPlugins.csvFile
+  const plugin = draft.plugins.targets.csvFile
   const loadFile = (file: File | undefined) => {
     if (!file) return
     void file.text().then((csvText) => updateCsvFilePlugin({ csvText }))
@@ -322,8 +322,7 @@ export const pluginSettingsPanels = Object.freeze({
   csvFile: CsvFileTargetPluginSettingsPanel,
 })
 
-export function TargetPluginSettingsPanels(props: PluginSettingsPanelProps) {
-  return <>
-    {Object.entries(pluginSettingsPanels).map(([key, Panel]) => <Panel key={key} {...props} />)}
-  </>
+export function TargetPluginSettingsPanels({ settingsKey, ...props }: PluginSettingsPanelProps & { settingsKey: string }) {
+  const Panel = pluginSettingsPanels[settingsKey as keyof typeof pluginSettingsPanels]
+  return Panel ? <Panel {...props} /> : null
 }

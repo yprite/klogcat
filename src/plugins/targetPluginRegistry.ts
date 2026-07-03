@@ -29,10 +29,10 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 
 export function validateTargetPluginSettings(value: unknown, errors: SettingsValidationError[]) {
   if (!isRecord(value)) {
-    errors.push({ field: 'targetPlugins', message: 'targetPlugins must be an object' })
+    errors.push({ field: 'plugins.targets', message: 'plugins.targets must be an object' })
     return
   }
-  rejectExtraKeys(value, targetPluginDefinitions.map((plugin) => plugin.settingsKey), 'targetPlugins', errors)
+  rejectExtraKeys(value, targetPluginDefinitions.map((plugin) => plugin.settingsKey), 'plugins.targets', errors)
   for (const plugin of targetPluginDefinitions) plugin.validate(value[plugin.settingsKey], errors)
 }
 

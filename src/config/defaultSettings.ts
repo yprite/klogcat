@@ -17,8 +17,10 @@ export const defaultSettings: PersistedSettings = {
   },
   logPolicyId: 'scloud',
   logPolicy: getLogPolicy(),
-  targetPlugins: {
-    awsVm: defaultAwsVmTargetPluginSettings,
-    csvFile: defaultCsvFileTargetPluginSettings,
+  plugins: {
+    targets: {
+      awsVm: defaultAwsVmTargetPluginSettings,
+      csvFile: defaultCsvFileTargetPluginSettings,
+    },
   },
 }

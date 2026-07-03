@@ -70,7 +70,7 @@ check(
 check(
   'settings validation delegates target plugins to registry',
   includes('src/config/validateSettings.ts', 'validateTargetPluginSettings') &&
-    includes('src/config/validateSettings.ts', 'validateTargetPluginSettings(value.targetPlugins, errors)') &&
+    includes('src/config/validateSettings.ts', 'validatePlugins(value.plugins, errors)') &&
     notIncludes('src/config/validateSettings.ts', 'function validateAwsVmPlugin'),
 )
 
@@ -91,7 +91,7 @@ for (const file of [
   check(
     `${file} uses target plugin enabled policy`,
     includes(file, 'isTargetPluginEnabled('),
-    'Expected plugin enabled policy instead of direct targetPlugins.awsVm.enabled checks.',
+    'Expected plugin enabled policy instead of direct plugins.targets.awsVm.enabled checks.',
   )
 }
 

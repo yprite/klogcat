@@ -13,7 +13,7 @@ describe('browser fallback command boundary scenario', () => {
     await expect(listContexts()).resolves.toEqual({ contexts: [] })
     await expect(listNamespaces('demo')).resolves.toEqual({ context: 'demo', namespaces: [] })
     await expect(listPods('default', 'demo')).resolves.toEqual({ context: 'demo', namespace: 'default', pods: [] })
-    await expect(listVmTargets(defaultSettings.targetPlugins)).rejects.toMatchObject({ code: 'vm_runtime_unavailable' })
+    await expect(listVmTargets(defaultSettings.plugins.targets)).rejects.toMatchObject({ code: 'vm_runtime_unavailable' })
 
     await expect(startLogStream({
       streamId: 's1',

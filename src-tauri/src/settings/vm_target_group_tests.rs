@@ -4,12 +4,12 @@ use std::{collections::BTreeMap, env, fs};
 #[test]
 fn validates_aws_vm_target_groups_as_effective_profiles() {
     let mut s = default_settings();
-    s.target_plugins.aws_vm.enabled = true;
-    s.target_plugins.aws_vm.bastion_username = "ops".into();
-    s.target_plugins.aws_vm.bastion_password = "bastion-password".into();
-    s.target_plugins.aws_vm.vm_username = "operator@example.com".into();
-    s.target_plugins.aws_vm.vm_password = "vm-password".into();
-    s.target_plugins.aws_vm.target_groups = vec![AwsVmTargetGroupSettings {
+    s.plugins.targets.aws_vm.enabled = true;
+    s.plugins.targets.aws_vm.bastion_username = "ops".into();
+    s.plugins.targets.aws_vm.bastion_password = "bastion-password".into();
+    s.plugins.targets.aws_vm.vm_username = "operator@example.com".into();
+    s.plugins.targets.aws_vm.vm_password = "vm-password".into();
+    s.plugins.targets.aws_vm.target_groups = vec![AwsVmTargetGroupSettings {
         id: "prod".into(),
         name: "Prod".into(),
         enabled: true,
@@ -34,10 +34,10 @@ fn validates_aws_vm_target_groups_as_effective_profiles() {
 
     assert!(validate_settings(&s).is_empty());
 
-    s.target_plugins.aws_vm.target_groups[0].bastion_host = Some(String::new());
+    s.plugins.targets.aws_vm.target_groups[0].bastion_host = Some(String::new());
     assert!(validate_settings(&s)
         .iter()
-        .any(|error| error.field == "targetPlugins.awsVm.targetGroups.0.modules.0.bastionHost"));
+        .any(|error| error.field == "plugins.targets.awsVm.targetGroups.0.modules.0.bastionHost"));
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn encrypts_aws_vm_group_secrets_on_disk_and_decrypts_on_load() {
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("settings.json");
     let mut s = default_settings();
-    s.target_plugins.aws_vm.target_groups = vec![AwsVmTargetGroupSettings {
+    s.plugins.targets.aws_vm.target_groups = vec![AwsVmTargetGroupSettings {
         id: "prod".into(),
         name: "Prod".into(),
         enabled: true,
@@ -75,7 +75,7 @@ fn encrypts_aws_vm_group_secrets_on_disk_and_decrypts_on_load() {
     assert!(!text.contains("group-vm-password"));
 
     let loaded = load_from_path(path.clone()).unwrap().settings;
-    let loaded_group = &loaded.target_plugins.aws_vm.target_groups[0];
+    let loaded_group = &loaded.plugins.targets.aws_vm.target_groups[0];
     assert_eq!(
         loaded_group.bastion_password.as_deref(),
         Some("group-bastion-password")

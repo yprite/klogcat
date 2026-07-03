@@ -43,8 +43,9 @@ where
     F: FnMut(&str) -> Result<String, CommandError>,
 {
     let Some(aws_vm) = value
-        .get_mut("targetPlugins")
-        .and_then(|plugins| plugins.get_mut("awsVm"))
+        .get_mut("plugins")
+        .and_then(|plugins| plugins.get_mut("targets"))
+        .and_then(|targets| targets.get_mut("awsVm"))
         .and_then(|plugin| plugin.as_object_mut())
     else {
         return Ok(());

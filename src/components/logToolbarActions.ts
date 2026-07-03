@@ -231,7 +231,7 @@ async function launchVmLogStream(
   settings: PersistedSettings,
   log: LogStoreState,
 ): Promise<LaunchResult> {
-  const plugin = awsVmPluginForTarget(settings.targetPlugins.awsVm, target.vm)
+  const plugin = awsVmPluginForTarget(settings.plugins.targets.awsVm, target.vm)
   const filePath = plugin.logPaths[selectedSourceType]
   const streamId = crypto.randomUUID()
   const namespace = 'aws-vm'

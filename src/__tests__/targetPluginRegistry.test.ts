@@ -19,15 +19,15 @@ describe('target plugin registry', () => {
 
   it('rejects unknown target plugin settings keys', () => {
     const errors: Array<{ field: string; message: string }> = []
-    validateTargetPluginSettings({ ...defaultSettings.targetPlugins, unknown: { enabled: true } }, errors)
-    expect(errors).toContainEqual(expect.objectContaining({ field: 'targetPlugins.unknown' }))
+    validateTargetPluginSettings({ ...defaultSettings.plugins.targets, unknown: { enabled: true } }, errors)
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'plugins.targets.unknown' }))
   })
 
   it('reports disabled and enabled target plugin state through policy', () => {
-    expect(isTargetPluginEnabled(defaultSettings.targetPlugins, 'awsVm')).toBe(false)
-    expect(isTargetPluginEnabled(defaultSettings.targetPlugins, 'csvFile')).toBe(false)
-    expect(isTargetPluginEnabled({ ...defaultSettings.targetPlugins, awsVm: { ...defaultSettings.targetPlugins.awsVm, enabled: true } }, 'awsVm')).toBe(true)
-    expect(isTargetPluginEnabled({ ...defaultSettings.targetPlugins, csvFile: { enabled: true, csvText: 'name,address\napi,10.0.0.1' } }, 'csvFile')).toBe(true)
+    expect(isTargetPluginEnabled(defaultSettings.plugins.targets, 'awsVm')).toBe(false)
+    expect(isTargetPluginEnabled(defaultSettings.plugins.targets, 'csvFile')).toBe(false)
+    expect(isTargetPluginEnabled({ ...defaultSettings.plugins.targets, awsVm: { ...defaultSettings.plugins.targets.awsVm, enabled: true } }, 'awsVm')).toBe(true)
+    expect(isTargetPluginEnabled({ ...defaultSettings.plugins.targets, csvFile: { enabled: true, csvText: 'name,address\napi,10.0.0.1' } }, 'csvFile')).toBe(true)
   })
 
   it('parses CSV file targets with optional metadata', () => {

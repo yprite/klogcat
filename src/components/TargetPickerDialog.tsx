@@ -354,8 +354,8 @@ function SelectedVmTargetButton({ onVmTargetChange, runSelectionChange, selected
 export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange, onPodChange, onVmTargetChange = () => undefined }: TargetSelectionHandlers) {
   const [query, setQuery] = useState('')
   const language = useSettingsStore((s) => s.settings?.language)
-  const awsVmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'awsVm'))
-  const csvTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.targetPlugins, 'csvFile'))
+  const awsVmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.plugins.targets, 'awsVm'))
+  const csvTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.plugins.targets, 'csvFile'))
   const vmTargetsEnabled = awsVmTargetsEnabled || csvTargetsEnabled
   const [selectionPending, setSelectionPending] = useState(false)
   const [collapsedContexts, setCollapsedContexts] = useState<Record<string, boolean>>({})
@@ -390,7 +390,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
 
   useEffect(() => {
     if ((targetTab !== 'aws-vm' && targetTab !== 'csv-file') || !vmTargetsEnabled) return
-    const pluginSettings = useSettingsStore.getState().settings?.targetPlugins
+    const pluginSettings = useSettingsStore.getState().settings?.plugins.targets
     const vmState = useVmStore.getState()
     if (pluginSettings && !vmState.loading && vmState.targets.length === 0) void vmState.loadTargets(pluginSettings)
   }, [targetTab, vmTargetsEnabled])

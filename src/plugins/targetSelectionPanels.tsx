@@ -21,10 +21,10 @@ function toggleValue(values: string[], value: string) {
 function AwsVmTargetSelectionPanel({ language, normalizedQuery, onVmTargetChange, runSelectionChange, selectedVmTargets, selectionPending, setDraftSelectedVmTargets }: TargetSelectionPanelProps) {
   const settings = useSettingsStore((state) => state.settings)
   const vm = useVmStore()
-  const plugin = settings?.targetPlugins.awsVm
+  const plugin = settings?.plugins.targets.awsVm
   if (!settings || !plugin?.enabled) return null
   const refresh = () => {
-    void useVmStore.getState().loadTargets(settings.targetPlugins)
+    void useVmStore.getState().loadTargets(settings.plugins.targets)
   }
   const toggleVm = (target: VmTargetInfo) => {
     const value = vmTargetValue(target)
@@ -72,10 +72,10 @@ function AwsVmTargetSelectionPanel({ language, normalizedQuery, onVmTargetChange
 function CsvFileTargetSelectionPanel({ language, normalizedQuery, onVmTargetChange, runSelectionChange, selectedVmTargets, selectionPending, setDraftSelectedVmTargets }: TargetSelectionPanelProps) {
   const settings = useSettingsStore((state) => state.settings)
   const vm = useVmStore()
-  const plugin = settings?.targetPlugins.csvFile
+  const plugin = settings?.plugins.targets.csvFile
   if (!settings || !plugin?.enabled) return null
   const refresh = () => {
-    void useVmStore.getState().loadTargets(settings.targetPlugins)
+    void useVmStore.getState().loadTargets(settings.plugins.targets)
   }
   const toggleVm = (target: VmTargetInfo) => {
     const value = vmTargetValue(target)
