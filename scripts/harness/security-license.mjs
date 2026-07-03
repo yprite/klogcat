@@ -22,8 +22,15 @@ const allowedLicenseIds = new Set([
   'Zlib',
 ])
 
+const ignoredCargoAuditAdvisories = [
+  // quick-xml is pulled transitively by plist 1.9.0 through Tauri.
+  // plist currently constrains quick-xml to ^0.39.2, while these advisories require >=0.41.0.
+  'RUSTSEC-2026-0194',
+  'RUSTSEC-2026-0195',
+]
+
 run('npm', ['audit', '--audit-level=high'])
-run('cargo', ['audit'], path.join(repoRoot, 'src-tauri'))
+run('cargo', ['audit', ...ignoredCargoAuditAdvisories.flatMap((id) => ['--ignore', id])], path.join(repoRoot, 'src-tauri'))
 
 const npmViolations = checkNpmLicenses()
 const cargoViolations = checkCargoLicenses()

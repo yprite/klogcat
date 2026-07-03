@@ -12,7 +12,7 @@ describe('tauriVm browser fallback', () => {
   it('reports a readable runtime error outside Tauri', async () => {
     vi.mocked(isTauri).mockReturnValue(false)
 
-    await expect(listVmTargets(defaultSettings.targetPlugins)).rejects.toMatchObject({ code: 'vm_runtime_unavailable' })
+    await expect(listVmTargets(defaultSettings.plugins.targets)).rejects.toMatchObject({ code: 'vm_runtime_unavailable' })
     expect(invoke).not.toHaveBeenCalled()
   })
 
@@ -20,7 +20,7 @@ describe('tauriVm browser fallback', () => {
     vi.mocked(isTauri).mockReturnValue(true)
     vi.mocked(invoke).mockResolvedValue({ targets: [] })
 
-    await expect(listVmTargets(defaultSettings.targetPlugins)).resolves.toEqual({ targets: [] })
-    expect(invoke).toHaveBeenCalledWith('list_vm_targets', { request: { plugin: defaultSettings.targetPlugins } })
+    await expect(listVmTargets(defaultSettings.plugins.targets)).resolves.toEqual({ targets: [] })
+    expect(invoke).toHaveBeenCalledWith('list_vm_targets', { request: { plugin: defaultSettings.plugins.targets } })
   })
 })

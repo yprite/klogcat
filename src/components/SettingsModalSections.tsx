@@ -88,11 +88,16 @@ const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
 export function SettingsNav({ activeSection, language, onSectionChange }: { activeSection: SettingsSectionId; language?: Language; onSectionChange: (section: SettingsSectionId) => void }) {
   return <nav aria-label={t(language, 'Settings sections')} className="border-r border-slate-800 bg-slate-950/60 p-4 text-sm">
     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Sections')}</p>
-    {settingsSections.map((section, index) => <button key={section.id} type="button" className={`${index === 0 ? 'mt-3' : 'mt-2'} block w-full rounded border px-3 py-2 text-left ${activeSection === section.id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-200 hover:border-slate-600'}`} onClick={() => onSectionChange(section.id)}>{t(language, section.label)}</button>)}
-    {targetPluginDefinitions.map((plugin) => {
-      const sectionId = `target-plugin:${plugin.settingsKey}` as SettingsSectionId
-      return <button key={plugin.manifest.id} type="button" className={`mt-2 block w-full rounded border px-3 py-2 text-left ${activeSection === sectionId ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-200 hover:border-slate-600'}`} onClick={() => onSectionChange(sectionId)}>{t(language, plugin.manifest.label)}</button>
-    })}
+    {settingsSections.map((section, index) => <div key={section.id}>
+      <button type="button" className={`${index === 0 ? 'mt-3' : 'mt-2'} block w-full rounded border px-3 py-2 text-left ${activeSection === section.id ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-200 hover:border-slate-600'}`} onClick={() => onSectionChange(section.id)}>{t(language, section.label)}</button>
+      {section.id === 'plugin-inventory' && <div className="mt-2 space-y-1 border-l border-slate-800 pl-3">
+        <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Target plugins')}</p>
+        {targetPluginDefinitions.map((plugin) => {
+          const sectionId = `target-plugin:${plugin.settingsKey}` as SettingsSectionId
+          return <button key={plugin.manifest.id} type="button" className={`block w-full rounded border px-2 py-1.5 text-left text-xs ${activeSection === sectionId ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-300 hover:border-slate-600'}`} onClick={() => onSectionChange(sectionId)}>{t(language, plugin.manifest.label)}</button>
+        })}
+      </div>}
+    </div>)}
   </nav>
 }
 

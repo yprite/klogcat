@@ -31,7 +31,7 @@ function languageForDraft(draft: PersistedSettings, settings: PersistedSettings 
 }
 
 function hasVmLikeTargetPlugin(settings: PersistedSettings | undefined) {
-  return isTargetPluginEnabled(settings?.targetPlugins, 'awsVm') || isTargetPluginEnabled(settings?.targetPlugins, 'csvFile')
+  return isTargetPluginEnabled(settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(settings?.plugins.targets, 'csvFile')
 }
 
 function policyIdForSettings(settings: PersistedSettings) {
@@ -121,17 +121,17 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     setNotice(undefined)
     setDraft({ ...draft, shortcuts: { ...(draft.shortcuts ?? {}), [key]: value.trim() } })
   }
-  const updateAwsVmPlugin = (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => {
+  const updateAwsVmPlugin = (patch: Partial<PersistedSettings['plugins']['targets']['awsVm']>) => {
     setNotice(undefined)
-    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, awsVm: { ...draft.targetPlugins.awsVm, ...patch } } })
+    setDraft({ ...draft, plugins: { ...draft.plugins, targets: { ...draft.plugins.targets, awsVm: { ...draft.plugins.targets.awsVm, ...patch } } } })
   }
   const updateAwsVmLogPath = (sourceType: SourceLogType, path: string) => {
     setNotice(undefined)
-    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, awsVm: { ...draft.targetPlugins.awsVm, logPaths: { ...draft.targetPlugins.awsVm.logPaths, [sourceType]: path } } } })
+    setDraft({ ...draft, plugins: { ...draft.plugins, targets: { ...draft.plugins.targets, awsVm: { ...draft.plugins.targets.awsVm, logPaths: { ...draft.plugins.targets.awsVm.logPaths, [sourceType]: path } } } } })
   }
-  const updateCsvFilePlugin = (patch: Partial<PersistedSettings['targetPlugins']['csvFile']>) => {
+  const updateCsvFilePlugin = (patch: Partial<PersistedSettings['plugins']['targets']['csvFile']>) => {
     setNotice(undefined)
-    setDraft({ ...draft, targetPlugins: { ...draft.targetPlugins, csvFile: { ...draft.targetPlugins.csvFile, ...patch } } })
+    setDraft({ ...draft, plugins: { ...draft.plugins, targets: { ...draft.plugins.targets, csvFile: { ...draft.plugins.targets.csvFile, ...patch } } } })
   }
   const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
@@ -169,14 +169,14 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       logPolicy: policyDraft,
       logSources: derivedLogSources,
     }
-    const wasAwsVmEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm')
+    const wasAwsVmEnabled = isTargetPluginEnabled(settings?.plugins.targets, 'awsVm')
     const hadVmLikeTargets = hasVmLikeTargetPlugin(settings)
     const ok = canSave ? await saveSettings(nextDraft) : false
     if (ok) {
       if (!hasVmLikeTargetPlugin(nextDraft)) {
         await cleanupDisabledAwsVmPlugin()
-      } else if (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.targetPlugins, 'csvFile')) {
-        await useVmStore.getState().loadTargets(nextDraft.targetPlugins)
+      } else if (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.plugins.targets, 'csvFile')) {
+        await useVmStore.getState().loadTargets(nextDraft.plugins.targets)
       }
       onClose()
     }

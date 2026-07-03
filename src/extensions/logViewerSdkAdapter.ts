@@ -90,7 +90,7 @@ export function toLogViewerExtensionSnapshot(
   vm = useVmStore.getState(),
   settings = useSettingsStore.getState(),
 ): LogViewerExtensionSnapshot {
-  const vmTargetsEnabled = isTargetPluginEnabled(settings.settings?.targetPlugins, 'awsVm')
+  const vmTargetsEnabled = isTargetPluginEnabled(settings.settings?.plugins.targets, 'awsVm')
   return {
     rows: log.rows.map(toSdkLogRow),
     visibleRows: log.visibleRows.map(toSdkLogRow),

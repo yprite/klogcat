@@ -9,7 +9,7 @@ Target plugins register through `targetPluginRegistry.ts`.
 Each target plugin owns:
 
 - a manifest with `kind: 'target'`
-- a settings key under `settings.targetPlugins`
+- a settings key under `settings.plugins.targets`
 - a runtime target kind used by stream requests
 - default settings
 - validation policy

@@ -64,7 +64,7 @@ function isValidUsername(key: 'bastionUsername' | 'vmUsername', value: string) {
   return isSshUsername(value)
 }
 
-function validateVmLogPaths(value: unknown, errors: SettingsValidationError[], prefix = 'targetPlugins.awsVm.logPaths') {
+function validateVmLogPaths(value: unknown, errors: SettingsValidationError[], prefix = 'plugins.targets.awsVm.logPaths') {
   if (!isRecord(value)) {
     errors.push({ field: prefix, message: 'logPaths must be an object' })
     return
@@ -96,10 +96,10 @@ function validatePartialVmLogPaths(value: unknown, errors: SettingsValidationErr
 
 export function validateAwsVmTargetPluginSettings(value: unknown, errors: SettingsValidationError[]) {
   if (!isRecord(value)) {
-    errors.push({ field: 'targetPlugins.awsVm', message: 'awsVm plugin config must be an object' })
+    errors.push({ field: 'plugins.targets.awsVm', message: 'awsVm plugin config must be an object' })
     return
   }
-  rejectExtraKeys(value, awsVmSettingKeys, 'targetPlugins.awsVm', errors)
+  rejectExtraKeys(value, awsVmSettingKeys, 'plugins.targets.awsVm', errors)
   validateAwsVmShape(value, errors)
   validateAwsVmRequiredStrings(value, errors)
   validateAwsVmSecrets(value, errors)
@@ -127,35 +127,35 @@ function canExpandAwsVmTargetGroups(value: Record<string, unknown>) {
 }
 
 function validateAwsVmShape(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  if (typeof value.enabled !== 'boolean') errors.push({ field: 'targetPlugins.awsVm.enabled', message: 'enabled must be a boolean' })
-  if (!integerInRange(value.bastionPort, 1, 65535)) errors.push({ field: 'targetPlugins.awsVm.bastionPort', message: 'bastionPort must be 1..65535' })
-  if (value.bastionPasswordMode !== 'password' && value.bastionPasswordMode !== 'password-plus-totp') errors.push({ field: 'targetPlugins.awsVm.bastionPasswordMode', message: 'bastionPasswordMode must be password or password-plus-totp' })
-  if (typeof value.strictHostKeyChecking !== 'boolean') errors.push({ field: 'targetPlugins.awsVm.strictHostKeyChecking', message: 'strictHostKeyChecking must be a boolean' })
+  if (typeof value.enabled !== 'boolean') errors.push({ field: 'plugins.targets.awsVm.enabled', message: 'enabled must be a boolean' })
+  if (!integerInRange(value.bastionPort, 1, 65535)) errors.push({ field: 'plugins.targets.awsVm.bastionPort', message: 'bastionPort must be 1..65535' })
+  if (value.bastionPasswordMode !== 'password' && value.bastionPasswordMode !== 'password-plus-totp') errors.push({ field: 'plugins.targets.awsVm.bastionPasswordMode', message: 'bastionPasswordMode must be password or password-plus-totp' })
+  if (typeof value.strictHostKeyChecking !== 'boolean') errors.push({ field: 'plugins.targets.awsVm.strictHostKeyChecking', message: 'strictHostKeyChecking must be a boolean' })
 }
 
 function validateAwsVmRequiredStrings(value: Record<string, unknown>, errors: SettingsValidationError[]) {
   for (const key of requiredStringKeys) {
-    if (typeof value[key] !== 'string') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a string` })
+    if (typeof value[key] !== 'string') errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} must be a string` })
   }
   if (value.enabled !== true || (Array.isArray(value.targetGroups) && value.targetGroups.length > 0)) return
   for (const key of requiredStringKeys) {
-    if (typeof value[key] === 'string' && value[key].trim() === '') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
+    if (typeof value[key] === 'string' && value[key].trim() === '') errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
   }
 }
 
 function validateAwsVmSecrets(value: Record<string, unknown>, errors: SettingsValidationError[]) {
   for (const key of secretKeys) {
     const secret = value[key]
-    if (secret !== undefined && typeof secret !== 'string') errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a string when provided` })
-    if (typeof secret === 'string' && secret.includes('\0')) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} cannot contain null bytes` })
+    if (secret !== undefined && typeof secret !== 'string') errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} must be a string when provided` })
+    if (typeof secret === 'string' && secret.includes('\0')) errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} cannot contain null bytes` })
   }
-  if (value.enabled === true && value.bastionPasswordMode === 'password-plus-totp' && (typeof value.bastionTotpSecret !== 'string' || value.bastionTotpSecret.trim() === '')) errors.push({ field: 'targetPlugins.awsVm.bastionTotpSecret', message: 'bastionTotpSecret is required for password-plus-totp mode' })
+  if (value.enabled === true && value.bastionPasswordMode === 'password-plus-totp' && (typeof value.bastionTotpSecret !== 'string' || value.bastionTotpSecret.trim() === '')) errors.push({ field: 'plugins.targets.awsVm.bastionTotpSecret', message: 'bastionTotpSecret is required for password-plus-totp mode' })
 }
 
 function validateAwsVmUsernames(value: Record<string, unknown>, errors: SettingsValidationError[]) {
   for (const key of ['bastionUsername', 'vmUsername'] as const) {
     const username = value[key]
-    if (typeof username === 'string' && username.trim() !== '' && !isValidUsername(key, username)) errors.push({ field: `targetPlugins.awsVm.${key}`, message: `${key} must be a safe SSH username or email account` })
+    if (typeof username === 'string' && username.trim() !== '' && !isValidUsername(key, username)) errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} must be a safe SSH username or email account` })
   }
 }
 
@@ -163,7 +163,7 @@ function validateAwsVmTargetGroups(value: Record<string, unknown>, errors: Setti
   const groups = value.targetGroups
   if (groups === undefined) return
   if (!Array.isArray(groups)) {
-    errors.push({ field: 'targetPlugins.awsVm.targetGroups', message: 'targetGroups must be an array' })
+    errors.push({ field: 'plugins.targets.awsVm.targetGroups', message: 'targetGroups must be an array' })
     return
   }
   const groupIds = new Set<string>()
@@ -171,7 +171,7 @@ function validateAwsVmTargetGroups(value: Record<string, unknown>, errors: Setti
 }
 
 function validateAwsVmTargetGroup(value: unknown, index: number, groupIds: Set<string>, errors: SettingsValidationError[]) {
-  const prefix = `targetPlugins.awsVm.targetGroups.${index}`
+  const prefix = `plugins.targets.awsVm.targetGroups.${index}`
   if (!isRecord(value)) {
     errors.push({ field: prefix, message: 'target group must be an object' })
     return
@@ -318,10 +318,10 @@ function applyModuleOverrides(base: AwsVmTargetPluginSettings, module: AwsVmTarg
 }
 
 function effectiveAwsVmPlugins(plugin: AwsVmTargetPluginSettings): EffectiveAwsVmProfile[] {
-  if (plugin.targetGroups.length === 0) return [{ plugin, fieldPrefix: 'targetPlugins.awsVm' }]
+  if (plugin.targetGroups.length === 0) return [{ plugin, fieldPrefix: 'plugins.targets.awsVm' }]
   return plugin.targetGroups.flatMap((group, groupIndex) => {
     const groupPlugin = applyGroupOverrides(plugin, group)
-    const groupPrefix = `targetPlugins.awsVm.targetGroups.${groupIndex}`
+    const groupPrefix = `plugins.targets.awsVm.targetGroups.${groupIndex}`
     if (group.modules.length === 0) return [{ plugin: groupPlugin, fieldPrefix: groupPrefix }]
     return group.modules.map((module, moduleIndex) => ({
       plugin: applyModuleOverrides(groupPlugin, module),

@@ -10,6 +10,12 @@ const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginSettings {
+    pub targets: TargetPluginSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TargetPluginSettings {
     pub aws_vm: AwsVmTargetPluginSettings,
     pub csv_file: CsvFileTargetPluginSettings,
@@ -66,6 +72,12 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
     }
 }
 
+pub(crate) fn default_plugins() -> PluginSettings {
+    PluginSettings {
+        targets: default_target_plugins(),
+    }
+}
+
 fn default_vm_log_paths() -> BTreeMap<String, String> {
     BTreeMap::from([
         ("info".into(), "/var/log/app/info.log".into()),
@@ -98,7 +110,7 @@ fn validate_bastion_port(
         return;
     }
     errors.push(err(
-        "targetPlugins.awsVm.bastionPort",
+        "plugins.targets.awsVm.bastionPort",
         "bastionPort must be 1..65535",
     ));
 }
@@ -113,7 +125,7 @@ fn validate_password_mode(
         return;
     }
     errors.push(err(
-        "targetPlugins.awsVm.bastionPasswordMode",
+        "plugins.targets.awsVm.bastionPasswordMode",
         "bastionPasswordMode must be password or password-plus-totp",
     ));
 }
@@ -128,7 +140,7 @@ fn validate_required_fields(
     for (field, value) in required_field_values(plugin) {
         if value.trim().is_empty() {
             errors.push(err(
-                format!("targetPlugins.awsVm.{field}"),
+                format!("plugins.targets.awsVm.{field}"),
                 format!("{field} is required when AWS VM plugin is enabled"),
             ));
         }
@@ -156,7 +168,7 @@ fn validate_secret_values(
     ] {
         if value.contains('\0') {
             errors.push(err(
-                format!("targetPlugins.awsVm.{field}"),
+                format!("plugins.targets.awsVm.{field}"),
                 format!("{field} cannot contain null bytes"),
             ));
         }
@@ -172,7 +184,7 @@ fn validate_totp_secret(
     let secret = plugin.bastion_totp_secret.as_deref().unwrap_or_default();
     if secret.contains('\0') {
         errors.push(err(
-            "targetPlugins.awsVm.bastionTotpSecret",
+            "plugins.targets.awsVm.bastionTotpSecret",
             "bastionTotpSecret cannot contain null bytes",
         ));
     }
@@ -181,7 +193,7 @@ fn validate_totp_secret(
         && secret.trim().is_empty()
     {
         errors.push(err(
-            "targetPlugins.awsVm.bastionTotpSecret",
+            "plugins.targets.awsVm.bastionTotpSecret",
             "bastionTotpSecret is required for password-plus-totp mode",
         ));
     }
@@ -202,7 +214,7 @@ fn validate_usernames(
 
 fn username_error(field: &str) -> SettingsValidationError {
     err(
-        format!("targetPlugins.awsVm.{field}"),
+        format!("plugins.targets.awsVm.{field}"),
         format!("{field} must be a safe SSH username or email account"),
     )
 }
@@ -221,14 +233,14 @@ fn validate_log_paths(
     let keys: Vec<_> = plugin.log_paths.keys().map(String::as_str).collect();
     if keys.as_slice() != REQUIRED_LOG_SOURCE_KEYS {
         errors.push(err(
-            "targetPlugins.awsVm.logPaths",
+            "plugins.targets.awsVm.logPaths",
             "logPaths must contain exactly info/access/error keys",
         ));
     }
     for (key, path) in &plugin.log_paths {
         if !path.starts_with('/') || path.contains('\0') {
             errors.push(err(
-                format!("targetPlugins.awsVm.logPaths.{key}"),
+                format!("plugins.targets.awsVm.logPaths.{key}"),
                 "VM log path must be an absolute path without null bytes",
             ));
         }
@@ -285,7 +297,7 @@ fn validate_csv_file_plugin(
 ) {
     if plugin.enabled && !csv_has_address_row(&plugin.csv_text) {
         errors.push(err(
-            "targetPlugins.csvFile.csvText",
+            "plugins.targets.csvFile.csvText",
             "csvText must include a header and at least one row with address/ip/host",
         ));
     }

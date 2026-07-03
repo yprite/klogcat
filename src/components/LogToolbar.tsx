@@ -107,7 +107,7 @@ export function LogToolbar({ sourceType, sourceTypes, onSourceTypesChange }: { s
   const { settings } = useSettingsStore()
   const language = settings?.language
   const log = useLogStore()
-  const vmTargetsEnabled = isTargetPluginEnabled(settings?.targetPlugins, 'awsVm') || isTargetPluginEnabled(settings?.targetPlugins, 'csvFile')
+  const vmTargetsEnabled = isTargetPluginEnabled(settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(settings?.plugins.targets, 'csvFile')
   const targets = [...kube.getSelectedPodTargets().map((target) => ({ ...target, targetKind: 'kubernetes' as const })), ...(vmTargetsEnabled ? vm.getSelectedVmTargets().map((target) => ({ targetKind: 'aws-vm' as const, vm: target })) : [])]
   const resolveContainer = containerResolver(settings, primarySourceType)
   const status = toolbarStatus(log, settings, selectedSourceTypes, targets)

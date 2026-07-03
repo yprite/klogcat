@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn expands_vm_target_groups_and_modules() {
-        let mut plugin = crate::settings::default_settings().target_plugins.aws_vm;
+        let mut plugin = crate::settings::default_settings().plugins.targets.aws_vm;
         plugin.enabled = true;
         plugin.bastion_username = "ops".into();
         plugin.bastion_password = "bastion-password".into();

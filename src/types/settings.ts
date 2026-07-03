@@ -10,6 +10,9 @@ export type KeyboardShortcuts = {
   toggleStream?: string
   restartStream?: string
 }
+export type PluginSettings = {
+  targets: TargetPluginSettings
+}
 export type PersistedSettings = {
   schemaVersion: 1
   defaultNamespace?: string
@@ -20,7 +23,7 @@ export type PersistedSettings = {
   shortcuts?: KeyboardShortcuts
   logPolicyId?: LogPolicySelectionId
   logPolicy?: LogPolicy
-  targetPlugins: TargetPluginSettings
+  plugins: PluginSettings
 }
 export type SettingsWarning = { code: 'read_failed' | 'parse_failed'; message: string; details?: string }
 export type GetSettingsResponse = { settings: PersistedSettings; warning?: SettingsWarning }

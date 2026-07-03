@@ -25,10 +25,10 @@ export const noopTargetPlugin: TargetPluginDefinition<NoopTargetPluginSettings> 
   },
   validate(value: unknown, errors: SettingsValidationError[]) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      errors.push({ field: 'targetPlugins.noop', message: 'noop plugin config must be an object' })
+      errors.push({ field: 'plugins.targets.noop', message: 'noop plugin config must be an object' })
       return
     }
     const enabled = (value as { enabled?: unknown }).enabled
-    if (typeof enabled !== 'boolean') errors.push({ field: 'targetPlugins.noop.enabled', message: 'enabled must be a boolean' })
+    if (typeof enabled !== 'boolean') errors.push({ field: 'plugins.targets.noop.enabled', message: 'enabled must be a boolean' })
   },
 }

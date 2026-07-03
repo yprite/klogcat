@@ -51,20 +51,21 @@ type SettingsSectionContentProps = {
   sourceTypes: string[]
   testingPaths: boolean
   testResults: TestPathResult[]
-  updateCsvFilePlugin: (patch: Partial<PersistedSettings['targetPlugins']['csvFile']>) => void
+  updateCsvFilePlugin: (patch: Partial<PersistedSettings['plugins']['targets']['csvFile']>) => void
   updateAwsVmLogPath: (sourceType: SourceLogType, path: string) => void
-  updateAwsVmPlugin: (patch: Partial<PersistedSettings['targetPlugins']['awsVm']>) => void
+  updateAwsVmPlugin: (patch: Partial<PersistedSettings['plugins']['targets']['awsVm']>) => void
   warnings: string[]
 }
 
 export function SettingsSectionContent(props: SettingsSectionContentProps) {
   const { activeSection, activeTarget, draft, error, errors, handleClearTargetCache, handlePolicySelect, handleRawPolicyTextChange, handleRestart, handleTestPaths, language, loading, notice, policyText, previewPolicy, selectedPolicyId, setCustomPolicy, setDefaultNamespace, setLanguage, setNum, setShortcut, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes, testingPaths, testResults, updateCsvFilePlugin, updateAwsVmLogPath, updateAwsVmPlugin, warnings } = props
+  const targetPluginSettingsKey = activeSection.startsWith('target-plugin:') ? activeSection.slice('target-plugin:'.length) : undefined
   return <>
     {activeSection === 'runtime' && <RuntimeSection draft={draft} language={language} setDefaultNamespace={setDefaultNamespace} setNum={setNum} />}
     {activeSection === 'appearance' && <AppearanceSection draft={draft} language={language} setLanguage={setLanguage} />}
     {activeSection === 'plugin-inventory' && <PluginInventoryPanel language={language} settings={draft} />}
     {activeSection === 'log-source' && <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />}
-    {activeSection.startsWith('target-plugin:') && <TargetPluginSettingsPanels draft={draft} language={language} sourceTypes={sourceTypes} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} />}
+    {targetPluginSettingsKey && <TargetPluginSettingsPanels draft={draft} language={language} settingsKey={targetPluginSettingsKey} sourceTypes={sourceTypes} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} />}
     {activeSection === 'advanced' && <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} language={language} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />}
     {activeSection === 'shortcuts' && <ShortcutsSection draft={draft} language={language} setShortcut={setShortcut} />}
     <StatusMessages error={error} errors={errors} language={language} notice={notice} />
