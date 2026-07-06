@@ -14,6 +14,7 @@ vi.mock('../commands/tauriSettings', () => ({
 
 function resetStores() {
   useSettingsStore.setState({ settings: defaultSettings, warning: undefined, loading: false, error: undefined })
+  document.documentElement.dataset.colorTheme = 'dark-plus'
   useKubeStore.setState({
     contexts: [],
     currentContext: undefined,
@@ -68,9 +69,33 @@ describe('i18n language settings', () => {
     const selector = screen.getByRole('combobox', { name: /color theme/i })
 
     fireEvent.change(selector, { target: { value: 'monokai' } })
+    expect(document.documentElement.dataset.colorTheme).toBe('monokai')
     fireEvent.click(screen.getByRole('button', { name: /Save|저장/ }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ colorTheme: 'monokai' })))
+  })
+
+  it('previews a color theme on hover and restores the saved theme when closed without saving', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    const onClose = vi.fn()
+    render(<SettingsModal open onClose={onClose} onRestart={vi.fn()} />)
+
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /appearance/i }))
+    const monokaiPreview = screen.getByRole('button', { name: 'Monokai' })
+
+    fireEvent.mouseEnter(monokaiPreview)
+    expect(document.documentElement.dataset.colorTheme).toBe('monokai')
+
+    fireEvent.mouseLeave(monokaiPreview.parentElement!)
+    expect(document.documentElement.dataset.colorTheme).toBe('dark-plus')
+
+    fireEvent.change(screen.getByRole('combobox', { name: /color theme/i }), { target: { value: 'monokai' } })
+    expect(document.documentElement.dataset.colorTheme).toBe('monokai')
+
+    fireEvent.click(screen.getByLabelText('Close settings'))
+    expect(onClose).toHaveBeenCalled()
+    expect(saveSettings).not.toHaveBeenCalled()
+    expect(document.documentElement.dataset.colorTheme).toBe('dark-plus')
   })
 
   it('renders top-level navigation labels in Korean after the language is saved', () => {

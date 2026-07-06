@@ -18,7 +18,7 @@ import {
   type LogPolicy,
   type LogPolicySelectionId,
 } from '../utils/logPolicy'
-import { buildPreviewWarnings, defaultPolicyText, parseLogPolicyText, policyTextForSelection, testLogPaths, trapTabFocus } from './SettingsModalLogic'
+import { buildPreviewWarnings, defaultPolicyText, parseLogPolicyText, policyTextForSelection, previewColorThemeValue, testLogPaths, trapTabFocus } from './SettingsModalLogic'
 import { SettingsSectionContent } from './SettingsSectionContent'
 import { SettingsFooter, SettingsNav, type SettingsSectionId, type TestPathResult } from './SettingsModalSections'
 
@@ -71,6 +71,15 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null)
+  const savedColorTheme = settingsOrDefault(settings).colorTheme
+  const restoreSavedColorTheme = () => previewColorThemeValue(useSettingsStore.getState().settings?.colorTheme ?? savedColorTheme)
+  const restoreDraftColorTheme = () => previewColorThemeValue(draft.colorTheme ?? savedColorTheme)
+  const previewColorTheme = (value: PersistedSettings['colorTheme']) => previewColorThemeValue(value ?? savedColorTheme)
+  const closeWithoutSaving = (debugMessage: string) => {
+    recordActionDebug(debugMessage)
+    restoreSavedColorTheme()
+    onClose()
+  }
 
   useEffect(() => {
     const next = settingsOrDefault(settings)
@@ -96,8 +105,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
 
   const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
-      recordActionDebug('Settings escape pressed')
-      onClose()
+      closeWithoutSaving('Settings escape pressed')
       return
     }
     trapTabFocus(event, dialogRef)
@@ -116,7 +124,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
 
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
   const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
-  const setColorTheme = (value: PersistedSettings['colorTheme']) => { setNotice(undefined); setDraft({ ...draft, colorTheme: value }) }
+  const setColorTheme = (value: PersistedSettings['colorTheme']) => { setNotice(undefined); setDraft({ ...draft, colorTheme: value }); previewColorThemeValue(value) }
   const setDefaultNamespace = (value: string) => { setNotice(undefined); setDraft({ ...draft, defaultNamespace: value.trim() || undefined }) }
   const setShortcut = (key: keyof NonNullable<PersistedSettings['shortcuts']>, value: string) => {
     setNotice(undefined)
@@ -224,12 +232,12 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     <div aria-labelledby="settings-title" aria-modal="true" onKeyDown={handleDialogKeyDown} ref={dialogRef} role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
         <h2 className="text-lg font-bold" id="settings-title">{t(language, 'Settings')}</h2>
-        <button aria-label={t(language, 'Close settings')} ref={closeButtonRef} onClick={() => { recordActionDebug('Settings close clicked'); onClose() }}>✕</button>
+        <button aria-label={t(language, 'Close settings')} ref={closeButtonRef} onClick={() => closeWithoutSaving('Settings close clicked')}>✕</button>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
         <SettingsNav activeSection={activeSection} language={language} onSectionChange={setActiveSection} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
+          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewColorTheme={previewColorTheme} previewPolicy={previewPolicy} restoreDraftColorTheme={restoreDraftColorTheme} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
         </div>
       </div>
       <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />
