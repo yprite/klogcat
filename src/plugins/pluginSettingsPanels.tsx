@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { testVmConnection } from '../commands/tauriVm'
 import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
 import type { AwsVmTargetGroupSettings } from '../types/vm'
@@ -168,6 +169,8 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
   const [showJsonImport, setShowJsonImport] = useState(false)
   const [jsonImportText, setJsonImportText] = useState(awsVmTargetGroupJsonTemplate)
   const [jsonImportError, setJsonImportError] = useState<string>()
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionTestResult, setConnectionTestResult] = useState<{ kind: 'success' | 'error'; message: string }>()
   const updateTargetGroup = (index: number, group: AwsVmTargetGroupSettings) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.map((item, itemIndex) => itemIndex === index ? group : item) })
   }
@@ -211,17 +214,35 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
       setJsonImportError(error instanceof Error ? error.message : String(error))
     }
   }
+  const testConnection = async () => {
+    setTestingConnection(true)
+    setConnectionTestResult(undefined)
+    try {
+      const result = await testVmConnection(draft.plugins.targets)
+      setConnectionTestResult({ kind: 'success', message: t(language, 'VM connection test succeeded. Discovered {count} VM targets.', { count: result.targets.length }) })
+    } catch (error) {
+      const commandError = error as { message?: string; details?: string; code?: string }
+      setConnectionTestResult({ kind: 'error', message: [commandError.message ?? String(error), commandError.details, commandError.code].filter(Boolean).join('\n') })
+    } finally {
+      setTestingConnection(false)
+    }
+  }
   return <section id="settings-aws-vm-plugin" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
         <h3 className="text-sm font-semibold text-white">{t(language, 'AWS VM Target Plugin')}</h3>
         <p className="mt-1 text-xs text-slate-400">{t(language, 'Enable VM log targets discovered from Consul through a bastion host. Saved passwords and TOTP secrets are encrypted locally. Password auth needs sshpass and TOTP mode needs oathtool; if those tools or saved values are unavailable, klogcat falls back to SSH key or agent auth.')}</p>
       </div>
-      <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
-        <input type="checkbox" checked={plugin.enabled} onChange={(event) => updateAwsVmPlugin({ enabled: event.target.checked })} />
-        {t(language, 'Enabled')}
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="rounded border border-sky-500 px-3 py-1 text-sm text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={!plugin.enabled || testingConnection} type="button" onClick={testConnection}>{t(language, testingConnection ? 'Testing VM connection...' : 'Test VM connection')}</button>
+        <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
+          <input type="checkbox" checked={plugin.enabled} onChange={(event) => { updateAwsVmPlugin({ enabled: event.target.checked }); setConnectionTestResult(undefined) }} />
+          {t(language, 'Enabled')}
+        </label>
+      </div>
     </div>
+    {!plugin.enabled && <p className="mt-2 text-xs text-slate-500">{t(language, 'Enable the AWS VM plugin to test bastion and Consul catalog connectivity.')}</p>}
+    {connectionTestResult && <div className={`mt-3 rounded border px-3 py-2 text-xs whitespace-pre-wrap ${connectionTestResult.kind === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100' : 'border-red-500/40 bg-red-500/10 text-red-100'}`}>{connectionTestResult.message}</div>}
 
     <div className="mt-4 space-y-3 rounded border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">

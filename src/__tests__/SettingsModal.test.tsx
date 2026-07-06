@@ -16,6 +16,11 @@ vi.mock('../commands/tauriLogs', () => ({
   checkLogPath: vi.fn(async () => ({ exists: true })),
 }))
 
+vi.mock('../commands/tauriVm', () => ({
+  listVmTargets: vi.fn(async () => ({ targets: [{ id: 'prod:api:api-1', name: 'api-1', address: '10.0.0.7' }] })),
+  testVmConnection: vi.fn(async () => ({ targets: [{ id: 'prod:api:api-1', name: 'api-1', address: '10.0.0.7' }] })),
+}))
+
 function resetSettingsStore() {
   useSettingsStore.setState({
     settings: defaultSettings,
@@ -216,6 +221,22 @@ describe('SettingsModal log policy selection', () => {
 
     expect(bastionPassword).toHaveAttribute('type', 'password')
     expect(bastionPassword).toHaveValue('direct-secret')
+  })
+
+  it('tests AWS VM connection from the current draft settings', async () => {
+    const { testVmConnection } = await import('../commands/tauriVm')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    openSettingsSection(/AWS VM/i)
+    expect(screen.getByRole('button', { name: /test vm connection/i })).toBeDisabled()
+
+    fireEvent.click(screen.getByLabelText('Enabled'))
+    fireEvent.click(screen.getByRole('button', { name: /test vm connection/i }))
+
+    await waitFor(() => expect(testVmConnection).toHaveBeenCalledWith(expect.objectContaining({
+      awsVm: expect.objectContaining({ enabled: true }),
+    })))
+    expect(await screen.findByText('VM connection test succeeded. Discovered 1 VM targets.')).toBeInTheDocument()
   })
 
   it('adds a custom log type and derives settings for it', async () => {
