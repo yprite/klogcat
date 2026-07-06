@@ -1,6 +1,7 @@
 import type { SourceLogType } from './log'
 import type { LogPolicy, LogPolicySelectionId } from '../utils/logPolicy'
 import type { Language } from '../utils/i18n'
+import type { ColorThemeId } from '../utils/colorTheme'
 import type { TargetPluginSettings } from './vm'
 
 export type LogSourceConfig = { container: string; filePath: string }
@@ -17,6 +18,7 @@ export type PersistedSettings = {
   schemaVersion: 1
   defaultNamespace?: string
   language?: Language
+  colorTheme?: ColorThemeId
   initialTailLines: number
   bufferLimit: number
   logSources: Record<SourceLogType, LogSourceConfig>

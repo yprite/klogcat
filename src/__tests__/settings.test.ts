@@ -33,8 +33,8 @@ describe('settings validation', () => {
     expect(validateSettings({ ...defaultSettings, logPolicy: { version: 1 } })).toContainEqual(expect.objectContaining({ field: 'logPolicy' }))
   })
   it('validates AWS VM target plugin settings', () => {
-    const enabled = { ...defaultSettings.plugins.targets.awsVm, enabled: true }
-    const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret' }
+    const enabled = { ...defaultSettings.plugins.targets.awsVm, enabled: true, targetGroups: [] }
+    const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret', targetGroups: [] }
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionHost: '' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionHost' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionPort: 0 } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionPort' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionPassword: 'bad\0secret' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionPassword' }))

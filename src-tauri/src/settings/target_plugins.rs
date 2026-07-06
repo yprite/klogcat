@@ -1,6 +1,7 @@
 use super::target_plugin_groups::{
-    validate_effective_target_groups, validate_group_log_paths, validate_group_secret_values,
-    validate_group_usernames, validate_target_groups, AwsVmTargetGroupSettings,
+    default_aws_vm_target_groups, validate_effective_target_groups, validate_group_log_paths,
+    validate_group_secret_values, validate_group_usernames, validate_target_groups,
+    AwsVmTargetGroupSettings,
 };
 use crate::error::SettingsValidationError;
 use serde::{Deserialize, Serialize};
@@ -63,7 +64,7 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
             consul_catalog_command: "consul catalog nodes -format=json".into(),
             strict_host_key_checking: true,
             log_paths: default_vm_log_paths(),
-            target_groups: Vec::new(),
+            target_groups: default_aws_vm_target_groups(),
         },
         csv_file: CsvFileTargetPluginSettings {
             enabled: false,

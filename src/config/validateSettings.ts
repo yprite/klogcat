@@ -1,5 +1,6 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
 import { validateTargetPluginSettings } from '../plugins/targetPluginRegistry'
+import { isColorThemeId } from '../utils/colorTheme'
 import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy, type LogPolicy } from '../utils/logPolicy'
 
 function sourceKeys(policy?: LogPolicy) { return sourceTypesFromPolicy(policy ?? getLogPolicy()) }
@@ -9,10 +10,11 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'plugins'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'colorTheme', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'plugins'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
+    ['colorTheme', value.colorTheme !== undefined && !isColorThemeId(value.colorTheme), 'colorTheme must be a supported VS Code color theme'],
     ['initialTailLines', !integerInRange(value.initialTailLines, 0, 100000), 'initialTailLines must be 0..100000'],
     ['bufferLimit', !integerInRange(value.bufferLimit, 1000, 200000), 'bufferLimit must be 1000..200000'],
     ['defaultNamespace', value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string', 'defaultNamespace must be a string when provided'],

@@ -53,6 +53,33 @@ fn default_true() -> bool {
     true
 }
 
+pub(crate) fn default_aws_vm_target_groups() -> Vec<AwsVmTargetGroupSettings> {
+    (1..=5)
+        .map(|index| AwsVmTargetGroupSettings {
+            id: format!("region-bastion-{index}"),
+            name: format!("Region/Bastion {index}"),
+            enabled: false,
+            bastion_host: None,
+            bastion_port: None,
+            bastion_username: None,
+            bastion_password: None,
+            bastion_totp_secret: None,
+            bastion_password_mode: None,
+            vm_username: None,
+            vm_password: None,
+            consul_catalog_command: None,
+            strict_host_key_checking: None,
+            log_paths: BTreeMap::new(),
+            modules: vec![AwsVmTargetModuleSettings {
+                id: "module-1".into(),
+                name: "Module 1".into(),
+                consul_catalog_command: None,
+                log_paths: BTreeMap::new(),
+            }],
+        })
+        .collect()
+}
+
 pub(crate) fn validate_group_secret_values(
     plugin: &AwsVmTargetPluginSettings,
     errors: &mut Vec<SettingsValidationError>,
@@ -207,6 +234,12 @@ fn validate_group_identity(
         errors.push(err(
             format!("{prefix}.name"),
             "target group name is required",
+        ));
+    }
+    if group.enabled && group.modules.is_empty() {
+        errors.push(err(
+            format!("{prefix}.modules"),
+            "at least one module is required for an enabled VM region/bastion",
         ));
     }
 }

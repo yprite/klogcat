@@ -3,6 +3,7 @@ import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
 import type { AwsVmTargetGroupSettings } from '../types/vm'
 import { t, type Language } from '../utils/i18n'
+import { defaultAwsVmTargetGroups } from './awsVmTargetPlugin'
 
 type PluginSettingsPanelProps = {
   draft: PersistedSettings
@@ -33,11 +34,9 @@ function newTargetConfigId(prefix: string) {
 }
 
 const awsVmTargetGroupJsonTemplate = JSON.stringify({
-  targetGroups: [{
-    id: 'prod-bastion',
-    name: 'Prod Bastion',
-    enabled: true,
-    bastionHost: 'bastion-prod.example.com',
+  targetGroups: defaultAwsVmTargetGroups.map((group) => ({
+    ...group,
+    bastionHost: `${group.id}.example.com`,
     bastionPort: 22,
     modules: [
       {
@@ -51,7 +50,7 @@ const awsVmTargetGroupJsonTemplate = JSON.stringify({
         consulCatalogCommand: 'consul catalog nodes -service worker -format=json',
       },
     ],
-  }],
+  })),
 }, null, 2)
 
 function AwsVmTargetGroupPanel({ collapsed, group, index, language, toggleCollapsed, updateGroup, removeGroup }: { collapsed: boolean; group: AwsVmTargetGroupSettings; index: number; language?: Language; toggleCollapsed: () => void; updateGroup: (group: AwsVmTargetGroupSettings) => void; removeGroup: () => void }) {
@@ -100,7 +99,7 @@ function AwsVmTargetGroupDetails({ addModule, group, language, modules, removeMo
         <h4 className="text-xs font-semibold uppercase text-slate-400">{t(language, 'Modules')}</h4>
         <button className="rounded border border-sky-500 px-2 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addModule}>{t(language, 'Add module')}</button>
       </div>
-      {modules.length === 0 && <p className="rounded border border-dashed border-slate-700 p-2 text-xs text-slate-500">{t(language, 'No modules configured. This group uses the inherited Consul command.')}</p>}
+      {modules.length === 0 && <p className="rounded border border-dashed border-slate-700 p-2 text-xs text-slate-500">{t(language, 'At least one module is required for an enabled VM region/bastion.')}</p>}
       {modules.map((module, moduleIndex) => <div className="grid gap-2 rounded border border-slate-800 p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]" key={module.id}>
         <label className="block text-sm">{t(language, 'Module name')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={module.name} onChange={(event) => updateModule(moduleIndex, { name: event.target.value })} /></label>
         <label className="block text-sm">{t(language, 'Consul command override')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={module.consulCatalogCommand ?? ''} onChange={(event) => updateModule(moduleIndex, { consulCatalogCommand: event.target.value })} /></label>
@@ -189,6 +188,10 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
   const removeTargetGroup = (index: number) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.filter((_, itemIndex) => itemIndex !== index) })
   }
+  const resetFiveRegionTemplate = () => {
+    updateAwsVmPlugin({ targetGroups: defaultAwsVmTargetGroups.map((group) => ({ ...group, modules: group.modules.map((module) => ({ ...module })) })) })
+    setCollapsedGroupIds(new Set())
+  }
   const toggleCollapsedGroup = (groupId: string) => {
     setCollapsedGroupIds((current) => {
       const next = new Set(current)
@@ -223,11 +226,12 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
     <div className="mt-4 space-y-3 rounded border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h4 className="text-sm font-semibold text-white">{t(language, 'Bastion groups and modules')}</h4>
-          <p className="mt-1 text-xs text-slate-400">{t(language, 'Add each bastion once, then add modules under that bastion. Values below inherit from shared defaults unless overridden.')}</p>
+          <h4 className="text-sm font-semibold text-white">{t(language, 'Regions/Bastions and modules')}</h4>
+          <p className="mt-1 text-xs text-slate-400">{t(language, 'Configure up to five region bastions, then add modules under each bastion. VM instances discovered per module are selected like Kubernetes pods.')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={() => setShowJsonImport((value) => !value)}>{t(language, 'Import JSON template')}</button>
+          <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={resetFiveRegionTemplate}>{t(language, 'Reset 5 region template')}</button>
           <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addTargetGroup}>{t(language, 'Add bastion group')}</button>
         </div>
       </div>

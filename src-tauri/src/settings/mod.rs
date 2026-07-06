@@ -22,6 +22,8 @@ pub struct PersistedSettings {
     pub schema_version: u8,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default = "default_color_theme")]
+    pub color_theme: String,
     pub default_namespace: Option<String>,
     pub initial_tail_lines: u32,
     pub buffer_limit: u32,
@@ -57,10 +59,15 @@ fn default_language() -> String {
     "en".into()
 }
 
+fn default_color_theme() -> String {
+    "dark-plus".into()
+}
+
 pub fn default_settings() -> PersistedSettings {
     PersistedSettings {
         schema_version: 1,
         language: default_language(),
+        color_theme: default_color_theme(),
         default_namespace: None,
         initial_tail_lines: 200,
         buffer_limit: 50_000,
@@ -104,6 +111,7 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     let mut errors = Vec::new();
     validate_schema_version(s, &mut errors);
     validate_language(s, &mut errors);
+    validate_color_theme(s, &mut errors);
     validate_runtime_limits(s, &mut errors);
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
@@ -121,6 +129,31 @@ fn validate_schema_version(s: &PersistedSettings, errors: &mut Vec<SettingsValid
 fn validate_language(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     if s.language != "en" && s.language != "ko" {
         errors.push(err("language", "language must be en or ko"));
+    }
+}
+
+fn validate_color_theme(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
+    if !matches!(
+        s.color_theme.as_str(),
+        "dark-plus"
+            | "light-plus"
+            | "dark-modern"
+            | "light-modern"
+            | "quiet-light"
+            | "solarized-dark"
+            | "solarized-light"
+            | "monokai"
+            | "red"
+            | "tomorrow-night-blue"
+            | "abyss"
+            | "kimbie-dark"
+            | "high-contrast"
+            | "high-contrast-light"
+    ) {
+        errors.push(err(
+            "colorTheme",
+            "colorTheme must be a supported VS Code color theme",
+        ));
     }
 }
 

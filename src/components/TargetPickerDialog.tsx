@@ -338,7 +338,7 @@ function SelectedTargetButton({ onPodChange, runSelectionChange, selectedPods, s
 
 function SelectedVmTargetButton({ onVmTargetChange, runSelectionChange, selectedVmTargets, selectionPending, setDraftSelectedVmTargets, value }: Pick<SelectedTargetsProps, 'onVmTargetChange' | 'runSelectionChange' | 'selectedVmTargets' | 'selectionPending' | 'setDraftSelectedVmTargets'> & { value: string }) {
   const target = useVmStore.getState().targets.find((item) => vmTargetValue(item) === value)
-  const label = target ? `${target.name} / ${target.address}` : value
+  const label = target ? [target.bastionName, target.moduleName, target.name, target.address].filter(Boolean).join(' / ') : value
   const targetLabel = isCsvTargetId(value) ? 'CSV' : 'AWS VM'
   const removeTarget = () => {
     const next = selectedVmTargets.filter((item) => item !== value)
@@ -406,14 +406,14 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
       <div className="flex shrink-0 items-center justify-between border-b border-slate-800 p-4">
         <div>
           <h2 id="target-picker-title" className="text-lg font-semibold">{t(language, 'Select Log Targets')}</h2>
-          <p className="text-xs text-slate-400">{t(language, 'Choose targets in Cluster → Namespace → Pod order.')}</p>
+          <p className="text-xs text-slate-400">{t(language, 'Kubernetes uses Cluster → Namespace → Pod. VM uses Region/Bastion → Module → VM.')}</p>
         </div>
         {(discoveryActive || podRefreshActive) && <ProgressPanel progressLabel={progressLabel} language={language} />}
         <button className="rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800" onClick={onClose}>{t(language, 'Close')}</button>
       </div>
       <div className="shrink-0 border-b border-slate-800 p-3">
         <label className="block text-xs uppercase text-slate-400">{t(language, 'Search targets')}</label>
-        <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / phase / container / VM name / IP')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
+        <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / region / bastion / module / VM name / IP')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
         {vmTargetsEnabled && <div className="mt-3 inline-flex rounded border border-slate-700 bg-slate-900 p-1" role="tablist" aria-label={t(language, 'Target source')}>
           <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'kubernetes' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'kubernetes'} onClick={() => setTargetTab('kubernetes')}>{t(language, 'Kubernetes')}</button>
           {awsVmTargetsEnabled && <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'aws-vm' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'aws-vm'} onClick={() => setTargetTab('aws-vm')}>{t(language, 'AWS VM')}</button>}
