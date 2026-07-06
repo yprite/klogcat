@@ -60,6 +60,19 @@ describe('i18n language settings', () => {
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: 'ko' })))
   })
 
+  it('adds a VS Code color theme selector to appearance settings', async () => {
+    const { saveSettings } = await import('../commands/tauriSettings')
+    render(<SettingsModal open onClose={vi.fn()} onRestart={vi.fn()} />)
+
+    fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: /appearance/i }))
+    const selector = screen.getByRole('combobox', { name: /color theme/i })
+
+    fireEvent.change(selector, { target: { value: 'monokai' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save|저장/ }))
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ colorTheme: 'monokai' })))
+  })
+
   it('renders top-level navigation labels in Korean after the language is saved', () => {
     useSettingsStore.setState({ settings: { ...defaultSettings, language: 'ko' } })
 

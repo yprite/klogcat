@@ -13,6 +13,13 @@ const awsVmTargetModuleKeys = ['id', 'name', 'consulCatalogCommand', 'logPaths']
 const requiredStringKeys = ['bastionHost', 'bastionUsername', 'bastionPassword', 'vmUsername', 'vmPassword', 'consulCatalogCommand'] as const
 const secretKeys = ['bastionPassword', 'vmPassword', 'bastionTotpSecret'] as const
 
+export const defaultAwsVmTargetGroups: AwsVmTargetGroupSettings[] = Array.from({ length: 5 }, (_, index) => ({
+  id: `region-bastion-${index + 1}`,
+  name: `Region/Bastion ${index + 1}`,
+  enabled: false,
+  modules: [{ id: 'module-1', name: 'Module 1' }],
+}))
+
 export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
   enabled: false,
   bastionHost: '',
@@ -30,7 +37,7 @@ export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
     access: '/var/log/app/access.log',
     error: '/var/log/app/error.log',
   },
-  targetGroups: [],
+  targetGroups: defaultAwsVmTargetGroups,
 }
 
 function sourceKeys() {
@@ -110,6 +117,7 @@ export function validateAwsVmTargetPluginSettings(value: unknown, errors: Settin
     if (groups.length === 0) {
       validateVmLogPaths(value.logPaths, errors)
     } else if (canExpandAwsVmTargetGroups(value)) {
+      if (!groups.some((group) => isRecord(group) && group.enabled === true)) errors.push({ field: 'plugins.targets.awsVm.targetGroups', message: 'at least one enabled VM region/bastion is required' })
       for (const profile of effectiveAwsVmPlugins(value as AwsVmTargetPluginSettings)) validateEffectiveAwsVmPlugin(profile.plugin, errors, profile.fieldPrefix)
     }
   }
@@ -184,6 +192,7 @@ function validateAwsVmTargetGroup(value: unknown, index: number, groupIds: Set<s
     groupIds.add(id)
   }
   if (typeof value.enabled !== 'boolean') errors.push({ field: `${prefix}.enabled`, message: 'enabled must be a boolean' })
+  if (value.enabled === true && Array.isArray(value.modules) && value.modules.length === 0) errors.push({ field: `${prefix}.modules`, message: 'at least one module is required for an enabled VM region/bastion' })
   validateOptionalStringFields(value, prefix, ['bastionHost', 'bastionUsername', 'bastionPassword', 'bastionTotpSecret', 'bastionPasswordMode', 'vmUsername', 'vmPassword', 'consulCatalogCommand'], errors)
   if (value.bastionPort !== undefined && !integerInRange(value.bastionPort, 1, 65535)) errors.push({ field: `${prefix}.bastionPort`, message: 'bastionPort must be 1..65535' })
   if (value.bastionPasswordMode !== undefined && value.bastionPasswordMode !== 'password' && value.bastionPasswordMode !== 'password-plus-totp') errors.push({ field: `${prefix}.bastionPasswordMode`, message: 'bastionPasswordMode must be password or password-plus-totp' })

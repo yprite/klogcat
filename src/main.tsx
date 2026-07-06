@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { applyColorTheme, initialColorTheme } from './utils/colorTheme'
 import { loadLogPolicyConfig } from './utils/logPolicy'
 import './index.css'
+
+applyColorTheme(initialColorTheme())
 
 async function bootstrap() {
   const result = await loadLogPolicyConfig('/log-policy.json')
