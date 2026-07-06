@@ -65,7 +65,12 @@ fn encrypts_aws_vm_group_secrets_on_disk_and_decrypts_on_load() {
         consul_catalog_command: None,
         strict_host_key_checking: None,
         log_paths: BTreeMap::new(),
-        modules: Vec::new(),
+        modules: vec![AwsVmTargetModuleSettings {
+            id: "api".into(),
+            name: "API".into(),
+            consul_catalog_command: None,
+            log_paths: BTreeMap::new(),
+        }],
     }];
 
     save_to_path(path.clone(), s).unwrap();

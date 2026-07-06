@@ -510,6 +510,7 @@ mod tests {
     fn validates_aws_vm_plugin_security_fields() {
         let mut s = default_settings();
         s.plugins.targets.aws_vm.enabled = true;
+        s.plugins.targets.aws_vm.target_groups.clear();
         s.plugins.targets.aws_vm.bastion_host = "bastion.example.com".into();
         s.plugins.targets.aws_vm.bastion_username = "ops".into();
         s.plugins.targets.aws_vm.bastion_password = "bastion-password".into();
