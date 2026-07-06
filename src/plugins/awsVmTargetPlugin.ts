@@ -107,19 +107,22 @@ export function validateAwsVmTargetPluginSettings(value: unknown, errors: Settin
     return
   }
   rejectExtraKeys(value, awsVmSettingKeys, 'plugins.targets.awsVm', errors)
+  if (typeof value.enabled !== 'boolean') {
+    errors.push({ field: 'plugins.targets.awsVm.enabled', message: 'enabled must be a boolean' })
+    return
+  }
+  if (value.enabled !== true) return
   validateAwsVmShape(value, errors)
   validateAwsVmRequiredStrings(value, errors)
   validateAwsVmSecrets(value, errors)
   validateAwsVmUsernames(value, errors)
   validateAwsVmTargetGroups(value, errors)
-  if (value.enabled === true) {
-    const groups = Array.isArray(value.targetGroups) ? value.targetGroups : []
-    if (groups.length === 0) {
-      validateVmLogPaths(value.logPaths, errors)
-    } else if (canExpandAwsVmTargetGroups(value)) {
-      if (!groups.some((group) => isRecord(group) && group.enabled === true)) errors.push({ field: 'plugins.targets.awsVm.targetGroups', message: 'at least one enabled VM region/bastion is required' })
-      for (const profile of effectiveAwsVmPlugins(value as AwsVmTargetPluginSettings)) validateEffectiveAwsVmPlugin(profile.plugin, errors, profile.fieldPrefix)
-    }
+  const groups = Array.isArray(value.targetGroups) ? value.targetGroups : []
+  if (groups.length === 0) {
+    validateVmLogPaths(value.logPaths, errors)
+  } else if (canExpandAwsVmTargetGroups(value)) {
+    if (!groups.some((group) => isRecord(group) && group.enabled === true)) errors.push({ field: 'plugins.targets.awsVm.targetGroups', message: 'at least one enabled VM region/bastion is required' })
+    for (const profile of effectiveAwsVmPlugins(value as AwsVmTargetPluginSettings)) validateEffectiveAwsVmPlugin(profile.plugin, errors, profile.fieldPrefix)
   }
 }
 

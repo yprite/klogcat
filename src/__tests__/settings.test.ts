@@ -47,6 +47,24 @@ describe('settings validation', () => {
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, csvFile: { enabled: true, csvText: 'name,address\napi,10.0.0.7' } }))).toEqual([])
   })
 
+  it('does not block saving incomplete AWS VM settings while the plugin is disabled', () => {
+    expect(validateSettings(withTargetPlugins({
+      ...defaultSettings.plugins.targets,
+      awsVm: {
+        ...defaultSettings.plugins.targets.awsVm,
+        enabled: false,
+        bastionPort: 0,
+        bastionPasswordMode: 'invalid' as never,
+        targetGroups: [{
+          id: 'prod',
+          name: 'Prod',
+          enabled: true,
+          modules: [],
+        }],
+      },
+    }))).toEqual([])
+  })
+
   it('accepts AWS VM bastion groups and module overrides', () => {
     const settings = {
       ...defaultSettings,
