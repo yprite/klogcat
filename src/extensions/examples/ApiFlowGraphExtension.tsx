@@ -231,11 +231,12 @@ function GraphCanvas({ graph }: { graph: ApiFlowGraph }) {
         if (!from || !to) return null
         const midY = (from.y + to.y) / 2 + (index % 2 === 0 ? -18 : 18)
         const path = `M ${from.x} ${from.y} C ${(from.x + to.x) / 2} ${midY}, ${(from.x + to.x) / 2} ${midY}, ${to.x} ${to.y}`
-        return <g key={edge.id} data-testid="api-flow-edge">
-          <path d={path} className="api-flow-edge-base" />
-          <path d={path} className="api-flow-edge-motion" markerEnd="url(#api-flow-arrow)">
+        return <g key={edge.id}>
+          <path d={path} className="api-flow-edge-hit" data-testid="api-flow-edge">
             <title>{edgeTooltip(edge)}</title>
           </path>
+          <path d={path} className="api-flow-edge-base" />
+          <path d={path} className="api-flow-edge-motion" markerEnd="url(#api-flow-arrow)" />
         </g>
       })}
       {graph.nodes.map((node) => <g key={node.id} transform={`translate(${node.x} ${node.y})`} data-testid="api-flow-node">

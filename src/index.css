@@ -213,6 +213,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
   stroke-width: 8;
   stroke-linecap: round;
   opacity: 0.42;
+  pointer-events: none;
 }
 
 .api-flow-edge-motion {
@@ -223,6 +224,15 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
   stroke-dasharray: 14 18;
   animation: api-flow-dash 1.25s linear infinite;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--klogcat-accent) 48%, transparent));
+  pointer-events: none;
+}
+
+.api-flow-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  stroke-linecap: round;
+  pointer-events: stroke;
 }
 
 @keyframes api-flow-dash {
