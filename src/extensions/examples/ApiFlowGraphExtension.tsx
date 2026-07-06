@@ -231,10 +231,14 @@ function GraphCanvas({ graph }: { graph: ApiFlowGraph }) {
         if (!from || !to) return null
         const midY = (from.y + to.y) / 2 + (index % 2 === 0 ? -18 : 18)
         const path = `M ${from.x} ${from.y} C ${(from.x + to.x) / 2} ${midY}, ${(from.x + to.x) / 2} ${midY}, ${to.x} ${to.y}`
+        const hitX = Math.min(from.x, to.x) - 12
+        const hitY = Math.min(from.y, to.y, midY) - 24
+        const hitWidth = Math.abs(to.x - from.x) + 24
+        const hitHeight = Math.max(48, Math.abs(to.y - from.y) + 48)
         return <g key={edge.id}>
-          <path d={path} className="api-flow-edge-hit" data-testid="api-flow-edge">
+          <rect x={hitX} y={hitY} width={hitWidth} height={hitHeight} rx="12" className="api-flow-edge-hit" data-testid="api-flow-edge">
             <title>{edgeTooltip(edge)}</title>
-          </path>
+          </rect>
           <path d={path} className="api-flow-edge-base" />
           <path d={path} className="api-flow-edge-motion" markerEnd="url(#api-flow-arrow)" />
         </g>

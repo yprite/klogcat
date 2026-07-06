@@ -228,10 +228,8 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 }
 
 .api-flow-edge-hit {
-  fill: none;
-  stroke: color-mix(in srgb, var(--klogcat-accent) 2%, transparent);
-  stroke-width: 18;
-  stroke-linecap: round;
+  fill: color-mix(in srgb, var(--klogcat-accent) 1%, transparent);
+  stroke: none;
   pointer-events: all;
 }
 
