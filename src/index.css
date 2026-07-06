@@ -207,6 +207,32 @@ body { margin: 0; background: var(--klogcat-bg); color: var(--klogcat-text); fon
 button, input, select { font: inherit; }
 button:disabled { cursor: not-allowed; opacity: 0.45; }
 
+.api-flow-edge-base {
+  fill: none;
+  stroke: var(--klogcat-border);
+  stroke-width: 8;
+  stroke-linecap: round;
+  opacity: 0.42;
+}
+
+.api-flow-edge-motion {
+  fill: none;
+  stroke: var(--klogcat-accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 14 18;
+  animation: api-flow-dash 1.25s linear infinite;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--klogcat-accent) 48%, transparent));
+}
+
+@keyframes api-flow-dash {
+  to { stroke-dashoffset: -32; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .api-flow-edge-motion { animation: none; stroke-dasharray: none; }
+}
+
 .klogcat-select {
   color: var(--klogcat-text-strong);
   background: var(--klogcat-panel-soft);
