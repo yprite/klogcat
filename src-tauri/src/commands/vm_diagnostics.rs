@@ -1,7 +1,7 @@
 use super::{vm::shell_quote, vm_target_groups::EffectiveVmProfile};
 use crate::{error::CommandError, settings::AwsVmTargetPluginSettings};
 
-pub(crate) fn profile_label(profile: &EffectiveVmProfile) -> String {
+pub(super) fn profile_label(profile: &EffectiveVmProfile) -> String {
     [
         profile.bastion_name.as_deref().unwrap_or("shared-bastion"),
         profile.module_name.as_deref().unwrap_or("default-module"),
