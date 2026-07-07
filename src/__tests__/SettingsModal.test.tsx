@@ -231,6 +231,12 @@ describe('SettingsModal log policy selection', () => {
     expect(screen.getByRole('button', { name: /test vm connection/i })).toBeDisabled()
 
     fireEvent.click(screen.getByLabelText('Enabled'))
+    fireEvent.click(screen.getByLabelText(/Region\/Bastion 1/))
+    fireEvent.change(screen.getByLabelText('Bastion host'), { target: { value: 'bastion.example.com' } })
+    fireEvent.change(screen.getByLabelText('Bastion username'), { target: { value: 'ops' } })
+    fireEvent.change(screen.getByLabelText('Bastion password'), { target: { value: 'secret' } })
+    fireEvent.change(screen.getByLabelText('VM username'), { target: { value: 'app' } })
+    fireEvent.change(screen.getByLabelText('VM password'), { target: { value: 'vm-secret' } })
     fireEvent.click(screen.getByRole('button', { name: /test vm connection/i }))
 
     await waitFor(() => expect(testVmConnection).toHaveBeenCalledWith(expect.objectContaining({

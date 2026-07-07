@@ -9,7 +9,7 @@ function pluginEnabledState(pluginId: string, settings: PersistedSettings) {
   return targetPlugin.isEnabled(settings.plugins.targets) ? 'enabled' : 'disabled'
 }
 
-export function PluginInventoryPanel({ language, settings }: { language?: Language; settings: PersistedSettings }) {
+export function PluginInventoryPanel({ language, onOpenTargetPlugin, settings }: { language?: Language; onOpenTargetPlugin?: (settingsKey: string) => void; settings: PersistedSettings }) {
   const plugins = getPluginManifests()
   return <section id="settings-plugin-inventory" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -19,8 +19,18 @@ export function PluginInventoryPanel({ language, settings }: { language?: Langua
       </div>
       <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{plugins.length} {t(language, 'plugins')}</span>
     </div>
-    <div className="mt-3 overflow-hidden rounded border border-slate-800">
-      <table className="w-full text-left text-xs">
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {targetPluginDefinitions.map((plugin) => <button key={plugin.manifest.id} type="button" className="rounded border border-slate-800 bg-slate-900/70 p-3 text-left hover:border-yellow-400/70" onClick={() => onOpenTargetPlugin?.(plugin.settingsKey)}>
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-semibold text-slate-100">{t(language, plugin.manifest.label)}</span>
+          <span className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300">{pluginEnabledState(plugin.manifest.id, settings)}</span>
+        </div>
+        <p className="mt-1 text-xs text-slate-400">{plugin.manifest.description}</p>
+        <p className="mt-2 text-xs text-yellow-200">{t(language, 'Open plugin settings')}</p>
+      </button>)}
+    </div>
+    <div className="mt-3 overflow-x-auto rounded border border-slate-800">
+      <table className="min-w-[720px] w-full text-left text-xs">
         <thead className="bg-slate-900 text-slate-400">
           <tr>
             <th className="px-2 py-1">{t(language, 'Plugin id')}</th>

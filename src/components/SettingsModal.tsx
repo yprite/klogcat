@@ -34,6 +34,19 @@ function hasVmLikeTargetPlugin(settings: PersistedSettings | undefined) {
   return isTargetPluginEnabled(settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(settings?.plugins.targets, 'csvFile')
 }
 
+function hasLoadableVmTargetSettings(settings: PersistedSettings) {
+  const awsVm = settings.plugins.targets.awsVm
+  return isTargetPluginEnabled(settings.plugins.targets, 'csvFile') || (
+    isTargetPluginEnabled(settings.plugins.targets, 'awsVm')
+    && awsVm.bastionHost.trim() !== ''
+    && awsVm.bastionUsername.trim() !== ''
+    && awsVm.bastionPassword.trim() !== ''
+    && awsVm.vmUsername.trim() !== ''
+    && awsVm.vmPassword.trim() !== ''
+    && awsVm.targetGroups.some((group) => group.enabled)
+  )
+}
+
 function policyIdForSettings(settings: PersistedSettings) {
   return settings.logPolicyId ?? 'scloud'
 }
@@ -180,11 +193,12 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
     }
     const wasAwsVmEnabled = isTargetPluginEnabled(settings?.plugins.targets, 'awsVm')
     const hadVmLikeTargets = hasVmLikeTargetPlugin(settings)
+    const shouldLoadVmTargets = hasLoadableVmTargetSettings(nextDraft)
     const ok = canSave ? await saveSettings(nextDraft) : false
     if (ok) {
       if (!hasVmLikeTargetPlugin(nextDraft)) {
         await cleanupDisabledAwsVmPlugin()
-      } else if (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.plugins.targets, 'csvFile')) {
+      } else if (shouldLoadVmTargets && (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.plugins.targets, 'csvFile'))) {
         await useVmStore.getState().loadTargets(nextDraft.plugins.targets)
       }
       onClose()
@@ -237,7 +251,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
         <SettingsNav activeSection={activeSection} language={language} onSectionChange={setActiveSection} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewColorTheme={previewColorTheme} previewPolicy={previewPolicy} restoreDraftColorTheme={restoreDraftColorTheme} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
+          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewColorTheme={previewColorTheme} previewPolicy={previewPolicy} restoreDraftColorTheme={restoreDraftColorTheme} selectedPolicyId={selectedPolicyId} setActiveSection={setActiveSection} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
         </div>
       </div>
       <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />

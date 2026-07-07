@@ -137,9 +137,10 @@ async function copyText(text: string) {
 export function LogViewer() {
   const language = useSettingsStore((s) => s.settings?.language)
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
+  const setViewerFilteredRows = useLogStore((s) => s.setViewerFilteredRows)
   const kube = useKubeStore()
   const vm = useVmStore()
-  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.plugins.targets, 'awsVm'))
+  const vmTargetsEnabled = useSettingsStore((s) => isTargetPluginEnabled(s.settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(s.settings?.plugins.targets, 'csvFile'))
   const selectedTargetCount = kube.getSelectedPodTargets().length + (vmTargetsEnabled ? vm.getSelectedVmTargets().length : 0)
   const parentRef = useRef<HTMLDivElement>(null)
   const seenRowIdsRef = useRef<Set<number> | null>(null)
@@ -200,6 +201,10 @@ export function LogViewer() {
     if (activeFilters.length === 0) return visibleRows
     return visibleRows.filter((row) => activeFilters.every(([key, filter]) => valueForColumn(row, key).toLowerCase().includes(filter.trim().toLowerCase())))
   }, [columnFilters, visibleColumns, visibleRows])
+  useEffect(() => {
+    setViewerFilteredRows(filteredRows, Object.fromEntries(Object.entries(columnFilters).map(([key, value]) => [key, value ?? ''])))
+  }, [columnFilters, filteredRows, setViewerFilteredRows])
+  const mobileRows = useMemo(() => filteredRows.slice(-100), [filteredRows])
   const emptyState = useMemo(() => {
     if (rows.length === 0 && selectedTargetCount === 0) return { title: t(language, 'No log target selected'), detail: t(language, 'Use Choose Target to choose a pod or VM target, then start a stream.') }
     if (rows.length === 0) return { title: t(language, 'Ready to stream logs'), detail: t(language, 'Targets selected: {count}. Press Start to begin tailing logs.', { count: selectedTargetCount }) }
@@ -317,7 +322,37 @@ export function LogViewer() {
       })}
     </div>}
   </div>}
-  <div ref={parentRef} data-testid="log-scroll" className="min-h-0 flex-1 overflow-scroll font-mono text-xs bg-slate-950 border border-slate-800">
+  {emptyState ? <div className="min-h-0 flex-1 overflow-auto border border-slate-800 bg-slate-950 p-10 font-sans">
+    <div className="mx-auto w-[36rem] max-w-full rounded border border-dashed border-slate-700 bg-slate-900/80 p-5 text-center shadow-lg shadow-black/20">
+      <p className="text-base font-semibold text-slate-100">{emptyState.title}</p>
+      <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
+      <p className="mt-3 text-xs text-slate-500">{t(language, 'Stream status')}: {t(language, streamStatus)}</p>
+      {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">{t(language, 'Choose Target')}</button>}
+    </div>
+  </div> : <>
+  <div className="min-h-0 flex-1 overflow-auto border border-slate-800 bg-slate-950 p-2 text-xs sm:hidden">
+    <div className="mb-2 rounded border border-slate-800 bg-slate-900 p-2 text-slate-300">
+      <span className="font-semibold text-yellow-200">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span>
+      <span className="ml-2 text-slate-500">{t(language, 'Showing latest {count} rows as mobile cards.', { count: mobileRows.length })}</span>
+    </div>
+    <div className="space-y-2">
+      {mobileRows.map((row) => <button key={row.id} type="button" onClick={() => setSelectedRowId(row.id)} className={`block w-full rounded border p-3 text-left ${selectedRowId === row.id ? 'border-yellow-400 bg-yellow-400/10' : 'border-slate-800 bg-slate-900/70'}`}>
+        <div className="flex items-start justify-between gap-2">
+          <span className="min-w-0 truncate font-mono text-yellow-100">{row.trId || row.traceId || `#${row.id}`}</span>
+          <span className={`shrink-0 rounded border px-2 py-0.5 font-semibold ${String(row.status ?? '').startsWith('5') ? 'border-red-500/50 text-red-200' : String(row.status ?? '').startsWith('4') ? 'border-amber-500/50 text-amber-200' : 'border-slate-700 text-slate-200'}`}>{row.status ?? row.sourceType}</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-300">
+          <span>{row.method || '-'}</span>
+          <span className="min-w-0 flex-1 truncate">{row.url || row.errorPath || row.summary}</span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+          <span className="truncate">module: <span className="text-slate-300">{row.module || row.service || '-'}</span></span>
+          <span className="truncate">rmsg: <span className="text-slate-300">{row.rmsg || row.errorReason || '-'}</span></span>
+        </div>
+      </button>)}
+    </div>
+  </div>
+  <div ref={parentRef} data-testid="log-scroll" className="hidden min-h-0 flex-1 overflow-scroll border border-slate-800 bg-slate-950 font-mono text-xs sm:block">
     <div style={{ height: `${virtualizer.getTotalSize() + headerHeight}px`, minWidth: '100%', position: 'relative' }}>
       {availableColumns.length > 0 && <div role="row" aria-label={t(language, 'Visible column filters')} className="sticky top-0 z-10 inline-flex min-w-max items-start gap-2 border-b border-slate-700 bg-slate-900 px-2 py-1">
         <span className="inline-block w-28 shrink-0 text-[10px] uppercase text-slate-400">time</span>
@@ -338,18 +373,11 @@ export function LogViewer() {
           </span>
         })}
       </div>}
-      {emptyState && <div className="absolute inset-0 flex items-start justify-center p-10 font-sans">
-        <div className="w-[36rem] max-w-full rounded border border-dashed border-slate-700 bg-slate-900/80 p-5 text-center shadow-lg shadow-black/20">
-          <p className="text-base font-semibold text-slate-100">{emptyState.title}</p>
-          <p className="mt-2 text-sm text-slate-400">{emptyState.detail}</p>
-          <p className="mt-3 text-xs text-slate-500">{t(language, 'Stream status')}: {t(language, streamStatus)}</p>
-          {selectedTargetCount === 0 && <button type="button" onClick={openTargetPicker} className="mt-4 rounded border border-yellow-500 bg-yellow-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-yellow-300">{t(language, 'Choose Target')}</button>}
-        </div>
-      </div>}
       {virtualizer.getVirtualItems().map(v => <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} onClick={() => setSelectedRowId(filteredRows[v.index].id)} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start + headerHeight}px)` }}><LogRow row={filteredRows[v.index]} grepQuery={grepQuery} grepMode={grepMode} visibleColumns={headerColumns} columnWidths={columnWidths} isNew={highlightedRowIds.has(filteredRows[v.index].id)} isSelected={selectedRowId === filteredRows[v.index].id} /></div>)}
     </div>
   </div>
-  <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
+  </>}
+  <div className="flex flex-wrap items-center gap-2 border border-slate-800 bg-slate-900 p-2 text-xs">
     <span className="text-slate-400">{t(language, 'Rows')}: {filteredRows.length}/{visibleRows.length}</span>
     <button type="button" disabled={filteredRows.length === 0} onClick={() => void copyText(exportRowsAsJsonl(filteredRows))}>{t(language, 'Copy filtered')}</button>
     <button type="button" disabled={filteredRows.length === 0} onClick={() => downloadTextFile(`klogcat-${Date.now()}.jsonl`, exportRowsAsJsonl(filteredRows))}>{t(language, 'Export filtered JSONL')}</button>

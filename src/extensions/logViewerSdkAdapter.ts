@@ -95,12 +95,13 @@ export function toLogViewerExtensionSnapshot(
   vm = useVmStore.getState(),
   settings = useSettingsStore.getState(),
 ): LogViewerExtensionSnapshot {
-  const vmTargetsEnabled = isTargetPluginEnabled(settings.settings?.plugins.targets, 'awsVm')
+  const vmTargetsEnabled = isTargetPluginEnabled(settings.settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(settings.settings?.plugins.targets, 'csvFile')
+  const visibleRows = log.viewerFilteredRows ?? log.visibleRows
   return {
     rows: log.rows.map(toSdkLogRow),
-    visibleRows: log.visibleRows.map(toSdkLogRow),
+    visibleRows: visibleRows.map(toSdkLogRow),
     totalRowCount: log.rows.length,
-    visibleRowCount: log.visibleRows.length,
+    visibleRowCount: visibleRows.length,
     rowLimit: log.bufferLimit,
     grepQuery: log.grepQuery,
     grepMode: log.grepMode,

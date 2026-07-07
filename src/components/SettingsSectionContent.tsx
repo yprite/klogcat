@@ -56,6 +56,7 @@ type SettingsSectionContentProps = {
   previewPolicy: LogPolicy
   restoreDraftColorTheme: () => void
   selectedPolicyId: LogPolicySelectionId
+  setActiveSection: (section: SettingsSectionId) => void
   setCustomPolicy: (policy: LogPolicy, message?: string) => void
   setColorTheme: (value: PersistedSettings['colorTheme']) => void
   setDefaultNamespace: (value: string) => void
@@ -76,17 +77,22 @@ type SettingsSectionContentProps = {
 }
 
 export function SettingsSectionContent(props: SettingsSectionContentProps) {
-  const { activeSection, activeTarget, draft, error, errors, handleClearTargetCache, handlePolicySelect, handleRawPolicyTextChange, handleRestart, handleTestPaths, language, loading, notice, policyText, previewColorTheme, previewPolicy, restoreDraftColorTheme, selectedPolicyId, setCustomPolicy, setColorTheme, setDefaultNamespace, setLanguage, setNum, setShortcut, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes, testingPaths, testResults, updateCsvFilePlugin, updateAwsVmLogPath, updateAwsVmPlugin, warnings } = props
+  const { activeSection, activeTarget, draft, error, errors, handleClearTargetCache, handlePolicySelect, handleRawPolicyTextChange, handleRestart, handleTestPaths, language, loading, notice, policyText, previewColorTheme, previewPolicy, restoreDraftColorTheme, selectedPolicyId, setActiveSection, setCustomPolicy, setColorTheme, setDefaultNamespace, setLanguage, setNum, setShortcut, setShowPathOverrides, setShowRawJson, showPathOverrides, showRawJson, sourceTypes, testingPaths, testResults, updateCsvFilePlugin, updateAwsVmLogPath, updateAwsVmPlugin, warnings } = props
   const targetPluginSettingsKey = activeSection.startsWith('target-plugin:') ? activeSection.slice('target-plugin:'.length) : undefined
+  const visibleErrors = errors.filter((item) => {
+    if (item.field.startsWith('plugins.targets.awsVm') && !draft.plugins.targets.awsVm.enabled) return false
+    if (item.field.startsWith('plugins.targets.csvFile') && !draft.plugins.targets.csvFile.enabled) return false
+    return true
+  })
   return <>
     {activeSection === 'runtime' && <RuntimeSection draft={draft} language={language} setDefaultNamespace={setDefaultNamespace} setNum={setNum} />}
     {activeSection === 'appearance' && <AppearanceSection draft={draft} language={language} previewColorTheme={previewColorTheme} restoreDraftColorTheme={restoreDraftColorTheme} setColorTheme={setColorTheme} setLanguage={setLanguage} />}
-    {activeSection === 'plugin-inventory' && <PluginInventoryPanel language={language} settings={draft} />}
+    {activeSection === 'plugin-inventory' && <PluginInventoryPanel language={language} onOpenTargetPlugin={(settingsKey) => setActiveSection(`target-plugin:${settingsKey}`)} settings={draft} />}
     {activeSection === 'log-source' && <LogSourceSection activeTarget={activeTarget} handlePolicySelect={handlePolicySelect} handleTestPaths={handleTestPaths} language={language} previewPolicy={previewPolicy} selectedPolicyId={selectedPolicyId} setCustomPolicy={setCustomPolicy} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} warnings={warnings} />}
     {targetPluginSettingsKey && <TargetPluginSettingsPanels draft={draft} language={language} settingsKey={targetPluginSettingsKey} sourceTypes={sourceTypes} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} />}
     {activeSection === 'advanced' && <AdvancedSection onRawPolicyTextChange={handleRawPolicyTextChange} policyText={policyText} previewPolicy={previewPolicy} setCustomPolicy={setCustomPolicy} setShowPathOverrides={setShowPathOverrides} language={language} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} />}
     {activeSection === 'shortcuts' && <ShortcutsSection draft={draft} language={language} setShortcut={setShortcut} />}
-    <StatusMessages error={error} errors={errors} language={language} notice={notice} />
+    <StatusMessages error={error} errors={visibleErrors} language={language} notice={notice} />
     {activeSection === 'maintenance' && <MaintenanceSection handleClearTargetCache={handleClearTargetCache} handleRestart={handleRestart} language={language} loading={loading} />}
   </>
 }

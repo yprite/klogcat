@@ -5,10 +5,11 @@ import type { TargetPluginDefinition } from './pluginModel'
 export const CSV_FILE_TARGET_PLUGIN_ID = 'csv-file'
 export const CSV_FILE_TARGET_SETTINGS_KEY = 'csvFile'
 export const CSV_FILE_TARGET_KIND = 'csv-file'
+export const csvFileTargetSampleCsv = 'id,name,address,service,datacenter,tags\napi-1,api-1,10.0.0.7,api,prod,blue|critical'
 
 export const defaultCsvFileTargetPluginSettings: CsvFileTargetPluginSettings = {
   enabled: false,
-  csvText: '',
+  csvText: csvFileTargetSampleCsv,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -84,8 +85,9 @@ export function validateCsvFileTargetPluginSettings(value: unknown, errors: Sett
     errors.push({ field: 'plugins.targets.csvFile', message: 'csvFile plugin config must be an object' })
     return
   }
-  rejectExtraKeys(value, ['enabled', 'csvText'], 'plugins.targets.csvFile', errors)
   if (typeof value.enabled !== 'boolean') errors.push({ field: 'plugins.targets.csvFile.enabled', message: 'enabled must be a boolean' })
+  if (value.enabled !== true) return
+  rejectExtraKeys(value, ['enabled', 'csvText'], 'plugins.targets.csvFile', errors)
   if (typeof value.csvText !== 'string') errors.push({ field: 'plugins.targets.csvFile.csvText', message: 'csvText must be a string' })
   if (value.enabled === true && typeof value.csvText === 'string' && csvTargetsFromText(value.csvText).length === 0) {
     errors.push({ field: 'plugins.targets.csvFile.csvText', message: 'csvText must include a header and at least one row with address/ip/host' })
