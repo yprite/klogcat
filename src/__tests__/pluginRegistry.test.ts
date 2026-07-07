@@ -38,9 +38,13 @@ describe('plugin registry', () => {
 
     expect(graphPlugin.settingsKey).toBe('apiFlowGraph')
     expect(graphPlugin.isEnabled(undefined)).toBe(true)
+    expect(graphPlugin.isEnabled(null)).toBe(true)
+    expect(graphPlugin.isEnabled('invalid')).toBe(true)
+    expect(graphPlugin.isEnabled({ apiFlowGraph: {} })).toBe(true)
     expect(graphPlugin.isEnabled({ apiFlowGraph: { enabled: false } })).toBe(false)
     expect(graphPlugin.isEnabled({ apiFlowGraph: { enabled: true } })).toBe(true)
     expect(vendorPlugin.isEnabled({ other: { enabled: false } })).toBe(true)
+    expect(vendorPlugin.validate({}, [])).toBeUndefined()
   })
 
   it('returns viewer plugin definitions for supplied extensions', () => {
