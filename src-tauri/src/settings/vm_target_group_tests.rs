@@ -2,7 +2,7 @@ use super::*;
 use std::{collections::BTreeMap, env, fs};
 
 #[test]
-fn validates_aws_vm_target_groups_as_effective_profiles() {
+fn validates_aws_vm_target_group_shape_without_requiring_connection_fields() {
     let mut s = default_settings();
     s.plugins.targets.aws_vm.enabled = true;
     s.plugins.targets.aws_vm.bastion_username = "ops".into();
@@ -35,9 +35,12 @@ fn validates_aws_vm_target_groups_as_effective_profiles() {
     assert!(validate_settings(&s).is_empty());
 
     s.plugins.targets.aws_vm.target_groups[0].bastion_host = Some(String::new());
+    assert!(validate_settings(&s).is_empty());
+
+    s.plugins.targets.aws_vm.target_groups[0].modules[0].id = String::new();
     assert!(validate_settings(&s)
         .iter()
-        .any(|error| error.field == "plugins.targets.awsVm.targetGroups.0.modules.0.bastionHost"));
+        .any(|error| error.field == "plugins.targets.awsVm.targetGroups.0.modules.0.id"));
 }
 
 #[test]

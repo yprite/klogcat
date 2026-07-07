@@ -66,6 +66,7 @@ export type VmTargetInfo = {
 
 export type ListVmTargetsResponse = {
   targets: VmTargetInfo[]
+  diagnostics?: string[]
 }
 
 export type VmLogStreamConfig = {

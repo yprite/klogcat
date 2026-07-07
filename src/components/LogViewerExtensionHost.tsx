@@ -5,6 +5,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useVmStore } from '../stores/vmStore'
 import { DEFAULT_LOG_VIEWER_EXTENSION_ID, findLogViewerExtension, useLogViewerExtensions } from '../extensions/logViewerExtensions'
 import { toLogViewerExtensionSnapshot } from '../extensions/logViewerSdkAdapter'
+import { isViewerPluginEnabled, settingsKeyForViewerExtension } from '../plugins/viewerPluginRegistry'
 import { createLogViewerExtensionHostApi } from '../sdk/log-viewer'
 import { InvestigationModeSelector, logViewerPanelId, logViewerTabId, type InvestigationMode } from './InvestigationModeSelector'
 import { LogViewerExtensionBoundary } from './LogViewerExtensionBoundary'
@@ -15,7 +16,12 @@ export function LogViewerExtensionHost({ children }: { children: ReactNode }) {
   const log = useLogStore()
   const vm = useVmStore()
   const settings = useSettingsStore()
-  const logViewerExtensions = useLogViewerExtensions()
+  const registeredLogViewerExtensions = useLogViewerExtensions()
+  const logViewerExtensions = useMemo(() => registeredLogViewerExtensions.filter((extension) => {
+    if (extension.id === DEFAULT_LOG_VIEWER_EXTENSION_ID) return true
+    const settingsKey = settingsKeyForViewerExtension(extension.id)
+    return settingsKey ? isViewerPluginEnabled(settings.settings?.plugins.viewers, settingsKey) : true
+  }), [registeredLogViewerExtensions, settings.settings?.plugins.viewers])
   useEffect(() => {
     if (!findLogViewerExtension(investigationMode, logViewerExtensions)) setInvestigationMode(DEFAULT_LOG_VIEWER_EXTENSION_ID)
   }, [investigationMode, logViewerExtensions])

@@ -17,13 +17,13 @@ enum AppLifecycleEvent {
 enum ShutdownRequest {
     None,
     StopStreams,
-    StopStreamsAndExit,
+    ExitProcessImmediately,
 }
 
 fn shutdown_request_for_lifecycle_event(event: AppLifecycleEvent) -> ShutdownRequest {
     match event {
         AppLifecycleEvent::ExitRequested => ShutdownRequest::StopStreams,
-        AppLifecycleEvent::MainWindowCloseRequested => ShutdownRequest::StopStreamsAndExit,
+        AppLifecycleEvent::MainWindowCloseRequested => ShutdownRequest::ExitProcessImmediately,
         AppLifecycleEvent::Other => ShutdownRequest::None,
     }
 }
@@ -72,10 +72,7 @@ pub fn run() {
             match shutdown {
                 ShutdownRequest::None => {}
                 ShutdownRequest::StopStreams => stop_all_log_streams(app),
-                ShutdownRequest::StopStreamsAndExit => {
-                    stop_all_log_streams(app);
-                    app.exit(0);
-                }
+                ShutdownRequest::ExitProcessImmediately => std::process::exit(0),
             }
         });
 }
@@ -85,10 +82,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn main_window_close_stops_streams_and_exits_app() {
+    fn main_window_close_exits_process_immediately() {
         assert_eq!(
             shutdown_request_for_lifecycle_event(AppLifecycleEvent::MainWindowCloseRequested),
-            ShutdownRequest::StopStreamsAndExit
+            ShutdownRequest::ExitProcessImmediately
         );
     }
 }

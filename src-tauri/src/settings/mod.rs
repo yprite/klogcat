@@ -11,7 +11,7 @@ mod target_plugins;
 mod vm_target_group_tests;
 
 pub use target_plugin_groups::{AwsVmTargetGroupSettings, AwsVmTargetModuleSettings};
-use target_plugins::{default_plugins, validate_target_plugins};
+use target_plugins::{default_plugins, validate_target_plugins, validate_viewer_plugins};
 pub use target_plugins::{
     AwsVmTargetPluginSettings, CsvFileTargetPluginSettings, PluginSettings, TargetPluginSettings,
 };
@@ -24,6 +24,10 @@ pub struct PersistedSettings {
     pub language: String,
     #[serde(default = "default_color_theme")]
     pub color_theme: String,
+    #[serde(default = "default_font_size")]
+    pub menu_font_size: String,
+    #[serde(default = "default_font_size")]
+    pub log_viewer_font_size: String,
     pub default_namespace: Option<String>,
     pub initial_tail_lines: u32,
     pub buffer_limit: u32,
@@ -63,11 +67,17 @@ fn default_color_theme() -> String {
     "dark-plus".into()
 }
 
+fn default_font_size() -> String {
+    "normal".into()
+}
+
 pub fn default_settings() -> PersistedSettings {
     PersistedSettings {
         schema_version: 1,
         language: default_language(),
         color_theme: default_color_theme(),
+        menu_font_size: default_font_size(),
+        log_viewer_font_size: default_font_size(),
         default_namespace: None,
         initial_tail_lines: 200,
         buffer_limit: 50_000,
@@ -112,12 +122,24 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     validate_schema_version(s, &mut errors);
     validate_language(s, &mut errors);
     validate_color_theme(s, &mut errors);
+    validate_font_size("menuFontSize", &s.menu_font_size, &mut errors);
+    validate_font_size("logViewerFontSize", &s.log_viewer_font_size, &mut errors);
     validate_runtime_limits(s, &mut errors);
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
     validate_log_sources(s, &mut errors);
     validate_target_plugins(&s.plugins.targets, &mut errors);
+    validate_viewer_plugins(&s.plugins.viewers, &mut errors);
     errors
+}
+
+fn validate_font_size(field: &str, value: &str, errors: &mut Vec<SettingsValidationError>) {
+    if !matches!(value, "compact" | "normal" | "large" | "extra-large") {
+        errors.push(err(
+            field,
+            "font size must be compact, normal, large, or extra-large",
+        ));
+    }
 }
 
 fn validate_schema_version(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {

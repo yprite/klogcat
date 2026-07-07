@@ -5,6 +5,7 @@ import { useLogStore } from '../stores/logStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useVmStore } from '../stores/vmStore'
 import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
+import { fontSizeClass } from '../utils/fontScale'
 import { stopLogStream } from '../commands/tauriLogs'
 import { ErrorBanner } from './ErrorBanner'
 import { GrepBar } from './GrepBar'
@@ -77,7 +78,7 @@ export function AppShell({ eventError }: { eventError?: string }) {
   const changeNamespace = async (namespaces: string[]) => { log.recordActionDebug(`Namespaces selected: ${namespaces.join(', ') || '(empty)'}`); const selection = useKubeStore.getState().selectNamespaces(namespaces); await stopAndClearIfActive(); await selection }
   const changePod = async (pods: string[]) => { log.recordActionDebug(`Pods selected: ${pods.join(', ') || '(empty)'}`); useKubeStore.getState().selectPods(pods); await stopAndClearIfActive() }
   const changeVmTarget = async (targets: string[]) => { log.recordActionDebug(`VM targets selected: ${targets.join(', ') || '(empty)'}`); useVmStore.getState().selectTargets(targets); await stopAndClearIfActive() }
-  return <div className="flex h-screen flex-col overflow-hidden">
+  return <div className={`flex h-screen flex-col overflow-hidden klogcat-menu-font ${fontSizeClass('menu', settings.settings?.menuFontSize)}`}>
     <TopBar onSettings={() => { log.recordActionDebug('Settings clicked'); setSettingsOpen(true) }} onContextChange={changeContext} onNamespaceChange={changeNamespace} onPodChange={changePod} onVmTargetChange={changeVmTarget} />
     <main className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-2">
       <ErrorBanner error={eventError || settings.error || kube.error || vm.error || log.errorMessage} />

@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "actions": 80,
+  "failedActions": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "screenshotPath": "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/monkey/api-flow-monkey-final.png"
+}

@@ -1,0 +1,3338 @@
+{
+  "generatedAt": "2026-07-06T22:55:05.535Z",
+  "findings": [
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 80.1875,
+        "height": 24
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 105.625,
+        "height": 26
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Essentials",
+      "rect": {
+        "width": 74.71875,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "All",
+      "rect": {
+        "width": 32.15625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "None",
+      "rect": {
+        "width": 47.859375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Manage columns",
+      "rect": {
+        "width": 117.734375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter trId",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter method",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter url",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter elapsed",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter status",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rcode",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rmsg",
+      "rect": {
+        "width": 105.8125,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1438.78125,
+        "right": 1454.8125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter exceptionName",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1490.078125,
+        "width": 91.359375
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter exceptionName",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1531.109375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1535.109375,
+        "right": 1551.140625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1555.140625,
+        "right": 1571.171875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter api_name",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1787.0625,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter api_name",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Copy filtered",
+      "rect": {
+        "width": 72.75,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Export filtered JSONL",
+      "rect": {
+        "width": 122.828125,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "graph-viewer",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "graph-viewer",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "settings-modal",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "✕",
+      "rect": {
+        "width": 12.203125,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "target-picker",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "target-picker",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 80.1875,
+        "height": 24
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 105.625,
+        "height": 26
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Essentials",
+      "rect": {
+        "width": 74.71875,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "All",
+      "rect": {
+        "width": 32.15625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "None",
+      "rect": {
+        "width": 47.859375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Manage columns",
+      "rect": {
+        "width": 117.734375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter trId",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter method",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter url",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter elapsed",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter status",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rcode",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1283.9375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1287.9375,
+        "right": 1303.96875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1307.96875,
+        "right": 1324,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter rmsg",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1373.71875,
+        "width": 105.8125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rmsg",
+      "rect": {
+        "width": 105.8125,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1414.75,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1418.75,
+        "right": 1434.78125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1438.78125,
+        "right": 1454.8125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter exceptionName",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1490.078125,
+        "width": 91.359375
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter exceptionName",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1531.109375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1535.109375,
+        "right": 1551.140625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1555.140625,
+        "right": 1571.171875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter api_name",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1787.0625,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter api_name",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Copy filtered",
+      "rect": {
+        "width": 72.75,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Export filtered JSONL",
+      "rect": {
+        "width": 122.828125,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "graph-viewer",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "graph-viewer",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 429.5,
+        "bottom": 749.5,
+        "height": 320
+      },
+      "scenario": "graph-viewer",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 429.5,
+        "bottom": 749.5,
+        "height": 320
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "✕",
+      "rect": {
+        "width": 12.203125,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "target-picker",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "target-picker",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 429.5,
+        "bottom": 749.5,
+        "height": 320
+      },
+      "scenario": "target-picker",
+      "viewport": "small-desktop"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 80.1875,
+        "height": 24
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 105.625,
+        "height": 26
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Essentials",
+      "rect": {
+        "width": 74.71875,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "All",
+      "rect": {
+        "width": 32.15625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "None",
+      "rect": {
+        "width": 47.859375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Manage columns",
+      "rect": {
+        "width": 117.734375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter trId",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter method",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter url",
+      "rect": {
+        "left": 643.5,
+        "right": 915.484375,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter url",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 940.484375,
+        "right": 956.515625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 960.515625,
+        "right": 976.546875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 980.546875,
+        "right": 996.578125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter elapsed",
+      "rect": {
+        "left": 940.484375,
+        "right": 1024.625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter elapsed",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1049.625,
+        "right": 1065.65625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1069.65625,
+        "right": 1085.6875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1089.6875,
+        "right": 1105.71875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter status",
+      "rect": {
+        "left": 1049.625,
+        "right": 1133.765625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter status",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1158.765625,
+        "right": 1174.796875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1178.796875,
+        "right": 1194.828125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1198.828125,
+        "right": 1214.859375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter rcode",
+      "rect": {
+        "left": 1158.765625,
+        "right": 1242.90625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rcode",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1283.9375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1287.9375,
+        "right": 1303.96875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1307.96875,
+        "right": 1324,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter rmsg",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1373.71875,
+        "width": 105.8125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rmsg",
+      "rect": {
+        "width": 105.8125,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1414.75,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1418.75,
+        "right": 1434.78125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1438.78125,
+        "right": 1454.8125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter exceptionName",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1490.078125,
+        "width": 91.359375
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter exceptionName",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1531.109375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1535.109375,
+        "right": 1551.140625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1555.140625,
+        "right": 1571.171875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter api_name",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1787.0625,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter api_name",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Copy filtered",
+      "rect": {
+        "width": 72.75,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Export filtered JSONL",
+      "rect": {
+        "width": 122.828125,
+        "height": 16
+      },
+      "scenario": "raw-logs",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "graph-viewer",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "graph-viewer",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "settings-modal",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "✕",
+      "rect": {
+        "width": 12.203125,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "target-picker",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "target-picker",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "tablet"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 80.1875,
+        "height": 24
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 105.625,
+        "height": 26
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter logs by text, field:value, -exclude, or url~:regex",
+      "rect": {
+        "width": 26,
+        "height": 36
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Essentials",
+      "rect": {
+        "width": 74.71875,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "All",
+      "rect": {
+        "width": 32.15625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "None",
+      "rect": {
+        "width": 47.859375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Manage columns",
+      "rect": {
+        "width": 117.734375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 418,
+        "right": 434.03125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 438.03125,
+        "right": 454.0625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 458.0625,
+        "right": 474.09375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter trId",
+      "rect": {
+        "left": 418,
+        "right": 509.359375,
+        "width": 91.359375
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter trId",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 534.359375,
+        "right": 550.390625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 554.390625,
+        "right": 570.421875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 574.421875,
+        "right": 590.453125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter method",
+      "rect": {
+        "left": 534.359375,
+        "right": 618.5,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter method",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 643.5,
+        "right": 659.53125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 663.53125,
+        "right": 679.5625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 683.5625,
+        "right": 699.59375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter url",
+      "rect": {
+        "left": 643.5,
+        "right": 915.484375,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter url",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 940.484375,
+        "right": 956.515625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 960.515625,
+        "right": 976.546875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 980.546875,
+        "right": 996.578125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter elapsed",
+      "rect": {
+        "left": 940.484375,
+        "right": 1024.625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter elapsed",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1049.625,
+        "right": 1065.65625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1069.65625,
+        "right": 1085.6875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1089.6875,
+        "right": 1105.71875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter status",
+      "rect": {
+        "left": 1049.625,
+        "right": 1133.765625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter status",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1158.765625,
+        "right": 1174.796875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1178.796875,
+        "right": 1194.828125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1198.828125,
+        "right": 1214.859375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter rcode",
+      "rect": {
+        "left": 1158.765625,
+        "right": 1242.90625,
+        "width": 84.140625
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rcode",
+      "rect": {
+        "width": 84.140625,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1283.9375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1287.9375,
+        "right": 1303.96875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1307.96875,
+        "right": 1324,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter rmsg",
+      "rect": {
+        "left": 1267.90625,
+        "right": 1373.71875,
+        "width": 105.8125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter rmsg",
+      "rect": {
+        "width": 105.8125,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1414.75,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1418.75,
+        "right": 1434.78125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1438.78125,
+        "right": 1454.8125,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter exceptionName",
+      "rect": {
+        "left": 1398.71875,
+        "right": 1490.078125,
+        "width": 91.359375
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter exceptionName",
+      "rect": {
+        "width": 91.359375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "←",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1531.109375,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "←",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "→",
+      "rect": {
+        "left": 1535.109375,
+        "right": 1551.140625,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "→",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "×",
+      "rect": {
+        "left": 1555.140625,
+        "right": 1571.171875,
+        "width": 16.03125
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "×",
+      "rect": {
+        "width": 16.03125,
+        "height": 18
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "horizontal-overflow",
+      "text": "Filter api_name",
+      "rect": {
+        "left": 1515.078125,
+        "right": 1787.0625,
+        "width": 271.984375
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter api_name",
+      "rect": {
+        "width": 271.984375,
+        "height": 22
+      },
+      "scenario": "raw-logs",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter logs by text, field:value, -exclude, or url~:regex",
+      "rect": {
+        "width": 26,
+        "height": 36
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 766,
+        "bottom": 1086,
+        "height": 320
+      },
+      "scenario": "graph-viewer",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter logs by text, field:value, -exclude, or url~:regex",
+      "rect": {
+        "width": 26,
+        "height": 36
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 766,
+        "bottom": 1086,
+        "height": 320
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "✕",
+      "rect": {
+        "width": 12.203125,
+        "height": 24
+      },
+      "scenario": "settings-modal",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Raw Logs",
+      "rect": {
+        "width": 82.1875,
+        "height": 26
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Graph Viewer",
+      "rect": {
+        "width": 103.625,
+        "height": 24
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "Filter logs by text, field:value, -exclude, or url~:regex",
+      "rect": {
+        "width": 26,
+        "height": 36
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    },
+    {
+      "type": "small-interactive-target",
+      "text": "INPUT",
+      "rect": {
+        "width": 13,
+        "height": 13
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    },
+    {
+      "type": "vertical-offscreen",
+      "text": "gateway -> orders\nFlows: 3\ntrID: TR-AUDIT-1001, TR-AUDIT-1003, TR-AUDIT-1005\nAvg",
+      "rect": {
+        "top": 766,
+        "bottom": 1086,
+        "height": 320
+      },
+      "scenario": "target-picker",
+      "viewport": "mobile"
+    }
+  ],
+  "screenshots": [
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/desktop-raw-logs.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/desktop-graph-viewer.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/desktop-settings.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/desktop-target-picker.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/small-desktop-raw-logs.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/small-desktop-graph-viewer.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/small-desktop-settings.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/small-desktop-target-picker.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/tablet-raw-logs.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/tablet-graph-viewer.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/tablet-settings.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/tablet-target-picker.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/mobile-raw-logs.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/mobile-graph-viewer.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/mobile-settings.png",
+    "/Users/yprite/repos/klogcat-vm-log-plugin/.harness/playwright-scenario-audit/mobile-target-picker.png"
+  ]
+}
