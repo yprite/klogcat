@@ -36,14 +36,14 @@ export function initialColorTheme(): ColorThemeId {
   }
 }
 
-export function applyColorTheme(value: unknown) {
+export function applyColorTheme(value: unknown, options: { persist?: boolean } = {}) {
   const themeId = isColorThemeId(value) ? value : defaultColorTheme
   const option = colorThemeOptions.find((theme) => theme.id === themeId)
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.colorTheme = themeId
     document.documentElement.style.colorScheme = option?.scheme ?? 'dark'
   }
-  if (typeof localStorage !== 'undefined') {
+  if (options.persist !== false && typeof localStorage !== 'undefined') {
     try { localStorage.setItem(storageKey, themeId) } catch { /* ignore unavailable storage */ }
   }
 }

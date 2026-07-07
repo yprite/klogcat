@@ -34,4 +34,12 @@ describe('color themes', () => {
     expect(document.documentElement.dataset.colorTheme).toBe(defaultColorTheme)
     expect(localStorage.getItem('klogcat-color-theme')).toBe(defaultColorTheme)
   })
+
+  it('can preview a theme without persisting it', () => {
+    applyColorTheme('dark-plus')
+    applyColorTheme('monokai', { persist: false })
+
+    expect(document.documentElement.dataset.colorTheme).toBe('monokai')
+    expect(localStorage.getItem('klogcat-color-theme')).toBe('dark-plus')
+  })
 })

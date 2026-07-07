@@ -2,6 +2,7 @@ import type { KeyboardEvent, RefObject } from 'react'
 import { checkLogPath } from '../commands/tauriLogs'
 import type { SelectedPodTarget } from '../stores/kubeStore'
 import type { PersistedSettings } from '../types/settings'
+import { applyColorTheme } from '../utils/colorTheme'
 import { t } from '../utils/i18n'
 import {
   assertValidLogPolicy,
@@ -15,6 +16,10 @@ import {
 import type { TestPathResult } from './SettingsModalSections'
 
 const knownPathTokens = new Set<string>(logPathTemplateTokens.map((item) => item.token))
+
+export function previewColorThemeValue(value: unknown) {
+  applyColorTheme(value, { persist: false })
+}
 
 export function clonePolicy(policy: LogPolicy): LogPolicy {
   return JSON.parse(JSON.stringify(policy)) as LogPolicy

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
-import { awsVmPluginForTarget } from '../plugins/awsVmTargetPlugin'
+import { awsVmPluginForTarget, getAwsVmConnectionReadiness } from '../plugins/awsVmTargetPlugin'
 
 describe('settings validation', () => {
   const withTargetPlugins = (targets: typeof defaultSettings.plugins.targets) => ({ ...defaultSettings, plugins: { ...defaultSettings.plugins, targets } })
@@ -35,7 +35,8 @@ describe('settings validation', () => {
   it('validates AWS VM target plugin settings', () => {
     const enabled = { ...defaultSettings.plugins.targets.awsVm, enabled: true, targetGroups: [] }
     const validEnabled = { ...enabled, bastionHost: 'bastion.example.com', bastionUsername: 'ops', bastionPassword: 'secret', vmUsername: 'app', vmPassword: 'vm-secret', targetGroups: [] }
-    expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionHost: '' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionHost' }))
+    expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionHost: '' } }))).toEqual([])
+    expect(getAwsVmConnectionReadiness({ ...enabled, bastionHost: '' }).missing).toContain('plugins.targets.awsVm.bastionHost')
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionPort: 0 } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionPort' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionPassword: 'bad\0secret' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionPassword' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...enabled, bastionUsername: '-bad' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionUsername' }))
@@ -45,6 +46,24 @@ describe('settings validation', () => {
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, awsVm: { ...validEnabled, bastionUsername: 'operator@example.com' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.awsVm.bastionUsername' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, csvFile: { enabled: true, csvText: '' } }))).toContainEqual(expect.objectContaining({ field: 'plugins.targets.csvFile.csvText' }))
     expect(validateSettings(withTargetPlugins({ ...defaultSettings.plugins.targets, csvFile: { enabled: true, csvText: 'name,address\napi,10.0.0.7' } }))).toEqual([])
+  })
+
+  it('does not block saving incomplete AWS VM settings while the plugin is disabled', () => {
+    expect(validateSettings(withTargetPlugins({
+      ...defaultSettings.plugins.targets,
+      awsVm: {
+        ...defaultSettings.plugins.targets.awsVm,
+        enabled: false,
+        bastionPort: 0,
+        bastionPasswordMode: 'invalid' as never,
+        targetGroups: [{
+          id: 'prod',
+          name: 'Prod',
+          enabled: true,
+          modules: [],
+        }],
+      },
+    }))).toEqual([])
   })
 
   it('accepts AWS VM bastion groups and module overrides', () => {

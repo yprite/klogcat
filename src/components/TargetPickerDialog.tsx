@@ -261,6 +261,17 @@ function createSelectionChangeHandler(selectionPending: boolean, setSelectionPen
   }
 }
 
+function targetPickerCopy(vmTargetsEnabled: boolean) {
+  if (vmTargetsEnabled) return {
+    helpText: 'Kubernetes uses Cluster -> Namespace -> Pod. VM uses Region/Bastion -> Module -> VM.',
+    searchPlaceholder: 'context / namespace / pod / region / bastion / module / VM name / IP',
+  }
+  return {
+    helpText: 'Kubernetes uses Cluster -> Namespace -> Pod.',
+    searchPlaceholder: 'context / namespace / pod',
+  }
+}
+
 type PodRowProps = {
   context: string
   namespace: string
@@ -290,6 +301,7 @@ function PodRow({ context, namespace, onPodChange, pod, runSelectionChange, sele
 }
 
 type SelectedTargetsProps = {
+  vmTargetsEnabled: boolean
   onPodChange: (pods: string[]) => void | Promise<void>
   onVmTargetChange: (targets: string[]) => void | Promise<void>
   runSelectionChange: (change: () => void | Promise<void>) => void
@@ -300,7 +312,7 @@ type SelectedTargetsProps = {
   setDraftSelectedVmTargets: (values: string[]) => void
 }
 
-function SelectedTargetsPanel({ onPodChange, onVmTargetChange, runSelectionChange, selectedPods, selectedVmTargets, selectionPending, setDraftSelectedPods, setDraftSelectedVmTargets }: SelectedTargetsProps) {
+function SelectedTargetsPanel({ onPodChange, onVmTargetChange, runSelectionChange, selectedPods, selectedVmTargets, selectionPending, setDraftSelectedPods, setDraftSelectedVmTargets, vmTargetsEnabled }: SelectedTargetsProps) {
   return <aside aria-label={t(useSettingsStore.getState().settings?.language, 'Selected targets')} className="min-h-0 overflow-y-auto border-t border-slate-800 bg-slate-900/40 p-3 lg:border-l lg:border-t-0">
     <div className="mb-3 rounded border border-slate-800 bg-slate-950 p-3">
       <h3 className="text-sm font-semibold">{t(useSettingsStore.getState().settings?.language, 'Selected targets')}</h3>
@@ -308,17 +320,17 @@ function SelectedTargetsPanel({ onPodChange, onVmTargetChange, runSelectionChang
     </div>
     {selectionPending && <div role="status" aria-label={t(useSettingsStore.getState().settings?.language, 'Selection shown immediately')} className="mb-2 rounded border border-yellow-400/30 bg-yellow-400/10 px-2 py-1 text-xs text-yellow-100">{t(useSettingsStore.getState().settings?.language, 'Selection shown immediately. Applying target change…')}</div>}
     <div className="space-y-2">
-      {selectedPods.length === 0 && selectedVmTargets.length === 0 && <NoSelectedTargets />}
+      {selectedPods.length === 0 && selectedVmTargets.length === 0 && <NoSelectedTargets vmTargetsEnabled={vmTargetsEnabled} />}
       {selectedPods.map((value) => <SelectedTargetButton key={value} onPodChange={onPodChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} value={value} />)}
       {selectedVmTargets.map((value) => <SelectedVmTargetButton key={value} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedVmTargets={selectedVmTargets} selectionPending={selectionPending} setDraftSelectedVmTargets={setDraftSelectedVmTargets} value={value} />)}
     </div>
   </aside>
 }
 
-function NoSelectedTargets() {
+function NoSelectedTargets({ vmTargetsEnabled }: { vmTargetsEnabled: boolean }) {
   return <div className="rounded border border-dashed border-slate-700 bg-slate-950 p-3 text-xs text-slate-400">
-    <p className="font-semibold text-slate-200">{t(useSettingsStore.getState().settings?.language, 'No pods selected')}</p>
-    <p className="mt-1">{t(useSettingsStore.getState().settings?.language, 'Choose one or more running pods from the target tree.')}</p>
+    <p className="font-semibold text-slate-200">{t(useSettingsStore.getState().settings?.language, vmTargetsEnabled ? 'No targets selected' : 'No pods selected')}</p>
+    <p className="mt-1">{t(useSettingsStore.getState().settings?.language, vmTargetsEnabled ? 'Choose one or more Kubernetes pods or VM targets.' : 'Choose one or more running pods from the target tree.')}</p>
   </div>
 }
 
@@ -401,20 +413,22 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
     setDraftSelectedVmTargets(vmTargetsEnabled ? vm.selectedTargetIds : [])
   }, [selectionPending, vmTargetsEnabled, vm.selectedTargetIds.join('\u0000')])
 
-  return <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4">
+  const { helpText, searchPlaceholder } = targetPickerCopy(vmTargetsEnabled)
+
+  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 sm:p-4">
     <section role="dialog" aria-modal="true" aria-labelledby="target-picker-title" onKeyDown={handleDialogKeyDown} className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-950 shadow-xl">
-      <div className="flex shrink-0 items-center justify-between border-b border-slate-800 p-4">
-        <div>
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-800 p-3 sm:p-4">
+        <div className="min-w-0">
           <h2 id="target-picker-title" className="text-lg font-semibold">{t(language, 'Select Log Targets')}</h2>
-          <p className="text-xs text-slate-400">{t(language, 'Kubernetes uses Cluster → Namespace → Pod. VM uses Region/Bastion → Module → VM.')}</p>
+          <p className="text-xs text-slate-400">{t(language, helpText)}</p>
         </div>
         {(discoveryActive || podRefreshActive) && <ProgressPanel progressLabel={progressLabel} language={language} />}
         <button className="rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800" onClick={onClose}>{t(language, 'Close')}</button>
       </div>
       <div className="shrink-0 border-b border-slate-800 p-3">
         <label className="block text-xs uppercase text-slate-400">{t(language, 'Search targets')}</label>
-        <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, 'context / namespace / pod / region / bastion / module / VM name / IP')} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
-        {vmTargetsEnabled && <div className="mt-3 inline-flex rounded border border-slate-700 bg-slate-900 p-1" role="tablist" aria-label={t(language, 'Target source')}>
+        <input aria-label={t(language, 'Search targets')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t(language, searchPlaceholder)} className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
+        {vmTargetsEnabled && <div className="mt-3 inline-flex max-w-full overflow-x-auto rounded border border-slate-700 bg-slate-900 p-1" role="tablist" aria-label={t(language, 'Target source')}>
           <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'kubernetes' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'kubernetes'} onClick={() => setTargetTab('kubernetes')}>{t(language, 'Kubernetes')}</button>
           {awsVmTargetsEnabled && <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'aws-vm' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'aws-vm'} onClick={() => setTargetTab('aws-vm')}>{t(language, 'AWS VM')}</button>}
           {csvTargetsEnabled && <button className={`rounded px-3 py-1 text-sm ${activeTargetTab === 'csv-file' ? 'bg-yellow-400 text-slate-950' : 'text-slate-300 hover:bg-slate-800'}`} role="tab" aria-selected={activeTargetTab === 'csv-file'} onClick={() => setTargetTab('csv-file')}>{t(language, 'CSV File')}</button>}
@@ -428,7 +442,7 @@ export function TargetPickerDialog({ onClose, onContextChange, onNamespaceChange
               ? <CsvFileTargetSelectionPanel language={language} normalizedQuery={normalizedQuery} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedVmTargets={setDraftSelectedVmTargets} />
             : <TargetTree collapsedContexts={collapsedContexts} contextValues={contextValues} namespaceValues={namespaceValues} onContextChange={onContextChange} onNamespaceChange={onNamespaceChange} onPodChange={onPodChange} progressLabel={progressLabel} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectionPending={selectionPending} setCollapsedContexts={setCollapsedContexts} setDraftContextValues={setDraftContextValues} setDraftNamespaceValues={setDraftNamespaceValues} setDraftSelectedPods={setDraftSelectedPods} visibleTree={visibleTree} emptyState={emptyState} language={language} />}
         </div>
-        <SelectedTargetsPanel onPodChange={onPodChange} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} setDraftSelectedVmTargets={setDraftSelectedVmTargets} />
+        <SelectedTargetsPanel onPodChange={onPodChange} onVmTargetChange={onVmTargetChange} runSelectionChange={runSelectionChange} selectedPods={selectedPods} selectedVmTargets={visibleVmDraftTargets} selectionPending={selectionPending} setDraftSelectedPods={setDraftSelectedPods} setDraftSelectedVmTargets={setDraftSelectedVmTargets} vmTargetsEnabled={vmTargetsEnabled} />
       </div>
     </section>
   </div>

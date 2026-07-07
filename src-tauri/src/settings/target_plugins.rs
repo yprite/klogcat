@@ -92,14 +92,16 @@ pub(crate) fn validate_target_plugins(
     errors: &mut Vec<SettingsValidationError>,
 ) {
     let plugin = &settings.aws_vm;
-    validate_bastion_port(plugin, errors);
-    validate_password_mode(plugin, errors);
-    validate_required_fields(plugin, errors);
-    validate_secret_values(plugin, errors);
-    validate_usernames(plugin, errors);
-    validate_target_groups(plugin, errors);
-    validate_effective_target_groups(plugin, errors);
-    validate_log_paths(plugin, errors);
+    if plugin.enabled {
+        validate_bastion_port(plugin, errors);
+        validate_password_mode(plugin, errors);
+        validate_required_fields(plugin, errors);
+        validate_secret_values(plugin, errors);
+        validate_usernames(plugin, errors);
+        validate_target_groups(plugin, errors);
+        validate_effective_target_groups(plugin, errors);
+        validate_log_paths(plugin, errors);
+    }
     validate_csv_file_plugin(&settings.csv_file, errors);
 }
 

@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { testVmConnection } from '../commands/tauriVm'
 import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
 import type { AwsVmTargetGroupSettings } from '../types/vm'
 import { t, type Language } from '../utils/i18n'
-import { defaultAwsVmTargetGroups } from './awsVmTargetPlugin'
+import { defaultAwsVmTargetGroups, getAwsVmConnectionReadiness } from './awsVmTargetPlugin'
+import { csvFileTargetSampleCsv } from './csvFileTargetPlugin'
 
 type PluginSettingsPanelProps = {
   draft: PersistedSettings
@@ -168,6 +170,9 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
   const [showJsonImport, setShowJsonImport] = useState(false)
   const [jsonImportText, setJsonImportText] = useState(awsVmTargetGroupJsonTemplate)
   const [jsonImportError, setJsonImportError] = useState<string>()
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [connectionTestResult, setConnectionTestResult] = useState<{ kind: 'success' | 'error'; message: string }>()
+  const readiness = getAwsVmConnectionReadiness(plugin)
   const updateTargetGroup = (index: number, group: AwsVmTargetGroupSettings) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.map((item, itemIndex) => itemIndex === index ? group : item) })
   }
@@ -211,17 +216,44 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
       setJsonImportError(error instanceof Error ? error.message : String(error))
     }
   }
+  const testConnection = async () => {
+    const currentReadiness = getAwsVmConnectionReadiness(draft.plugins.targets.awsVm)
+    if (!currentReadiness.ready) {
+      setConnectionTestResult({ kind: 'error', message: `${t(language, 'VM connection settings are incomplete.')}\n${currentReadiness.missing.join('\n')}` })
+      return
+    }
+    setTestingConnection(true)
+    setConnectionTestResult(undefined)
+    try {
+      const result = await testVmConnection(draft.plugins.targets)
+      setConnectionTestResult({ kind: 'success', message: t(language, 'VM connection test succeeded. Discovered {count} VM targets.', { count: result.targets.length }) })
+    } catch (error) {
+      const commandError = error as { message?: string; details?: string; code?: string }
+      setConnectionTestResult({ kind: 'error', message: [commandError.message ?? String(error), commandError.details, commandError.code].filter(Boolean).join('\n') })
+    } finally {
+      setTestingConnection(false)
+    }
+  }
   return <section id="settings-aws-vm-plugin" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
         <h3 className="text-sm font-semibold text-white">{t(language, 'AWS VM Target Plugin')}</h3>
         <p className="mt-1 text-xs text-slate-400">{t(language, 'Enable VM log targets discovered from Consul through a bastion host. Saved passwords and TOTP secrets are encrypted locally. Password auth needs sshpass and TOTP mode needs oathtool; if those tools or saved values are unavailable, klogcat falls back to SSH key or agent auth.')}</p>
       </div>
-      <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
-        <input type="checkbox" checked={plugin.enabled} onChange={(event) => updateAwsVmPlugin({ enabled: event.target.checked })} />
-        {t(language, 'Enabled')}
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="rounded border border-sky-500 px-3 py-1 text-sm text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={!plugin.enabled || testingConnection} type="button" onClick={testConnection}>{t(language, testingConnection ? 'Testing VM connection...' : 'Test VM connection')}</button>
+        <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
+          <input type="checkbox" checked={plugin.enabled} onChange={(event) => { updateAwsVmPlugin({ enabled: event.target.checked }); setConnectionTestResult(undefined) }} />
+          {t(language, 'Enabled')}
+        </label>
+      </div>
     </div>
+    {!plugin.enabled && <p className="mt-2 text-xs text-slate-500">{t(language, 'Enable the AWS VM plugin to test bastion and Consul catalog connectivity.')}</p>}
+    {plugin.enabled && !readiness.ready && <div className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+      <p className="font-semibold">{t(language, 'Saved configuration is allowed, but connection testing needs these fields:')}</p>
+      <ul className="mt-1 list-disc pl-4">{readiness.missing.map((field) => <li key={field} className="font-mono">{field}</li>)}</ul>
+    </div>}
+    {connectionTestResult && <div className={`mt-3 rounded border px-3 py-2 text-xs whitespace-pre-wrap ${connectionTestResult.kind === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100' : 'border-red-500/40 bg-red-500/10 text-red-100'}`}>{connectionTestResult.message}</div>}
 
     <div className="mt-4 space-y-3 rounded border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -296,6 +328,7 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
 
 function CsvFileTargetPluginSettingsPanel({ draft, language, updateCsvFilePlugin }: PluginSettingsPanelProps) {
   const plugin = draft.plugins.targets.csvFile
+  const toggleEnabled = (enabled: boolean) => updateCsvFilePlugin({ enabled, csvText: enabled && plugin.csvText.trim() === '' ? csvFileTargetSampleCsv : plugin.csvText })
   const loadFile = (file: File | undefined) => {
     if (!file) return
     void file.text().then((csvText) => updateCsvFilePlugin({ csvText }))
@@ -307,7 +340,7 @@ function CsvFileTargetPluginSettingsPanel({ draft, language, updateCsvFilePlugin
         <p className="mt-1 text-xs text-slate-400">{t(language, 'Load VM log targets from a CSV file. Required header: address or ip or host. Optional headers: id, name, service, datacenter, tags.')}</p>
       </div>
       <label className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-1 text-sm text-slate-100">
-        <input type="checkbox" checked={plugin.enabled} onChange={(event) => updateCsvFilePlugin({ enabled: event.target.checked })} />
+        <input type="checkbox" checked={plugin.enabled} onChange={(event) => toggleEnabled(event.target.checked)} />
         {t(language, 'Enabled')}
       </label>
     </div>
@@ -315,7 +348,7 @@ function CsvFileTargetPluginSettingsPanel({ draft, language, updateCsvFilePlugin
       <input accept=".csv,text/csv" className="mt-1 block w-full text-xs text-slate-300 file:mr-3 file:rounded file:border-0 file:bg-sky-500 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white" type="file" onChange={(event) => loadFile(event.currentTarget.files?.[0])} />
     </label>
     <label className="mt-3 block text-sm">{t(language, 'CSV content')}
-      <textarea className="mt-1 h-40 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.csvText} onChange={(event) => updateCsvFilePlugin({ csvText: event.target.value })} placeholder="id,name,address,service,datacenter,tags&#10;api-1,api-1,10.0.0.7,api,prod,blue|critical" />
+      <textarea className="mt-1 h-40 w-full rounded border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white" value={plugin.csvText} onChange={(event) => updateCsvFilePlugin({ csvText: event.target.value })} placeholder={csvFileTargetSampleCsv} />
     </label>
     <p className="mt-2 text-xs text-slate-500">{t(language, 'CSV targets use the VM SSH/log path settings when streams are started.')}</p>
   </section>

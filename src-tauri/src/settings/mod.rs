@@ -507,6 +507,18 @@ mod tests {
     }
 
     #[test]
+    fn disabled_aws_vm_plugin_does_not_validate_incomplete_operational_settings() {
+        let mut s = default_settings();
+        s.plugins.targets.aws_vm.enabled = false;
+        s.plugins.targets.aws_vm.bastion_port = 0;
+        s.plugins.targets.aws_vm.bastion_password_mode = "invalid".into();
+        s.plugins.targets.aws_vm.target_groups[0].enabled = true;
+        s.plugins.targets.aws_vm.target_groups[0].modules.clear();
+
+        assert!(validate_settings(&s).is_empty());
+    }
+
+    #[test]
     fn validates_aws_vm_plugin_security_fields() {
         let mut s = default_settings();
         s.plugins.targets.aws_vm.enabled = true;

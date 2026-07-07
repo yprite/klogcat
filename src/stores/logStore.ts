@@ -19,6 +19,8 @@ export type LogStoreState = {
   nextLineId: number
   rows: ParsedLogLine[]
   visibleRows: ParsedLogLine[]
+  viewerFilteredRows?: ParsedLogLine[]
+  viewerColumnFilters: Record<string, string>
   grepQuery: string
   grepMode: GrepMode
   latestStderr?: string
@@ -44,6 +46,7 @@ export type LogStoreState = {
   setAutoScrollEnabled(enabled: boolean): void
   setReconnectEnabled(enabled: boolean): void
   setBufferLimit(limit: number): void
+  setViewerFilteredRows(rows: ParsedLogLine[], columnFilters: Record<string, string>): void
   pause(): void
   resume(): void
   clear(): void
@@ -107,6 +110,8 @@ const initial = {
   nextLineId: 1,
   rows: [] as ParsedLogLine[],
   visibleRows: [] as ParsedLogLine[],
+  viewerFilteredRows: undefined,
+  viewerColumnFilters: {} as Record<string, string>,
   grepQuery: '',
   grepMode: 'substring' as GrepMode,
   latestStderr: undefined,
@@ -183,6 +188,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     set({
       rows,
       visibleRows,
+      viewerFilteredRows: undefined,
+      viewerColumnFilters: {},
       nextLineId,
       totalDroppedCount: state.totalDroppedCount + dropped,
       droppedWhilePaused: state.droppedWhilePaused + (state.viewerPaused ? dropped : 0),
@@ -194,18 +201,22 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     const previous = s.stderrByStream[streamId] ?? []
     set({ latestStderr: line, stderrByStream: { ...s.stderrByStream, [streamId]: [...previous, line].slice(-STDERR_HISTORY_LIMIT) } })
   },
-  setGrepQuery(query) { const s = get(); set({ grepQuery: query, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, query, s.grepMode) }) },
-  setGrepMode(mode) { const s = get(); set({ grepMode: mode, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, s.grepQuery, mode) }) },
+  setGrepQuery(query) { const s = get(); set({ grepQuery: query, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, query, s.grepMode), viewerFilteredRows: undefined, viewerColumnFilters: {} }) },
+  setGrepMode(mode) { const s = get(); set({ grepMode: mode, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(s.rows, s.grepQuery, mode), viewerFilteredRows: undefined, viewerColumnFilters: {} }) },
   setAutoScrollEnabled(enabled) { set({ autoScrollEnabled: enabled }) },
   setReconnectEnabled(enabled) { set({ reconnectEnabled: enabled }) },
   setBufferLimit(limit) {
     const safe = Math.max(0, Math.floor(limit)); const s = get(); const drop = Math.max(0, s.rows.length - safe); const rows = drop ? s.rows.slice(drop) : s.rows
-    set({ bufferLimit: safe, rows, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(rows, s.grepQuery, s.grepMode), totalDroppedCount: s.totalDroppedCount + drop, droppedWhilePaused: s.droppedWhilePaused + (s.viewerPaused ? drop : 0) })
+    set({ bufferLimit: safe, rows, visibleRows: s.viewerPaused ? s.visibleRows : filterRows(rows, s.grepQuery, s.grepMode), viewerFilteredRows: undefined, viewerColumnFilters: {}, totalDroppedCount: s.totalDroppedCount + drop, droppedWhilePaused: s.droppedWhilePaused + (s.viewerPaused ? drop : 0) })
+  },
+  setViewerFilteredRows(rows, columnFilters) {
+    const activeFilters = Object.fromEntries(Object.entries(columnFilters).filter(([, value]) => value.trim() !== ''))
+    set({ viewerFilteredRows: Object.keys(activeFilters).length ? rows : undefined, viewerColumnFilters: activeFilters })
   },
   pause() { set({ viewerPaused: true }) },
-  resume() { const s = get(); set({ viewerPaused: false, visibleRows: filterRows(s.rows, s.grepQuery, s.grepMode), droppedWhilePaused: 0 }) },
-  clear() { set({ rows: [], visibleRows: [], totalDroppedCount: 0, droppedWhilePaused: 0 }) },
-  resetForSelectionChange() { set({ rows: [], visibleRows: [], streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, viewerPaused: false, totalDroppedCount: 0, droppedWhilePaused: 0, latestStderr: undefined, stderrByStream: {}, errorMessage: undefined }) },
+  resume() { const s = get(); set({ viewerPaused: false, visibleRows: filterRows(s.rows, s.grepQuery, s.grepMode), viewerFilteredRows: undefined, viewerColumnFilters: {}, droppedWhilePaused: 0 }) },
+  clear() { set({ rows: [], visibleRows: [], viewerFilteredRows: undefined, viewerColumnFilters: {}, totalDroppedCount: 0, droppedWhilePaused: 0 }) },
+  resetForSelectionChange() { set({ rows: [], visibleRows: [], viewerFilteredRows: undefined, viewerColumnFilters: {}, streamStatus: 'stopped', activeStreamId: undefined, activeStreamMeta: undefined, activeStreamIds: [], activeStreamMetas: {}, viewerPaused: false, totalDroppedCount: 0, droppedWhilePaused: 0, latestStderr: undefined, stderrByStream: {}, errorMessage: undefined }) },
 }))
 
 export function resetLogStoreForTests() { useLogStore.setState({ ...initial }) }

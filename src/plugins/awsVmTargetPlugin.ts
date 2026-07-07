@@ -106,32 +106,21 @@ export function validateAwsVmTargetPluginSettings(value: unknown, errors: Settin
     errors.push({ field: 'plugins.targets.awsVm', message: 'awsVm plugin config must be an object' })
     return
   }
+  if (typeof value.enabled !== 'boolean') {
+    errors.push({ field: 'plugins.targets.awsVm.enabled', message: 'enabled must be a boolean' })
+    return
+  }
+  if (value.enabled !== true) return
   rejectExtraKeys(value, awsVmSettingKeys, 'plugins.targets.awsVm', errors)
   validateAwsVmShape(value, errors)
   validateAwsVmRequiredStrings(value, errors)
   validateAwsVmSecrets(value, errors)
   validateAwsVmUsernames(value, errors)
   validateAwsVmTargetGroups(value, errors)
-  if (value.enabled === true) {
-    const groups = Array.isArray(value.targetGroups) ? value.targetGroups : []
-    if (groups.length === 0) {
-      validateVmLogPaths(value.logPaths, errors)
-    } else if (canExpandAwsVmTargetGroups(value)) {
-      if (!groups.some((group) => isRecord(group) && group.enabled === true)) errors.push({ field: 'plugins.targets.awsVm.targetGroups', message: 'at least one enabled VM region/bastion is required' })
-      for (const profile of effectiveAwsVmPlugins(value as AwsVmTargetPluginSettings)) validateEffectiveAwsVmPlugin(profile.plugin, errors, profile.fieldPrefix)
-    }
+  const groups = Array.isArray(value.targetGroups) ? value.targetGroups : []
+  if (groups.length === 0) {
+    validateVmLogPaths(value.logPaths, errors)
   }
-}
-
-function canExpandAwsVmTargetGroups(value: Record<string, unknown>) {
-  return isRecord(value.logPaths)
-    && Array.isArray(value.targetGroups)
-    && value.targetGroups.every((group) => isRecord(group)
-      && typeof group.id === 'string'
-      && typeof group.name === 'string'
-      && typeof group.enabled === 'boolean'
-      && Array.isArray(group.modules)
-      && group.modules.every((module) => isRecord(module) && typeof module.id === 'string' && typeof module.name === 'string'))
 }
 
 function validateAwsVmShape(value: Record<string, unknown>, errors: SettingsValidationError[]) {
@@ -144,10 +133,6 @@ function validateAwsVmShape(value: Record<string, unknown>, errors: SettingsVali
 function validateAwsVmRequiredStrings(value: Record<string, unknown>, errors: SettingsValidationError[]) {
   for (const key of requiredStringKeys) {
     if (typeof value[key] !== 'string') errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} must be a string` })
-  }
-  if (value.enabled !== true || (Array.isArray(value.targetGroups) && value.targetGroups.length > 0)) return
-  for (const key of requiredStringKeys) {
-    if (typeof value[key] === 'string' && value[key].trim() === '') errors.push({ field: `plugins.targets.awsVm.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
   }
 }
 
@@ -248,13 +233,18 @@ function validateGroupUsernames(value: Record<string, unknown>, prefix: string, 
   }
 }
 
-function validateEffectiveAwsVmPlugin(plugin: AwsVmTargetPluginSettings, errors: SettingsValidationError[], prefix: string) {
-  if (!plugin.enabled) return
-  for (const key of requiredStringKeys) {
-    if (plugin[key].trim() === '') errors.push({ field: `${prefix}.${key}`, message: `${key} is required when AWS VM plugin is enabled` })
+export function getAwsVmConnectionReadiness(plugin: AwsVmTargetPluginSettings) {
+  if (!plugin.enabled) return { ready: false, missing: ['AWS VM plugin is disabled'] }
+  const profiles = effectiveAwsVmPlugins(plugin).filter((profile) => profile.plugin.enabled)
+  if (profiles.length === 0) return { ready: false, missing: ['Enable at least one region/bastion group'] }
+  const missing = new Set<string>()
+  for (const profile of profiles) {
+    for (const key of requiredStringKeys) {
+      if (profile.plugin[key].trim() === '') missing.add(`${profile.fieldPrefix}.${key}`)
+    }
+    if (profile.plugin.bastionPasswordMode === 'password-plus-totp' && (profile.plugin.bastionTotpSecret ?? '').trim() === '') missing.add(`${profile.fieldPrefix}.bastionTotpSecret`)
   }
-  if (plugin.bastionPasswordMode === 'password-plus-totp' && (plugin.bastionTotpSecret ?? '').trim() === '') errors.push({ field: `${prefix}.bastionTotpSecret`, message: 'bastionTotpSecret is required for password-plus-totp mode' })
-  validateVmLogPaths(plugin.logPaths, errors, `${prefix}.logPaths`)
+  return { ready: missing.size === 0, missing: [...missing] }
 }
 
 export const awsVmTargetPlugin: TargetPluginDefinition<AwsVmTargetPluginSettings> = {
