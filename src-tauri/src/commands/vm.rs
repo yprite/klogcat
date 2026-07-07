@@ -1,4 +1,6 @@
 use super::{
+    vm_diagnostics::{append_diagnostics, profile_label, redact_command},
+    vm_process::run_shell_with_timeout,
     vm_target_groups::{annotate_vm_target, discovery_error_details, effective_vm_profiles},
     vm_username::{validate_bastion_username, validate_vm_username},
 };
@@ -6,15 +8,9 @@ use crate::error::CommandError;
 use crate::settings::{AwsVmTargetPluginSettings, TargetPluginSettings};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 use std::{
-    io::Read,
     net::{IpAddr, Ipv4Addr},
-    process::{Command, Output},
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[derive(Debug, Deserialize, Clone)]
@@ -42,6 +38,7 @@ pub struct VmTargetInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ListVmTargetsResponse {
     pub targets: Vec<VmTargetInfo>,
+    pub diagnostics: Vec<String>,
 }
 
 #[tauri::command]
@@ -51,26 +48,55 @@ pub async fn list_vm_targets(
     let plugin = request.plugin.aws_vm;
     validate_plugin_enabled(&plugin)?;
     let mut targets = Vec::new();
+    let mut diagnostics = Vec::new();
     for profile in effective_vm_profiles(&plugin) {
-        validate_aws_vm_plugin(&profile.plugin)?;
+        diagnostics.push(format!("STEP validate {}", profile_label(&profile)));
+        validate_aws_vm_plugin(&profile.plugin)
+            .map_err(|error| append_diagnostics(error, &diagnostics))?;
         let command =
-            bastion_shell_command(&profile.plugin, &profile.plugin.consul_catalog_command)?;
-        let output = run_shell_with_timeout(&command, Duration::from_secs(20))?;
+            bastion_shell_command(&profile.plugin, &profile.plugin.consul_catalog_command)
+                .map_err(|error| append_diagnostics(error, &diagnostics))?;
+        diagnostics.push(format!(
+            "RUN sh -lc {}",
+            redact_command(&command, &profile.plugin)
+        ));
+        let output = run_shell_with_timeout(&command, Duration::from_secs(20))
+            .map_err(|error| append_diagnostics(error, &diagnostics))?;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if !output.status.success() {
+            diagnostics.push(format!(
+                "FAIL {} exit={}",
+                profile_label(&profile),
+                output.status
+            ));
             return Err(
                 CommandError::new("vm_discovery_failed", "failed to discover VM targets")
-                    .with_details(discovery_error_details(&profile, &stderr)),
+                    .with_details(format!(
+                        "{}\n{}",
+                        discovery_error_details(&profile, &stderr),
+                        diagnostics.join("\n")
+                    )),
             );
         }
+        diagnostics.push(format!(
+            "OK {} exit={} stdout={} bytes stderr={} bytes",
+            profile_label(&profile),
+            output.status,
+            output.stdout.len(),
+            output.stderr.len()
+        ));
         targets.extend(
-            parse_vm_targets(&stdout)?
+            parse_vm_targets(&stdout)
+                .map_err(|error| append_diagnostics(error, &diagnostics))?
                 .into_iter()
                 .map(|target| annotate_vm_target(target, &profile)),
         );
     }
-    Ok(ListVmTargetsResponse { targets })
+    Ok(ListVmTargetsResponse {
+        targets,
+        diagnostics,
+    })
 }
 
 pub fn validate_plugin_enabled(plugin: &AwsVmTargetPluginSettings) -> Result<(), CommandError> {
@@ -305,144 +331,6 @@ pub fn validate_vm_target(target: &VmTargetInfo) -> Result<(), CommandError> {
         ));
     }
     Ok(())
-}
-
-fn run_shell_with_timeout(command: &str, timeout: Duration) -> Result<Output, CommandError> {
-    let mut child = spawn_shell_child(command)?;
-    let pid = child.id();
-    let stdout_rx = read_child_pipe(child.stdout.take(), "stdout")?;
-    let stderr_rx = read_child_pipe(child.stderr.take(), "stderr")?;
-    wait_for_shell_child(
-        &mut child,
-        pid,
-        stdout_rx,
-        stderr_rx,
-        Instant::now() + timeout,
-    )
-}
-
-fn spawn_shell_child(command: &str) -> Result<std::process::Child, CommandError> {
-    let mut child_command = Command::new("sh");
-    child_command
-        .arg("-lc")
-        .arg(command)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    #[cfg(unix)]
-    {
-        child_command.process_group(0);
-    }
-    child_command.spawn().map_err(|e| {
-        CommandError::new(
-            "vm_discovery_spawn_failed",
-            "failed to spawn VM discovery command",
-        )
-        .with_details(e.to_string())
-    })
-}
-
-fn read_child_pipe<T: Read + Send + 'static>(
-    pipe: Option<T>,
-    name: &str,
-) -> Result<mpsc::Receiver<std::io::Result<Vec<u8>>>, CommandError> {
-    let pipe = pipe.ok_or_else(|| {
-        CommandError::new(
-            "vm_discovery_failed",
-            format!("failed to capture VM discovery {name}"),
-        )
-    })?;
-    Ok(read_pipe(pipe))
-}
-
-fn wait_for_shell_child(
-    child: &mut std::process::Child,
-    pid: u32,
-    stdout_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
-    stderr_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
-    deadline: Instant,
-) -> Result<Output, CommandError> {
-    loop {
-        if let Some(status) = try_shell_child_status(child, pid)? {
-            return collect_shell_output(status, stdout_rx, stderr_rx);
-        }
-        if Instant::now() >= deadline {
-            return timeout_shell_child(child, pid);
-        }
-        thread::sleep(Duration::from_millis(25));
-    }
-}
-
-fn try_shell_child_status(
-    child: &mut std::process::Child,
-    pid: u32,
-) -> Result<Option<std::process::ExitStatus>, CommandError> {
-    child.try_wait().map_err(|e| {
-        kill_process_group(pid);
-        let _ = child.kill();
-        CommandError::new(
-            "vm_discovery_failed",
-            "failed to wait for VM discovery command",
-        )
-        .with_details(e.to_string())
-    })
-}
-
-fn collect_shell_output(
-    status: std::process::ExitStatus,
-    stdout_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
-    stderr_rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
-) -> Result<Output, CommandError> {
-    Ok(Output {
-        status,
-        stdout: collect_pipe(stdout_rx, "stdout")?,
-        stderr: collect_pipe(stderr_rx, "stderr")?,
-    })
-}
-
-fn timeout_shell_child(child: &mut std::process::Child, pid: u32) -> Result<Output, CommandError> {
-    kill_process_group(pid);
-    let _ = child.kill();
-    let _ = child.wait();
-    Err(
-        CommandError::new("vm_discovery_timeout", "VM discovery timed out")
-            .with_details("Timed out while running Consul catalog command through bastion"),
-    )
-}
-
-fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> mpsc::Receiver<std::io::Result<Vec<u8>>> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let mut buffer = Vec::new();
-        let result = reader.read_to_end(&mut buffer).map(|_| buffer);
-        let _ = tx.send(result);
-    });
-    rx
-}
-
-fn collect_pipe(
-    rx: mpsc::Receiver<std::io::Result<Vec<u8>>>,
-    name: &str,
-) -> Result<Vec<u8>, CommandError> {
-    match rx.recv_timeout(Duration::from_secs(1)) {
-        Ok(Ok(buffer)) => Ok(buffer),
-        Ok(Err(e)) => Err(CommandError::new(
-            "vm_discovery_failed",
-            format!("failed to read VM discovery {name}"),
-        )
-        .with_details(e.to_string())),
-        Err(e) => Err(CommandError::new(
-            "vm_discovery_failed",
-            format!("failed to collect VM discovery {name}"),
-        )
-        .with_details(e.to_string())),
-    }
-}
-
-fn kill_process_group(pid: u32) {
-    #[cfg(unix)]
-    {
-        let _ = unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
-    }
 }
 
 fn is_safe_host(value: &str) -> bool {

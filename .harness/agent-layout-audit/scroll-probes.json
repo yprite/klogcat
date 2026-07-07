@@ -1,0 +1,98 @@
+[
+  {
+    "viewport": "390x844",
+    "scenario": "Graph Viewer vertical wheel",
+    "before": {
+      "windowScrollY": 0,
+      "docScrollHeight": 844,
+      "clientHeight": 844,
+      "bodyScrollHeight": 844,
+      "graphRect": {
+        "top": 766,
+        "bottom": 1086,
+        "height": 320
+      }
+    },
+    "afterWheel": {
+      "windowScrollY": 0,
+      "docScrollHeight": 844,
+      "clientHeight": 844,
+      "bodyScrollHeight": 844,
+      "graphRect": {
+        "top": 766,
+        "bottom": 1086,
+        "height": 320
+      }
+    },
+    "screenshot": ".harness/agent-layout-audit/390x844-graph-after-wheel.png"
+  },
+  {
+    "viewport": "390x844",
+    "scenario": "Raw Logs horizontal scroll",
+    "before": {
+      "scrollLeft": 0,
+      "scrollTop": 1840,
+      "scrollWidth": 1527,
+      "clientWidth": 372,
+      "scrollHeight": 2021,
+      "clientHeight": 181
+    },
+    "after": {
+      "scrollLeft": 1155,
+      "scrollTop": 1840,
+      "scrollWidth": 1527,
+      "clientWidth": 372,
+      "scrollHeight": 2021,
+      "clientHeight": 181
+    },
+    "screenshot": ".harness/agent-layout-audit/390x844-raw-after-horizontal-scroll.png"
+  },
+  {
+    "viewport": "1280x720",
+    "scenario": "Graph Viewer vertical wheel",
+    "before": {
+      "windowScrollY": 0,
+      "docScrollHeight": 720,
+      "clientHeight": 720,
+      "bodyScrollHeight": 720,
+      "graphRect": {
+        "top": 429.5,
+        "bottom": 749.5,
+        "height": 320
+      }
+    },
+    "afterWheel": {
+      "windowScrollY": 0,
+      "docScrollHeight": 720,
+      "clientHeight": 720,
+      "bodyScrollHeight": 720,
+      "graphRect": {
+        "top": 429.5,
+        "bottom": 749.5,
+        "height": 320
+      }
+    },
+    "screenshot": ".harness/agent-layout-audit/1280x720-graph-after-wheel.png"
+  },
+  {
+    "viewport": "1280x720",
+    "scenario": "Raw Logs horizontal scroll",
+    "before": {
+      "scrollLeft": 0,
+      "scrollTop": 1699,
+      "scrollWidth": 1527,
+      "clientWidth": 1262,
+      "scrollHeight": 2029,
+      "clientHeight": 330
+    },
+    "after": {
+      "scrollLeft": 265,
+      "scrollTop": 1699,
+      "scrollWidth": 1527,
+      "clientWidth": 1262,
+      "scrollHeight": 2029,
+      "clientHeight": 330
+    },
+    "screenshot": ".harness/agent-layout-audit/1280x720-raw-after-horizontal-scroll.png"
+  }
+]

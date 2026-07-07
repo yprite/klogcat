@@ -34,6 +34,10 @@ export type TargetPluginDefinition<TSettings = unknown> = {
 
 export type ViewerPluginDefinition = {
   manifest: KlogcatPluginManifest & { kind: 'viewer' }
+  settingsKey: string
   extensionId: string
+  defaultSettings: unknown
   requestedCapabilities: readonly string[]
+  isEnabled(settings: unknown): boolean
+  validate(value: unknown, errors: SettingsValidationError[]): void
 }

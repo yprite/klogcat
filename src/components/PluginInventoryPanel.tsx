@@ -1,15 +1,22 @@
 import type { PersistedSettings } from '../types/settings'
 import { getPluginManifests } from '../plugins/pluginRegistry'
 import { targetPluginDefinitions } from '../plugins/targetPluginRegistry'
+import { isViewerPluginEnabled, viewerPluginDefinitions } from '../plugins/viewerPluginRegistry'
 import { t, type Language } from '../utils/i18n'
 
 function pluginEnabledState(pluginId: string, settings: PersistedSettings) {
   const targetPlugin = targetPluginDefinitions.find((plugin) => plugin.manifest.id === pluginId)
-  if (!targetPlugin) return 'active'
-  return targetPlugin.isEnabled(settings.plugins.targets) ? 'enabled' : 'disabled'
+  if (targetPlugin) return targetPlugin.isEnabled(settings.plugins.targets) ? 'enabled' : 'disabled'
+  return viewerPluginEnabledState(pluginId, settings)
 }
 
-export function PluginInventoryPanel({ language, onOpenTargetPlugin, settings }: { language?: Language; onOpenTargetPlugin?: (settingsKey: string) => void; settings: PersistedSettings }) {
+function viewerPluginEnabledState(pluginId: string, settings: PersistedSettings) {
+  const viewerPlugin = viewerPluginDefinitions.find((plugin) => plugin.manifest.id === pluginId)
+  if (!viewerPlugin) return 'active'
+  return isViewerPluginEnabled(settings.plugins.viewers, viewerPlugin.settingsKey) ? 'enabled' : 'disabled'
+}
+
+export function PluginInventoryPanel({ language, onOpenTargetPlugin, onOpenViewerPlugin, settings }: { language?: Language; onOpenTargetPlugin?: (settingsKey: string) => void; onOpenViewerPlugin?: (settingsKey: string) => void; settings: PersistedSettings }) {
   const plugins = getPluginManifests()
   return <section id="settings-plugin-inventory" className="rounded border border-slate-700 bg-slate-950/60 p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -24,6 +31,14 @@ export function PluginInventoryPanel({ language, onOpenTargetPlugin, settings }:
         <div className="flex items-start justify-between gap-2">
           <span className="font-semibold text-slate-100">{t(language, plugin.manifest.label)}</span>
           <span className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300">{pluginEnabledState(plugin.manifest.id, settings)}</span>
+        </div>
+        <p className="mt-1 text-xs text-slate-400">{plugin.manifest.description}</p>
+        <p className="mt-2 text-xs text-yellow-200">{t(language, 'Open plugin settings')}</p>
+      </button>)}
+      {viewerPluginDefinitions.map((plugin) => <button key={plugin.manifest.id} type="button" className="rounded border border-slate-800 bg-slate-900/70 p-3 text-left hover:border-yellow-400/70" onClick={() => onOpenViewerPlugin?.(plugin.settingsKey)}>
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-semibold text-slate-100">{t(language, plugin.manifest.label)}</span>
+          <span className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300">{viewerPluginEnabledState(plugin.manifest.id, settings)}</span>
         </div>
         <p className="mt-1 text-xs text-slate-400">{plugin.manifest.description}</p>
         <p className="mt-2 text-xs text-yellow-200">{t(language, 'Open plugin settings')}</p>

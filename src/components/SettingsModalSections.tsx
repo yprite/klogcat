@@ -3,6 +3,7 @@ import type { KeyboardShortcuts, PersistedSettings, SettingsValidationError } fr
 import type { SourceLogType } from '../types/log'
 import type { SelectedPodTarget } from '../stores/kubeStore'
 import { targetPluginDefinitions } from '../plugins/targetPluginRegistry'
+import { viewerPluginDefinitions } from '../plugins/viewerPluginRegistry'
 import {
   buildLogPathFromPolicy,
   buildLogPathTemplateFromPolicy,
@@ -73,7 +74,7 @@ function stripSourcePathOverrides(policy: LogPolicy) {
   return next
 }
 
-export type SettingsSectionId = 'runtime' | 'appearance' | 'plugin-inventory' | 'log-source' | `target-plugin:${string}` | 'advanced' | 'shortcuts' | 'maintenance'
+export type SettingsSectionId = 'runtime' | 'appearance' | 'plugin-inventory' | 'log-source' | `target-plugin:${string}` | `viewer-plugin:${string}` | 'advanced' | 'shortcuts' | 'maintenance'
 
 const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
   { id: 'runtime', label: 'Runtime' },
@@ -95,6 +96,11 @@ export function SettingsNav({ activeSection, language, onSectionChange }: { acti
         <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Target plugins')}</p>
         {targetPluginDefinitions.map((plugin) => {
           const sectionId = `target-plugin:${plugin.settingsKey}` as SettingsSectionId
+          return <button key={plugin.manifest.id} type="button" className={`block w-full rounded border px-2 py-1.5 text-left text-xs ${activeSection === sectionId ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-300 hover:border-slate-600'}`} onClick={() => onSectionChange(sectionId)}>{t(language, plugin.manifest.label)}</button>
+        })}
+        <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t(language, 'Viewer plugins')}</p>
+        {viewerPluginDefinitions.map((plugin) => {
+          const sectionId = `viewer-plugin:${plugin.settingsKey}` as SettingsSectionId
           return <button key={plugin.manifest.id} type="button" className={`block w-full rounded border px-2 py-1.5 text-left text-xs ${activeSection === sectionId ? 'border-yellow-400 bg-yellow-400/10 text-yellow-100' : 'border-slate-800 text-slate-300 hover:border-slate-600'}`} onClick={() => onSectionChange(sectionId)}>{t(language, plugin.manifest.label)}</button>
         })}
       </div>}

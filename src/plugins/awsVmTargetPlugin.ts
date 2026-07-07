@@ -13,11 +13,15 @@ const awsVmTargetModuleKeys = ['id', 'name', 'consulCatalogCommand', 'logPaths']
 const requiredStringKeys = ['bastionHost', 'bastionUsername', 'bastionPassword', 'vmUsername', 'vmPassword', 'consulCatalogCommand'] as const
 const secretKeys = ['bastionPassword', 'vmPassword', 'bastionTotpSecret'] as const
 
-export const defaultAwsVmTargetGroups: AwsVmTargetGroupSettings[] = Array.from({ length: 5 }, (_, index) => ({
+export function consulCatalogCommandForModule(moduleName: string) {
+  return `consul_catalog ${moduleName.trim() || 'Module 1'}`
+}
+
+export const defaultAwsVmTargetGroups: AwsVmTargetGroupSettings[] = Array.from({ length: 1 }, (_, index) => ({
   id: `region-bastion-${index + 1}`,
   name: `Region/Bastion ${index + 1}`,
   enabled: false,
-  modules: [{ id: 'module-1', name: 'Module 1' }],
+  modules: [{ id: 'module-1', name: 'Module 1', consulCatalogCommand: consulCatalogCommandForModule('Module 1') }],
 }))
 
 export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
@@ -30,7 +34,7 @@ export const defaultAwsVmTargetPluginSettings: AwsVmTargetPluginSettings = {
   bastionPasswordMode: 'password',
   vmUsername: '',
   vmPassword: '',
-  consulCatalogCommand: 'consul catalog nodes -format=json',
+  consulCatalogCommand: 'consul_catalog',
   strictHostKeyChecking: true,
   logPaths: {
     info: '/var/log/app/info.log',
@@ -310,7 +314,7 @@ function applyGroupOverrides(base: AwsVmTargetPluginSettings, group: AwsVmTarget
 function applyModuleOverrides(base: AwsVmTargetPluginSettings, module: AwsVmTargetModuleSettings): AwsVmTargetPluginSettings {
   return {
     ...base,
-    consulCatalogCommand: nonEmpty(module.consulCatalogCommand) ?? base.consulCatalogCommand,
+    consulCatalogCommand: nonEmpty(module.consulCatalogCommand) ?? consulCatalogCommandForModule(module.name),
     logPaths: mergeLogPaths(base.logPaths, module.logPaths),
     targetGroups: [],
   }

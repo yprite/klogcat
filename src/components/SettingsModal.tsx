@@ -4,11 +4,11 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useLogStore } from '../stores/logStore'
 import { useKubeStore } from '../stores/kubeStore'
 import { useVmStore } from '../stores/vmStore'
-import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
 import { defaultSettings } from '../config/defaultSettings'
 import { validateSettings } from '../config/validateSettings'
 import type { PersistedSettings } from '../types/settings'
 import type { SourceLogType } from '../types/log'
+import { fontSizeClass } from '../utils/fontScale'
 import { t } from '../utils/i18n'
 import {
   defaultLogSourcesFromPolicy,
@@ -31,13 +31,13 @@ function languageForDraft(draft: PersistedSettings, settings: PersistedSettings 
 }
 
 function hasVmLikeTargetPlugin(settings: PersistedSettings | undefined) {
-  return isTargetPluginEnabled(settings?.plugins.targets, 'awsVm') || isTargetPluginEnabled(settings?.plugins.targets, 'csvFile')
+  return settings?.plugins.targets.awsVm.enabled === true || settings?.plugins.targets.csvFile.enabled === true
 }
 
 function hasLoadableVmTargetSettings(settings: PersistedSettings) {
   const awsVm = settings.plugins.targets.awsVm
-  return isTargetPluginEnabled(settings.plugins.targets, 'csvFile') || (
-    isTargetPluginEnabled(settings.plugins.targets, 'awsVm')
+  return settings.plugins.targets.csvFile.enabled === true || (
+    settings.plugins.targets.awsVm.enabled === true
     && awsVm.bastionHost.trim() !== ''
     && awsVm.bastionUsername.trim() !== ''
     && awsVm.bastionPassword.trim() !== ''
@@ -138,6 +138,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const setNum = (key: 'initialTailLines' | 'bufferLimit', value: string) => { setNotice(undefined); setDraft({ ...draft, [key]: Number(value) }) }
   const setLanguage = (value: PersistedSettings['language']) => { setNotice(undefined); setDraft({ ...draft, language: value }) }
   const setColorTheme = (value: PersistedSettings['colorTheme']) => { setNotice(undefined); setDraft({ ...draft, colorTheme: value }); previewColorThemeValue(value) }
+  const setFontSize = (key: 'menuFontSize' | 'logViewerFontSize', value: PersistedSettings['menuFontSize']) => { setNotice(undefined); setDraft({ ...draft, [key]: value }) }
   const setDefaultNamespace = (value: string) => { setNotice(undefined); setDraft({ ...draft, defaultNamespace: value.trim() || undefined }) }
   const setShortcut = (key: keyof NonNullable<PersistedSettings['shortcuts']>, value: string) => {
     setNotice(undefined)
@@ -154,6 +155,10 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   const updateCsvFilePlugin = (patch: Partial<PersistedSettings['plugins']['targets']['csvFile']>) => {
     setNotice(undefined)
     setDraft({ ...draft, plugins: { ...draft.plugins, targets: { ...draft.plugins.targets, csvFile: { ...draft.plugins.targets.csvFile, ...patch } } } })
+  }
+  const updateViewerPlugin = (settingsKey: keyof PersistedSettings['plugins']['viewers'], patch: Partial<PersistedSettings['plugins']['viewers'][keyof PersistedSettings['plugins']['viewers']]>) => {
+    setNotice(undefined)
+    setDraft({ ...draft, plugins: { ...draft.plugins, viewers: { ...draft.plugins.viewers, [settingsKey]: { ...draft.plugins.viewers[settingsKey], ...patch } } } })
   }
   const setCustomPolicy = (policy: LogPolicy, message = t(language, 'Profile: Custom, based on SCloud')) => {
     setNotice(message)
@@ -191,14 +196,14 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       logPolicy: policyDraft,
       logSources: derivedLogSources,
     }
-    const wasAwsVmEnabled = isTargetPluginEnabled(settings?.plugins.targets, 'awsVm')
+    const wasAwsVmEnabled = settings?.plugins.targets.awsVm.enabled === true
     const hadVmLikeTargets = hasVmLikeTargetPlugin(settings)
     const shouldLoadVmTargets = hasLoadableVmTargetSettings(nextDraft)
     const ok = canSave ? await saveSettings(nextDraft) : false
     if (ok) {
       if (!hasVmLikeTargetPlugin(nextDraft)) {
         await cleanupDisabledAwsVmPlugin()
-      } else if (shouldLoadVmTargets && (!hadVmLikeTargets || !wasAwsVmEnabled || isTargetPluginEnabled(nextDraft.plugins.targets, 'csvFile'))) {
+      } else if (shouldLoadVmTargets && (!hadVmLikeTargets || !wasAwsVmEnabled || nextDraft.plugins.targets.csvFile.enabled === true)) {
         await useVmStore.getState().loadTargets(nextDraft.plugins.targets)
       }
       onClose()
@@ -243,7 +248,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
   }
 
   return <div className="fixed inset-0 z-10 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-3 sm:p-6">
-    <div aria-labelledby="settings-title" aria-modal="true" onKeyDown={handleDialogKeyDown} ref={dialogRef} role="dialog" className="flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl">
+    <div aria-labelledby="settings-title" aria-modal="true" onKeyDown={handleDialogKeyDown} ref={dialogRef} role="dialog" className={`klogcat-menu-font ${fontSizeClass('menu', draft.menuFontSize)} flex max-h-[92vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-2xl`}>
       <div className="flex shrink-0 items-center justify-between border-b border-slate-700 bg-slate-900 p-4">
         <h2 className="text-lg font-bold" id="settings-title">{t(language, 'Settings')}</h2>
         <button aria-label={t(language, 'Close settings')} ref={closeButtonRef} onClick={() => closeWithoutSaving('Settings close clicked')}>✕</button>
@@ -251,7 +256,7 @@ export function SettingsModal({ open, onClose, onRestart = () => window.location
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[12rem_minmax(0,1fr)]">
         <SettingsNav activeSection={activeSection} language={language} onSectionChange={setActiveSection} />
         <div className="min-h-0 space-y-4 overflow-y-auto p-4" data-testid="settings-scroll-panel">
-          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewColorTheme={previewColorTheme} previewPolicy={previewPolicy} restoreDraftColorTheme={restoreDraftColorTheme} selectedPolicyId={selectedPolicyId} setActiveSection={setActiveSection} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
+          <SettingsSectionContent activeSection={activeSection} activeTarget={activeTarget} draft={draft} error={error} errors={errors} handleClearTargetCache={handleClearTargetCache} handlePolicySelect={handlePolicySelect} handleRawPolicyTextChange={handleRawPolicyTextChange} handleRestart={handleRestart} handleTestPaths={handleTestPaths} language={language} loading={loading} notice={notice} policyText={policyText} previewColorTheme={previewColorTheme} previewPolicy={previewPolicy} restoreDraftColorTheme={restoreDraftColorTheme} selectedPolicyId={selectedPolicyId} setActiveSection={setActiveSection} setCustomPolicy={setCustomPolicy} setColorTheme={setColorTheme} setFontSize={setFontSize} setDefaultNamespace={setDefaultNamespace} setLanguage={setLanguage} setNum={setNum} setShortcut={setShortcut} setShowPathOverrides={setShowPathOverrides} setShowRawJson={setShowRawJson} showPathOverrides={showPathOverrides} showRawJson={showRawJson} sourceTypes={sourceTypes} testingPaths={testingPaths} testResults={testResults} updateCsvFilePlugin={updateCsvFilePlugin} updateViewerPlugin={updateViewerPlugin} updateAwsVmLogPath={updateAwsVmLogPath} updateAwsVmPlugin={updateAwsVmPlugin} warnings={warnings} />
         </div>
       </div>
       <SettingsFooter canSave={canSave} handleReset={handleReset} handleSave={handleSave} language={language} loading={loading} saveBlockedReason={saveBlockedReason} />

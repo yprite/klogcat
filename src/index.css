@@ -207,6 +207,36 @@ body { margin: 0; background: var(--klogcat-bg); color: var(--klogcat-text); fon
 button, input, select { font: inherit; }
 button:disabled { cursor: not-allowed; opacity: 0.45; }
 
+.klogcat-menu-font-compact { --klogcat-menu-font-scale: 0.9; }
+.klogcat-menu-font-normal { --klogcat-menu-font-scale: 1; }
+.klogcat-menu-font-large { --klogcat-menu-font-scale: 1.12; }
+.klogcat-menu-font-extra-large { --klogcat-menu-font-scale: 1.25; }
+.klogcat-log-font-compact { --klogcat-log-font-scale: 0.9; }
+.klogcat-log-font-normal { --klogcat-log-font-scale: 1; }
+.klogcat-log-font-large { --klogcat-log-font-scale: 1.15; }
+.klogcat-log-font-extra-large { --klogcat-log-font-scale: 1.3; }
+
+.klogcat-menu-font {
+  font-size: calc(1rem * var(--klogcat-menu-font-scale, 1));
+}
+
+.klogcat-menu-font .text-\[10px\] { font-size: calc(10px * var(--klogcat-menu-font-scale, 1)); }
+.klogcat-menu-font .text-\[11px\] { font-size: calc(11px * var(--klogcat-menu-font-scale, 1)); }
+.klogcat-menu-font .text-xs { font-size: calc(0.75rem * var(--klogcat-menu-font-scale, 1)); }
+.klogcat-menu-font .text-sm { font-size: calc(0.875rem * var(--klogcat-menu-font-scale, 1)); }
+.klogcat-menu-font .text-base { font-size: calc(1rem * var(--klogcat-menu-font-scale, 1)); }
+.klogcat-menu-font .text-lg { font-size: calc(1.125rem * var(--klogcat-menu-font-scale, 1)); }
+
+.klogcat-log-font {
+  font-size: calc(0.75rem * var(--klogcat-log-font-scale, 1));
+}
+
+.klogcat-log-font .text-\[10px\] { font-size: calc(10px * var(--klogcat-log-font-scale, 1)); }
+.klogcat-log-font .text-\[11px\] { font-size: calc(11px * var(--klogcat-log-font-scale, 1)); }
+.klogcat-log-font .text-xs { font-size: calc(0.75rem * var(--klogcat-log-font-scale, 1)); }
+.klogcat-log-font .text-sm { font-size: calc(0.875rem * var(--klogcat-log-font-scale, 1)); }
+.klogcat-log-font .text-base { font-size: calc(1rem * var(--klogcat-log-font-scale, 1)); }
+
 .api-flow-edge-base {
   fill: none;
   stroke: var(--klogcat-border);

@@ -5,6 +5,7 @@ import { useKubeStore } from '../stores/kubeStore'
 import { useVmStore } from '../stores/vmStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { isTargetPluginEnabled } from '../plugins/targetPluginRegistry'
+import { fontSizeClass } from '../utils/fontScale'
 import { t } from '../utils/i18n'
 import { defaultVisibleColumnsForPolicy, getLogPolicy } from '../utils/logPolicy'
 import { columnsForRows, labelForColumn, type LogColumnKey, valueForColumn } from '../utils/logColumns'
@@ -136,6 +137,7 @@ async function copyText(text: string) {
 
 export function LogViewer() {
   const language = useSettingsStore((s) => s.settings?.language)
+  const logViewerFontSize = useSettingsStore((s) => s.settings?.logViewerFontSize)
   const { rows, visibleRows, grepQuery, grepMode, autoScrollEnabled, viewerPaused, streamStatus } = useLogStore()
   const setViewerFilteredRows = useLogStore((s) => s.setViewerFilteredRows)
   const kube = useKubeStore()
@@ -302,7 +304,7 @@ export function LogViewer() {
     setDragOverColumn(key)
   }
   const headerHeight = availableColumns.length ? 72 : 0
-  return <>
+  return <div className={`contents klogcat-log-font ${fontSizeClass('log', logViewerFontSize)}`}>
   {availableColumns.length > 0 && <div className="relative flex shrink-0 flex-wrap items-center gap-2 border border-slate-800 bg-slate-900 px-2 py-1 text-xs">
     <span className="font-semibold uppercase text-slate-300">{t(language, 'Columns')}</span>
     <span className="rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-yellow-200">{headerColumns.length}/{availableColumns.length} {t(language, 'shown')}</span>
@@ -395,5 +397,5 @@ export function LogViewer() {
     </div>
     <pre className="whitespace-pre-wrap text-slate-200">{JSON.stringify(selectedRow, null, 2)}</pre>
   </aside>}
-  </>
+  </div>
 }

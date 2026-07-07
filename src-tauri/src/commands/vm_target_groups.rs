@@ -6,10 +6,10 @@ use crate::settings::{
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveVmProfile {
     pub plugin: AwsVmTargetPluginSettings,
-    bastion_id: Option<String>,
-    bastion_name: Option<String>,
-    module_id: Option<String>,
-    module_name: Option<String>,
+    pub bastion_id: Option<String>,
+    pub bastion_name: Option<String>,
+    pub module_id: Option<String>,
+    pub module_name: Option<String>,
 }
 
 pub(super) fn effective_vm_profiles(plugin: &AwsVmTargetPluginSettings) -> Vec<EffectiveVmProfile> {
@@ -121,10 +121,11 @@ fn apply_module_overrides(
     module: &AwsVmTargetModuleSettings,
 ) -> AwsVmTargetPluginSettings {
     let mut next = without_target_groups(plugin);
-    apply_optional_string(
-        &mut next.consul_catalog_command,
-        &module.consul_catalog_command,
-    );
+    if let Some(value) = non_empty(&module.consul_catalog_command) {
+        next.consul_catalog_command = value;
+    } else {
+        next.consul_catalog_command = format!("consul_catalog {}", module.name);
+    }
     next.log_paths.extend(module.log_paths.clone());
     next
 }

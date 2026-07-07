@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { KlogcatExtensionModule, LogViewerExtension, LogViewerExtensionProps, SdkLogRow } from '../../sdk/log-viewer'
 
@@ -120,6 +120,11 @@ function formatDuration(ms: number) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`
 }
 
+function formatTime(ms: number) {
+  if (!Number.isFinite(ms)) return 'n/a'
+  return new Date(ms).toLocaleTimeString()
+}
+
 function edgeKey(from: string, to: string) {
   return `${from}=>${to}`
 }
@@ -222,7 +227,7 @@ export function buildApiFlowGraph(rows: readonly SdkLogRow[]): ApiFlowGraph {
   }).sort((a, b) => b.startTime - a.startTime || a.trId.localeCompare(b.trId))
 
   const edges = [...edgeMap.values()].sort((a, b) => b.count - a.count || statusSeverity(b.status) - statusSeverity(a.status) || a.id.localeCompare(b.id))
-  const visibleTraces = traces.slice(0, 20)
+  const visibleTraces = traces.slice(0, 200)
   return {
     nodes,
     edges: edges.slice(0, 40),
@@ -251,7 +256,7 @@ function edgeTooltip(edge: FlowEdge) {
   ].join('\n')
 }
 
-function GraphCanvas({ graph }: { graph: ApiFlowGraph }) {
+function GraphCanvas({ graph, selectedTrId }: { graph: ApiFlowGraph; selectedTrId?: string }) {
   const [selectedDetail, setSelectedDetail] = useState<string>('Select a node or edge to inspect full flow details.')
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
   const activate = (detail: string) => setSelectedDetail(detail)
@@ -261,6 +266,10 @@ function GraphCanvas({ graph }: { graph: ApiFlowGraph }) {
     activate(detail)
   }
   return <div className="min-h-[280px] rounded border border-slate-800 bg-slate-950 p-3">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <span className="font-semibold uppercase tracking-wide text-slate-400">{selectedTrId ? 'Selected trID sequence' : 'All module flow'}</span>
+      {selectedTrId && <span className="rounded border border-yellow-400/40 bg-yellow-400/10 px-2 py-0.5 font-mono text-yellow-100">{selectedTrId}</span>}
+    </div>
     {(graph.omittedNodeCount > 0 || graph.omittedEdgeCount > 0) && <p className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
       Graph limited for readability: {graph.omittedNodeCount} nodes and {graph.omittedEdgeCount} edges omitted. Narrow filters or a shorter time window for full detail.
     </p>}
@@ -303,9 +312,27 @@ function GraphCanvas({ graph }: { graph: ApiFlowGraph }) {
   </div>
 }
 
-function TraceList({ traces }: { traces: readonly FlowTrace[] }) {
-  return <div className="min-h-0 overflow-auto rounded border border-slate-800 bg-slate-950">
-    {traces.map((trace) => <article key={trace.trId} className="border-b border-slate-800 p-3 last:border-b-0" title={`${trace.entryApi}\nModules: ${trace.modules.join(' -> ')}`}>
+function TraceList({ onSelectTrId, selectedTrId, traces }: { onSelectTrId: (trId: string | undefined) => void; selectedTrId?: string; traces: readonly FlowTrace[] }) {
+  const [query, setQuery] = useState('')
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleTraces = useMemo(() => traces.filter((trace) => {
+    if (!normalizedQuery) return true
+    return [trace.trId, trace.user, trace.entryApi, trace.status, ...trace.modules].join(' ').toLowerCase().includes(normalizedQuery)
+  }), [normalizedQuery, traces])
+
+  return <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] rounded border border-slate-800 bg-slate-950">
+    <div className="border-b border-slate-800 p-3">
+      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400" htmlFor="api-flow-trace-search">Search trID</label>
+      <input id="api-flow-trace-search" aria-label="Search trID" className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-white placeholder:text-slate-500" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="trID / user / API / module" />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <span>{visibleTraces.length}/{traces.length} trID</span>
+        {selectedTrId && <button type="button" className="rounded border border-yellow-500/60 px-2 py-0.5 text-yellow-100 hover:bg-yellow-500/10" onClick={() => onSelectTrId(undefined)}>Clear selection</button>}
+      </div>
+    </div>
+    <div className="min-h-0 overflow-auto">
+    {visibleTraces.map((trace) => {
+      const selected = selectedTrId === trace.trId
+      return <button type="button" key={trace.trId} className={`block w-full border-b p-3 text-left last:border-b-0 ${selected ? 'border-yellow-400/40 bg-yellow-400/10' : 'border-slate-800 hover:bg-slate-900/80'}`} title={`${trace.entryApi}\nModules: ${trace.modules.join(' -> ')}`} onClick={() => onSelectTrId(selected ? undefined : trace.trId)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-xs text-yellow-200">{trace.trId}</p>
@@ -319,13 +346,63 @@ function TraceList({ traces }: { traces: readonly FlowTrace[] }) {
         <span>Rows: <span className="text-slate-200">{trace.rowCount}</span></span>
         <span>Servers: <span className="text-slate-200">{trace.modules.length}</span></span>
       </div>
-    </article>)}
+      </button>
+    })}
+    {visibleTraces.length === 0 && <p className="p-3 text-sm text-slate-400">No trID matches the current search.</p>}
+    </div>
   </div>
+}
+
+function traceRows(rows: readonly SdkLogRow[], trId: string | undefined) {
+  if (!trId) return []
+  return rows.filter((row) => correlationKey(row) === trId).sort((a, b) => timestampMs(a) - timestampMs(b) || a.id - b.id)
+}
+
+function TraceTimeline({ rows, trId }: { rows: readonly SdkLogRow[]; trId: string }) {
+  if (rows.length === 0) return null
+  const start = timestampMs(rows[0])
+  return <section data-testid="api-flow-trace-timeline" className="rounded border border-slate-800 bg-slate-950 p-3">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-yellow-300">Timeline</p>
+        <h3 className="font-mono text-sm font-semibold text-white">{trId}</h3>
+      </div>
+      <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rows.length} events</span>
+    </div>
+    <div className="space-y-2">
+      {rows.map((row, index) => {
+        const currentTime = timestampMs(row)
+        const previousTime = index > 0 ? timestampMs(rows[index - 1]) : currentTime
+        const status = statusValue(row) ?? 'n/a'
+        return <article key={`${row.id}-${index}`} className="grid gap-2 rounded border border-slate-800 bg-slate-900/70 p-2 text-xs sm:grid-cols-[5rem_minmax(0,1fr)_7rem]">
+          <div className="font-mono text-slate-400">
+            <p>#{index + 1}</p>
+            <p>+{formatDuration(currentTime - start)}</p>
+            {index > 0 && <p className="text-slate-500">delta {formatDuration(currentTime - previousTime)}</p>}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-white">{serverId(row)}</p>
+            <p className="mt-1 truncate text-slate-300">{requestLabel(row)}</p>
+            <p className="mt-1 truncate text-slate-500">{formatTime(currentTime)} · row #{row.id}</p>
+          </div>
+          <div className="flex items-start justify-end">
+            <span className={`rounded border px-2 py-0.5 font-semibold ${statusSeverity(status) >= 3 ? 'border-red-500/50 bg-red-500/10 text-red-100' : statusSeverity(status) >= 2 ? 'border-amber-500/50 bg-amber-500/10 text-amber-100' : 'border-slate-700 text-slate-200'}`}>{status}</span>
+          </div>
+        </article>
+      })}
+    </div>
+  </section>
 }
 
 export function ApiFlowGraphExtensionView({ snapshot }: LogViewerExtensionProps) {
   const sourceRows = snapshot.visibleRows
-  const graph = buildApiFlowGraph(sourceRows)
+  const [selectedTrId, setSelectedTrId] = useState<string>()
+  const fullGraph = useMemo(() => buildApiFlowGraph(sourceRows), [sourceRows])
+  const selectedRows = useMemo(() => traceRows(sourceRows, selectedTrId), [sourceRows, selectedTrId])
+  const graph = useMemo(() => selectedTrId ? buildApiFlowGraph(selectedRows) : fullGraph, [fullGraph, selectedRows, selectedTrId])
+  useEffect(() => {
+    if (selectedTrId && selectedRows.length === 0) setSelectedTrId(undefined)
+  }, [selectedRows.length, selectedTrId])
   return <section data-testid="api-flow-graph-view" className="min-h-0 flex-1 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
       <div>
@@ -336,19 +413,22 @@ export function ApiFlowGraphExtensionView({ snapshot }: LogViewerExtensionProps)
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2 text-right text-xs">
-        <span className="rounded border border-slate-800 bg-slate-950 px-3 py-2"><b className="block text-base text-white">{graph.traces.length}</b>trID</span>
+        <span className="rounded border border-slate-800 bg-slate-950 px-3 py-2"><b className="block text-base text-white">{fullGraph.traces.length}</b>trID</span>
         <span className="rounded border border-slate-800 bg-slate-950 px-3 py-2"><b className="block text-base text-white">{graph.nodes.length}</b>nodes</span>
         <span className="rounded border border-slate-800 bg-slate-950 px-3 py-2"><b className="block text-base text-white">{graph.edges.length}</b>edges</span>
       </div>
     </header>
-    {graph.correlatedRowCount === 0 ? <div className="rounded border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-300">
+    {fullGraph.correlatedRowCount === 0 ? <div className="rounded border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-300">
       <p className="font-semibold text-slate-100">No trID correlated rows in the current view</p>
       <p className="mt-2">Filter to a time window or user, then include rows with trId or traceId to render the API flow graph.</p>
     </div> : <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <GraphCanvas graph={graph} />
+      <div className="space-y-3">
+        <GraphCanvas graph={graph} selectedTrId={selectedTrId} />
+        {selectedTrId && <TraceTimeline rows={selectedRows} trId={selectedTrId} />}
+      </div>
       <div className="min-h-[240px]">
-        {graph.omittedTraceCount > 0 && <p className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">{graph.omittedTraceCount} older trID groups omitted from this list.</p>}
-        <TraceList traces={graph.traces} />
+        {fullGraph.omittedTraceCount > 0 && <p className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">{fullGraph.omittedTraceCount} older trID groups omitted from this list.</p>}
+        <TraceList traces={fullGraph.traces} selectedTrId={selectedTrId} onSelectTrId={setSelectedTrId} />
       </div>
     </div>}
   </section>

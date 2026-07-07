@@ -1,7 +1,6 @@
 use super::target_plugin_groups::{
-    default_aws_vm_target_groups, validate_effective_target_groups, validate_group_log_paths,
-    validate_group_secret_values, validate_group_usernames, validate_target_groups,
-    AwsVmTargetGroupSettings,
+    default_aws_vm_target_groups, validate_group_log_paths, validate_group_secret_values,
+    validate_group_usernames, validate_target_groups, AwsVmTargetGroupSettings,
 };
 use crate::error::SettingsValidationError;
 use serde::{Deserialize, Serialize};
@@ -13,6 +12,7 @@ const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginSettings {
     pub targets: TargetPluginSettings,
+    pub viewers: ViewerPluginSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +49,19 @@ pub struct CsvFileTargetPluginSettings {
     pub csv_text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewerPluginSettings {
+    pub raw: ViewerPluginEnabledSettings,
+    pub api_flow_graph: ViewerPluginEnabledSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewerPluginEnabledSettings {
+    pub enabled: bool,
+}
+
 pub(crate) fn default_target_plugins() -> TargetPluginSettings {
     TargetPluginSettings {
         aws_vm: AwsVmTargetPluginSettings {
@@ -61,14 +74,16 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
             bastion_password_mode: "password".into(),
             vm_username: String::new(),
             vm_password: String::new(),
-            consul_catalog_command: "consul catalog nodes -format=json".into(),
+            consul_catalog_command: "consul_catalog".into(),
             strict_host_key_checking: true,
             log_paths: default_vm_log_paths(),
             target_groups: default_aws_vm_target_groups(),
         },
         csv_file: CsvFileTargetPluginSettings {
             enabled: false,
-            csv_text: String::new(),
+            csv_text:
+                "id,name,address,service,datacenter,tags\napi-1,api-1,10.0.0.7,api,prod,blue|critical"
+                    .into(),
         },
     }
 }
@@ -76,6 +91,14 @@ pub(crate) fn default_target_plugins() -> TargetPluginSettings {
 pub(crate) fn default_plugins() -> PluginSettings {
     PluginSettings {
         targets: default_target_plugins(),
+        viewers: default_viewer_plugins(),
+    }
+}
+
+pub(crate) fn default_viewer_plugins() -> ViewerPluginSettings {
+    ViewerPluginSettings {
+        raw: ViewerPluginEnabledSettings { enabled: true },
+        api_flow_graph: ViewerPluginEnabledSettings { enabled: true },
     }
 }
 
@@ -95,14 +118,24 @@ pub(crate) fn validate_target_plugins(
     if plugin.enabled {
         validate_bastion_port(plugin, errors);
         validate_password_mode(plugin, errors);
-        validate_required_fields(plugin, errors);
         validate_secret_values(plugin, errors);
         validate_usernames(plugin, errors);
         validate_target_groups(plugin, errors);
-        validate_effective_target_groups(plugin, errors);
         validate_log_paths(plugin, errors);
     }
     validate_csv_file_plugin(&settings.csv_file, errors);
+}
+
+pub(crate) fn validate_viewer_plugins(
+    settings: &ViewerPluginSettings,
+    errors: &mut Vec<SettingsValidationError>,
+) {
+    if !settings.raw.enabled {
+        errors.push(err(
+            "plugins.viewers.raw.enabled",
+            "Raw Logs viewer cannot be disabled",
+        ));
+    }
 }
 
 fn validate_bastion_port(
@@ -131,34 +164,6 @@ fn validate_password_mode(
         "plugins.targets.awsVm.bastionPasswordMode",
         "bastionPasswordMode must be password or password-plus-totp",
     ));
-}
-
-fn validate_required_fields(
-    plugin: &AwsVmTargetPluginSettings,
-    errors: &mut Vec<SettingsValidationError>,
-) {
-    if !plugin.enabled || !plugin.target_groups.is_empty() {
-        return;
-    }
-    for (field, value) in required_field_values(plugin) {
-        if value.trim().is_empty() {
-            errors.push(err(
-                format!("plugins.targets.awsVm.{field}"),
-                format!("{field} is required when AWS VM plugin is enabled"),
-            ));
-        }
-    }
-}
-
-fn required_field_values(plugin: &AwsVmTargetPluginSettings) -> [(&'static str, &String); 6] {
-    [
-        ("bastionHost", &plugin.bastion_host),
-        ("bastionUsername", &plugin.bastion_username),
-        ("bastionPassword", &plugin.bastion_password),
-        ("vmUsername", &plugin.vm_username),
-        ("vmPassword", &plugin.vm_password),
-        ("consulCatalogCommand", &plugin.consul_catalog_command),
-    ]
 }
 
 fn validate_secret_values(

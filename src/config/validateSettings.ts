@@ -1,6 +1,8 @@
 import type { PersistedSettings, SettingsValidationError } from '../types/settings'
 import { validateTargetPluginSettings } from '../plugins/targetPluginRegistry'
+import { validateViewerPluginSettings } from '../plugins/viewerPluginRegistry'
 import { isColorThemeId } from '../utils/colorTheme'
+import { isFontSizeId } from '../utils/fontScale'
 import { assertValidLogPolicy, getLogPolicy, sourceTypesFromPolicy, type LogPolicy } from '../utils/logPolicy'
 
 function sourceKeys(policy?: LogPolicy) { return sourceTypesFromPolicy(policy ?? getLogPolicy()) }
@@ -10,11 +12,13 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
 }
 
 function validateTopLevelFields(value: Record<string, unknown>, errors: SettingsValidationError[]) {
-  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'colorTheme', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'plugins'], 'settings', errors)
+  rejectExtraKeys(value, ['schemaVersion', 'defaultNamespace', 'language', 'colorTheme', 'menuFontSize', 'logViewerFontSize', 'initialTailLines', 'bufferLimit', 'logSources', 'shortcuts', 'logPolicyId', 'logPolicy', 'plugins'], 'settings', errors)
   const validators: Array<[string, boolean, string]> = [
     ['schemaVersion', value.schemaVersion !== 1, 'schemaVersion must be 1'],
     ['language', value.language !== undefined && value.language !== 'en' && value.language !== 'ko', 'language must be en or ko'],
     ['colorTheme', value.colorTheme !== undefined && !isColorThemeId(value.colorTheme), 'colorTheme must be a supported VS Code color theme'],
+    ['menuFontSize', value.menuFontSize !== undefined && !isFontSizeId(value.menuFontSize), 'menuFontSize must be a supported font size'],
+    ['logViewerFontSize', value.logViewerFontSize !== undefined && !isFontSizeId(value.logViewerFontSize), 'logViewerFontSize must be a supported font size'],
     ['initialTailLines', !integerInRange(value.initialTailLines, 0, 100000), 'initialTailLines must be 0..100000'],
     ['bufferLimit', !integerInRange(value.bufferLimit, 1000, 200000), 'bufferLimit must be 1000..200000'],
     ['defaultNamespace', value.defaultNamespace !== undefined && typeof value.defaultNamespace !== 'string', 'defaultNamespace must be a string when provided'],
@@ -28,8 +32,9 @@ function validatePlugins(value: unknown, errors: SettingsValidationError[]) {
     errors.push({ field: 'plugins', message: 'plugins must be an object' })
     return
   }
-  rejectExtraKeys(value, ['targets'], 'plugins', errors)
+  rejectExtraKeys(value, ['targets', 'viewers'], 'plugins', errors)
   validateTargetPluginSettings(value.targets, errors)
+  validateViewerPluginSettings(value.viewers, errors)
 }
 
 function integerInRange(value: unknown, min: number, max: number) {

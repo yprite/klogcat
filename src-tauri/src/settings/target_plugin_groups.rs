@@ -54,7 +54,7 @@ fn default_true() -> bool {
 }
 
 pub(crate) fn default_aws_vm_target_groups() -> Vec<AwsVmTargetGroupSettings> {
-    (1..=5)
+    (1..=1)
         .map(|index| AwsVmTargetGroupSettings {
             id: format!("region-bastion-{index}"),
             name: format!("Region/Bastion {index}"),
@@ -73,7 +73,7 @@ pub(crate) fn default_aws_vm_target_groups() -> Vec<AwsVmTargetGroupSettings> {
             modules: vec![AwsVmTargetModuleSettings {
                 id: "module-1".into(),
                 name: "Module 1".into(),
-                consul_catalog_command: None,
+                consul_catalog_command: Some("consul_catalog Module 1".into()),
                 log_paths: BTreeMap::new(),
             }],
         })

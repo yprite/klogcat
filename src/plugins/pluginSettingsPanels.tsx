@@ -4,7 +4,7 @@ import type { SourceLogType } from '../types/log'
 import type { PersistedSettings } from '../types/settings'
 import type { AwsVmTargetGroupSettings } from '../types/vm'
 import { t, type Language } from '../utils/i18n'
-import { defaultAwsVmTargetGroups, getAwsVmConnectionReadiness } from './awsVmTargetPlugin'
+import { consulCatalogCommandForModule, defaultAwsVmTargetGroups, getAwsVmConnectionReadiness } from './awsVmTargetPlugin'
 import { csvFileTargetSampleCsv } from './csvFileTargetPlugin'
 
 type PluginSettingsPanelProps = {
@@ -44,12 +44,12 @@ const awsVmTargetGroupJsonTemplate = JSON.stringify({
       {
         id: 'api',
         name: 'API',
-        consulCatalogCommand: 'consul catalog nodes -service api -format=json',
+        consulCatalogCommand: consulCatalogCommandForModule('API'),
       },
       {
         id: 'worker',
         name: 'Worker',
-        consulCatalogCommand: 'consul catalog nodes -service worker -format=json',
+        consulCatalogCommand: consulCatalogCommandForModule('Worker'),
       },
     ],
   })),
@@ -59,10 +59,16 @@ function AwsVmTargetGroupPanel({ collapsed, group, index, language, toggleCollap
   const modules = group.modules ?? []
   const groupLabel = group.name || `${t(language, 'Bastion group')} ${index + 1}`
   const updateModule = (moduleIndex: number, patch: Partial<AwsVmTargetGroupSettings['modules'][number]>) => {
-    updateGroup({ ...group, modules: modules.map((module, itemIndex) => itemIndex === moduleIndex ? { ...module, ...patch } : module) })
+    updateGroup({ ...group, modules: modules.map((module, itemIndex) => {
+      if (itemIndex !== moduleIndex) return module
+      const next = { ...module, ...patch }
+      if (patch.name !== undefined && (!module.consulCatalogCommand || module.consulCatalogCommand === consulCatalogCommandForModule(module.name))) next.consulCatalogCommand = consulCatalogCommandForModule(patch.name)
+      return next
+    }) })
   }
   const addModule = () => {
-    updateGroup({ ...group, modules: [...modules, { id: newTargetConfigId('module'), name: `${t(language, 'Module')} ${modules.length + 1}` }] })
+    const name = `${t(language, 'Module')} ${modules.length + 1}`
+    updateGroup({ ...group, modules: [...modules, { id: newTargetConfigId('module'), name, consulCatalogCommand: consulCatalogCommandForModule(name) }] })
   }
   const removeModule = (moduleIndex: number) => {
     updateGroup({ ...group, modules: modules.filter((_, itemIndex) => itemIndex !== moduleIndex) })
@@ -93,6 +99,11 @@ function AwsVmTargetGroupDetails({ addModule, group, language, modules, removeMo
       <label className="block text-sm">{t(language, 'Bastion username override')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={group.bastionUsername ?? ''} onChange={(event) => updateGroup({ ...group, bastionUsername: event.target.value })} /></label>
       <SecretInput label="Bastion password override" language={language} value={group.bastionPassword ?? ''} onChange={(value) => updateGroup({ ...group, bastionPassword: value })} />
       <SecretInput label="Bastion TOTP override" language={language} value={group.bastionTotpSecret ?? ''} onChange={(value) => updateGroup({ ...group, bastionTotpSecret: value })} />
+      <label className="block text-sm">{t(language, 'Bastion password mode override')}<select className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={group.bastionPasswordMode ?? ''} onChange={(event) => updateGroup({ ...group, bastionPasswordMode: event.target.value === '' ? undefined : event.target.value as AwsVmTargetGroupSettings['bastionPasswordMode'] })}>
+        <option value="">{t(language, 'Use shared default')}</option>
+        <option value="password">{t(language, 'Password only')}</option>
+        <option value="password-plus-totp">{t(language, 'Password + current TOTP')}</option>
+      </select></label>
       <label className="block text-sm">{t(language, 'VM username override')}<input className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm text-white" value={group.vmUsername ?? ''} onChange={(event) => updateGroup({ ...group, vmUsername: event.target.value })} /></label>
       <SecretInput label="VM password override" language={language} value={group.vmPassword ?? ''} onChange={(value) => updateGroup({ ...group, vmPassword: value })} />
     </div>
@@ -147,7 +158,7 @@ function normalizeImportedModule(value: unknown, index: number): AwsVmTargetGrou
   return {
     id: stringValue(value.id) || newTargetConfigId('module'),
     name: stringValue(value.name) || `${'Module'} ${index + 1}`,
-    consulCatalogCommand: optionalString(value.consulCatalogCommand),
+    consulCatalogCommand: optionalString(value.consulCatalogCommand) ?? consulCatalogCommandForModule(stringValue(value.name) || `${'Module'} ${index + 1}`),
   }
 }
 
@@ -186,14 +197,14 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
         bastionPort: plugin.bastionPort,
         bastionUsername: plugin.bastionUsername,
         vmUsername: plugin.vmUsername,
-        modules: [{ id: newTargetConfigId('module'), name: `${t(language, 'Module')} 1`, consulCatalogCommand: plugin.consulCatalogCommand }],
+        modules: [{ id: newTargetConfigId('module'), name: `${t(language, 'Module')} 1`, consulCatalogCommand: consulCatalogCommandForModule(`${t(language, 'Module')} 1`) }],
       }],
     })
   }
   const removeTargetGroup = (index: number) => {
     updateAwsVmPlugin({ targetGroups: targetGroups.filter((_, itemIndex) => itemIndex !== index) })
   }
-  const resetFiveRegionTemplate = () => {
+  const resetRegionTemplate = () => {
     updateAwsVmPlugin({ targetGroups: defaultAwsVmTargetGroups.map((group) => ({ ...group, modules: group.modules.map((module) => ({ ...module })) })) })
     setCollapsedGroupIds(new Set())
   }
@@ -226,7 +237,7 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
     setConnectionTestResult(undefined)
     try {
       const result = await testVmConnection(draft.plugins.targets)
-      setConnectionTestResult({ kind: 'success', message: t(language, 'VM connection test succeeded. Discovered {count} VM targets.', { count: result.targets.length }) })
+      setConnectionTestResult({ kind: 'success', message: [t(language, 'VM connection test succeeded. Discovered {count} VM targets.', { count: result.targets.length }), ...(result.diagnostics ?? [])].join('\n') })
     } catch (error) {
       const commandError = error as { message?: string; details?: string; code?: string }
       setConnectionTestResult({ kind: 'error', message: [commandError.message ?? String(error), commandError.details, commandError.code].filter(Boolean).join('\n') })
@@ -259,11 +270,11 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold text-white">{t(language, 'Regions/Bastions and modules')}</h4>
-          <p className="mt-1 text-xs text-slate-400">{t(language, 'Configure up to five region bastions, then add modules under each bastion. VM instances discovered per module are selected like Kubernetes pods.')}</p>
+          <p className="mt-1 text-xs text-slate-400">{t(language, 'Start with one region/bastion and one module. Add more region/bastions or modules only when needed.')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={() => setShowJsonImport((value) => !value)}>{t(language, 'Import JSON template')}</button>
-          <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={resetFiveRegionTemplate}>{t(language, 'Reset 5 region template')}</button>
+          <button className="rounded border border-slate-600 px-3 py-1 text-xs text-slate-100 hover:bg-slate-800" type="button" onClick={resetRegionTemplate}>{t(language, 'Reset region/module template')}</button>
           <button className="rounded border border-sky-500 px-3 py-1 text-xs text-sky-100 hover:bg-sky-500/10" type="button" onClick={addTargetGroup}>{t(language, 'Add bastion group')}</button>
         </div>
       </div>
