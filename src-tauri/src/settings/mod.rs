@@ -36,6 +36,8 @@ pub struct PersistedSettings {
     pub initial_tail_lines: u32,
     pub buffer_limit: u32,
     pub log_sources: BTreeMap<String, LogSourceConfig>,
+    #[serde(default = "default_shortcuts")]
+    pub shortcuts: KeyboardShortcuts,
     #[serde(default)]
     pub log_policy_id: Option<String>,
     #[serde(default)]
@@ -48,6 +50,14 @@ pub struct PersistedSettings {
 pub struct LogSourceConfig {
     pub container: String,
     pub file_path: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KeyboardShortcuts {
+    pub open_settings: Option<String>,
+    pub open_target_picker: Option<String>,
+    pub toggle_stream: Option<String>,
+    pub restart_stream: Option<String>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +83,15 @@ fn default_color_theme() -> String {
 
 fn default_font_size() -> String {
     "normal".into()
+}
+
+fn default_shortcuts() -> KeyboardShortcuts {
+    KeyboardShortcuts {
+        open_settings: Some("Meta+,".into()),
+        open_target_picker: Some("Meta+K".into()),
+        toggle_stream: Some("Meta+Enter".into()),
+        restart_stream: Some("Meta+Shift+Enter".into()),
+    }
 }
 
 pub fn default_settings() -> PersistedSettings {
@@ -108,6 +127,7 @@ pub fn default_settings() -> PersistedSettings {
                 },
             ),
         ]),
+        shortcuts: default_shortcuts(),
         log_policy_id: Some("scloud".into()),
         log_policy: None,
         plugins: default_plugins(),
@@ -132,6 +152,7 @@ pub fn validate_settings(s: &PersistedSettings) -> Vec<SettingsValidationError> 
     validate_log_policy_id(s, &mut errors);
     validate_log_source_keys(s, &mut errors);
     validate_log_sources(s, &mut errors);
+    validate_shortcuts(&s.shortcuts, &mut errors);
     validate_target_plugins(&s.plugins.targets, &mut errors);
     validate_viewer_plugins(&s.plugins.viewers, &mut errors);
     errors
@@ -217,6 +238,30 @@ fn validate_log_source_keys(s: &PersistedSettings, errors: &mut Vec<SettingsVali
 fn validate_log_sources(s: &PersistedSettings, errors: &mut Vec<SettingsValidationError>) {
     for (k, v) in &s.log_sources {
         validate_log_source(k, v, errors);
+    }
+}
+
+fn validate_shortcuts(shortcuts: &KeyboardShortcuts, errors: &mut Vec<SettingsValidationError>) {
+    validate_shortcut("shortcuts.openSettings", &shortcuts.open_settings, errors);
+    validate_shortcut(
+        "shortcuts.openTargetPicker",
+        &shortcuts.open_target_picker,
+        errors,
+    );
+    validate_shortcut("shortcuts.toggleStream", &shortcuts.toggle_stream, errors);
+    validate_shortcut("shortcuts.restartStream", &shortcuts.restart_stream, errors);
+}
+
+fn validate_shortcut(
+    field: &str,
+    shortcut: &Option<String>,
+    errors: &mut Vec<SettingsValidationError>,
+) {
+    let Some(shortcut) = shortcut else {
+        return;
+    };
+    if shortcut.contains('\0') {
+        errors.push(err(field, "shortcut must not contain null bytes"));
     }
 }
 

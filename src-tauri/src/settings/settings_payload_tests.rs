@@ -15,8 +15,15 @@ fn deserializes_and_saves_settings_with_plugin_extension_config() {
         "layout": "timeline"
     });
     value["plugins"]["viewers"]["raw"]["enabled"] = json!(false);
+    value["shortcuts"] = json!({
+        "openSettings": "Meta+,",
+        "openTargetPicker": "Meta+K",
+        "toggleStream": "Meta+Enter",
+        "restartStream": "Meta+Shift+Enter"
+    });
 
     let settings: PersistedSettings = serde_json::from_value(value).unwrap();
+    assert_eq!(settings.shortcuts.open_settings.as_deref(), Some("Meta+,"));
     assert!(settings.plugins.extra.contains_key("extensionRoot"));
     assert!(settings
         .plugins
@@ -62,9 +69,14 @@ fn deserializes_partial_plugin_settings_with_defaults() {
         .as_object_mut()
         .unwrap()
         .remove("csvFile");
+    value.as_object_mut().unwrap().remove("shortcuts");
 
     let settings: PersistedSettings = serde_json::from_value(value).unwrap();
 
+    assert_eq!(
+        settings.shortcuts.open_target_picker.as_deref(),
+        Some("Meta+K")
+    );
     assert!(settings.plugins.viewers.raw.enabled);
     assert!(settings.plugins.viewers.api_flow_graph.enabled);
     assert!(!settings.plugins.targets.csv_file.enabled);
