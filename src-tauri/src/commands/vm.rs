@@ -53,13 +53,11 @@ pub async fn list_vm_targets(
         diagnostics.push(format!("STEP validate {}", profile_label(&profile)));
         validate_aws_vm_plugin(&profile.plugin)
             .map_err(|error| append_diagnostics(error, &diagnostics))?;
-        let command =
-            bastion_shell_command(&profile.plugin, &profile.plugin.consul_catalog_command)
+        let commands =
+            bastion_shell_commands(&profile.plugin, &profile.plugin.consul_catalog_command)
                 .map_err(|error| append_diagnostics(error, &diagnostics))?;
-        diagnostics.push(format!(
-            "RUN sh -lc {}",
-            redact_command(&command, &profile.plugin)
-        ));
+        diagnostics.extend(command_diagnostics(&profile.plugin, &commands));
+        let command = commands.shell_command;
         let output = run_shell_with_timeout(&command, Duration::from_secs(20))
             .map_err(|error| append_diagnostics(error, &diagnostics))?;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -194,6 +192,20 @@ pub fn bastion_shell_command(
     plugin: &AwsVmTargetPluginSettings,
     remote_command: &str,
 ) -> Result<String, CommandError> {
+    Ok(bastion_shell_commands(plugin, remote_command)?.shell_command)
+}
+
+pub(crate) struct BastionShellCommands {
+    remote_command: String,
+    sshpass_command: String,
+    fallback_command: String,
+    shell_command: String,
+}
+
+pub(crate) fn bastion_shell_commands(
+    plugin: &AwsVmTargetPluginSettings,
+    remote_command: &str,
+) -> Result<BastionShellCommands, CommandError> {
     validate_aws_vm_plugin(plugin)?;
     let password_setup = bastion_sshpass_password_setup(plugin)?;
     let password_ready = bastion_password_ready_shell_condition(plugin)?;
@@ -214,10 +226,41 @@ pub fn bastion_shell_command(
         shell_quote(&plugin.bastion_host),
         shell_quote(remote_command)
     );
-    Ok(format!(
+    let shell_command = format!(
         "if command -v sshpass >/dev/null 2>&1 && {}; then {}; else {}; fi",
         password_ready, sshpass_command, plain_command
-    ))
+    );
+    Ok(BastionShellCommands {
+        remote_command: remote_command.into(),
+        sshpass_command,
+        fallback_command: plain_command,
+        shell_command,
+    })
+}
+
+pub(crate) fn command_diagnostics(
+    plugin: &AwsVmTargetPluginSettings,
+    commands: &BastionShellCommands,
+) -> Vec<String> {
+    [
+        format!(
+            "COMMAND remote {}",
+            redact_command(&commands.remote_command, plugin)
+        ),
+        format!(
+            "COMMAND sshpass {}",
+            redact_command(&commands.sshpass_command, plugin)
+        ),
+        format!(
+            "COMMAND fallback {}",
+            redact_command(&commands.fallback_command, plugin)
+        ),
+        format!(
+            "RUN sh -lc {}",
+            redact_command(&commands.shell_command, plugin)
+        ),
+    ]
+    .into()
 }
 
 pub fn ssh_options(plugin: &AwsVmTargetPluginSettings, batch_mode: bool) -> String {

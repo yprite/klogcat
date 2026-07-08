@@ -264,7 +264,10 @@ function AwsVmPluginSettingsPanel({ draft, language, sourceTypes, updateAwsVmLog
       <p className="font-semibold">{t(language, 'Saved configuration is allowed, but connection testing needs these fields:')}</p>
       <ul className="mt-1 list-disc pl-4">{readiness.missing.map((field) => <li key={field} className="font-mono">{field}</li>)}</ul>
     </div>}
-    {connectionTestResult && <div className={`mt-3 rounded border px-3 py-2 text-xs whitespace-pre-wrap ${connectionTestResult.kind === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100' : 'border-red-500/40 bg-red-500/10 text-red-100'}`}>{connectionTestResult.message}</div>}
+    {connectionTestResult && <div className={`mt-3 rounded border px-3 py-2 text-xs ${connectionTestResult.kind === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100' : 'border-red-500/40 bg-red-500/10 text-red-100'}`}>
+      <p className="font-semibold">{t(language, 'VM connection test output')}</p>
+      <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded border border-black/20 bg-black/20 p-2 font-mono text-[11px] leading-relaxed text-inherit">{connectionTestResult.message}</pre>
+    </div>}
 
     <div className="mt-4 space-y-3 rounded border border-slate-800 bg-slate-900/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
