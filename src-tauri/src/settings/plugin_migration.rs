@@ -12,6 +12,7 @@ pub(super) fn migrate_missing_plugins(value: &mut serde_json::Value) -> bool {
         return false;
     }
     migrate_legacy_aws_vm_settings(plugins);
+    normalize_viewer_plugins(plugins);
     true
 }
 
@@ -60,6 +61,25 @@ fn migrate_legacy_aws_vm_settings(plugins: &mut serde_json::Value) {
         migrate_legacy_env_secret(aws_vm, "vmPasswordEnv", "vmPassword");
         aws_vm.remove("bastionTotpProfile");
         aws_vm.remove("streamCommandTemplate");
+    }
+}
+
+pub(super) fn normalize_plugins(settings: &mut super::PersistedSettings) {
+    settings.plugins.viewers.raw.enabled = true;
+}
+
+fn normalize_viewer_plugins(plugins: &mut serde_json::Value) {
+    let Some(viewers) = plugins
+        .get_mut("viewers")
+        .and_then(|viewers| viewers.as_object_mut())
+    else {
+        return;
+    };
+    let raw = viewers
+        .entry("raw")
+        .or_insert_with(|| serde_json::json!({ "enabled": true }));
+    if let Some(raw) = raw.as_object_mut() {
+        raw.insert("enabled".into(), serde_json::Value::Bool(true));
     }
 }
 

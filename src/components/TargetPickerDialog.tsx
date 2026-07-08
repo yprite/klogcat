@@ -117,7 +117,7 @@ type TargetTreeProps = {
   onNamespaceChange: (namespaces: string[]) => void | Promise<void>
   onPodChange: (pods: string[]) => void | Promise<void>
   progressLabel: string
-  runSelectionChange: (change: () => void | Promise<void>) => void
+  runSelectionChange: (change: () => void | Promise<void>, lockControls?: boolean) => void
   selectedPods: string[]
   selectionPending: boolean
   setCollapsedContexts: (update: (current: Record<string, boolean>) => Record<string, boolean>) => void
@@ -148,7 +148,7 @@ function ContextPanel({ contextItem, collapsedContexts, contextValues, namespace
   const toggleContext = () => {
     const next = toggleValue(contextValues, context.name)
     setDraftContextValues(next)
-    runSelectionChange(() => onContextChange(next))
+    runSelectionChange(() => onContextChange(next), false)
   }
 
   return <div className="mb-3 rounded border border-slate-800 bg-slate-900/40">
@@ -183,7 +183,7 @@ type NamespacePanelProps = {
   namespaceValues: string[]
   onNamespaceChange: (namespaces: string[]) => void | Promise<void>
   onPodChange: (pods: string[]) => void | Promise<void>
-  runSelectionChange: (change: () => void | Promise<void>) => void
+  runSelectionChange: (change: () => void | Promise<void>, lockControls?: boolean) => void
   selectedPods: string[]
   selectionPending: boolean
   setDraftNamespaceValues: (values: string[]) => void
@@ -198,7 +198,7 @@ function NamespacePanel({ context, namespaceItem, namespaceValues, onNamespaceCh
   const toggleNamespace = () => {
     const next = toggleValue(namespaceValues, nsKey)
     setDraftNamespaceValues(next)
-    runSelectionChange(() => onNamespaceChange(next))
+    runSelectionChange(() => onNamespaceChange(next), false)
   }
 
   return <div className="rounded border border-slate-800 bg-slate-950/70">
@@ -252,12 +252,14 @@ function contextsToProbeFromStore(kube: ReturnType<typeof useKubeStore.getState>
 }
 
 function createSelectionChangeHandler(selectionPending: boolean, setSelectionPending: (value: boolean) => void) {
-  return (change: () => void | Promise<void>) => {
+  return (change: () => void | Promise<void>, lockControls = true) => {
     if (selectionPending) return
     const result = change()
     if (!result || typeof result.then !== 'function') return
-    setSelectionPending(true)
-    void result.finally(() => setSelectionPending(false)).catch(() => undefined)
+    if (lockControls) setSelectionPending(true)
+    void result.finally(() => {
+      if (lockControls) setSelectionPending(false)
+    }).catch(() => undefined)
   }
 }
 
@@ -277,7 +279,7 @@ type PodRowProps = {
   namespace: string
   onPodChange: (pods: string[]) => void | Promise<void>
   pod: PodInfo
-  runSelectionChange: (change: () => void | Promise<void>) => void
+  runSelectionChange: (change: () => void | Promise<void>, lockControls?: boolean) => void
   selectedPods: string[]
   selectionPending: boolean
   setDraftSelectedPods: (values: string[]) => void
@@ -304,7 +306,7 @@ type SelectedTargetsProps = {
   vmTargetsEnabled: boolean
   onPodChange: (pods: string[]) => void | Promise<void>
   onVmTargetChange: (targets: string[]) => void | Promise<void>
-  runSelectionChange: (change: () => void | Promise<void>) => void
+  runSelectionChange: (change: () => void | Promise<void>, lockControls?: boolean) => void
   selectedPods: string[]
   selectedVmTargets: string[]
   selectionPending: boolean

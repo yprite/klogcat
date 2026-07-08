@@ -78,6 +78,7 @@ describe('settings store migration', () => {
           },
           viewers: {
             ...defaultSettings.plugins.viewers,
+            raw: { enabled: false },
             apiFlowGraph: { enabled: false },
           },
         },
@@ -89,6 +90,7 @@ describe('settings store migration', () => {
     const settings = useSettingsStore.getState().settings
     expect(settings?.defaultNamespace).toBeUndefined()
     expect(settings?.plugins.targets.csvFile.enabled).toBe(true)
+    expect(settings?.plugins.viewers.raw.enabled).toBe(true)
     expect(settings?.plugins.viewers.apiFlowGraph.enabled).toBe(false)
   })
 })

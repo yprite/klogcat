@@ -46,11 +46,20 @@ function pluginSettingsFor(legacySettings: LegacySettingsShape) {
   const targetPluginPatch = targetPluginPatchFor(legacySettings)
   const awsVm = awsVmSettingsFromPatch(targetPluginPatch)
   const csvFile = { ...defaultCsvFileTargetPluginSettings, ...(targetPluginPatch.csvFile ?? {}) }
+  const viewerPluginPatch = (legacySettings.plugins?.viewers ?? {}) as Partial<PersistedSettings['plugins']['viewers']>
   return {
     ...defaultSettings.plugins,
     ...(legacySettings.plugins ?? {}),
     targets: { ...defaultSettings.plugins.targets, ...targetPluginPatch, awsVm, csvFile },
-    viewers: { ...defaultViewerPluginSettings, ...(legacySettings.plugins?.viewers ?? {}) },
+    viewers: {
+      ...defaultViewerPluginSettings,
+      ...viewerPluginPatch,
+      raw: { enabled: true },
+      apiFlowGraph: {
+        ...defaultViewerPluginSettings.apiFlowGraph,
+        ...(viewerPluginPatch.apiFlowGraph ?? {}),
+      },
+    },
   }
 }
 

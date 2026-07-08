@@ -17,10 +17,10 @@ describe('target plugin registry', () => {
     expect(registry.map((plugin) => plugin.manifest.id)).toEqual(['aws-vm', 'csv-file', 'noop-target'])
   })
 
-  it('rejects unknown target plugin settings keys', () => {
+  it('allows unknown target plugin settings keys as extension-owned config', () => {
     const errors: Array<{ field: string; message: string }> = []
     validateTargetPluginSettings({ ...defaultSettings.plugins.targets, unknown: { enabled: true } }, errors)
-    expect(errors).toContainEqual(expect.objectContaining({ field: 'plugins.targets.unknown' }))
+    expect(errors).toEqual([])
   })
 
   it('reports disabled and enabled target plugin state through policy', () => {

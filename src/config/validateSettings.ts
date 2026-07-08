@@ -32,7 +32,6 @@ function validatePlugins(value: unknown, errors: SettingsValidationError[]) {
     errors.push({ field: 'plugins', message: 'plugins must be an object' })
     return
   }
-  rejectExtraKeys(value, ['targets', 'viewers'], 'plugins', errors)
   validateTargetPluginSettings(value.targets, errors)
   validateViewerPluginSettings(value.viewers, errors)
 }

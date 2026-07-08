@@ -300,7 +300,8 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
     migrate_legacy_app_log_source(&mut value);
     plugin_migration::migrate_missing_plugins(&mut value);
     secrets::decrypt_aws_vm_secrets(&mut value, &path)?;
-    let settings = load_settings_from_value(value)?;
+    let mut settings = load_settings_from_value(value)?;
+    plugin_migration::normalize_plugins(&mut settings);
     let errors = validate_settings(&settings);
     if !errors.is_empty() {
         return Err(
@@ -316,11 +317,12 @@ pub fn load_from_path(path: PathBuf) -> Result<GetSettingsResponse, CommandError
 
 pub fn save_to_path(
     path: PathBuf,
-    settings: PersistedSettings,
+    mut settings: PersistedSettings,
 ) -> Result<PersistedSettings, CommandError> {
     if debug_enabled() {
         eprintln!("[klogcat debug] saving settings to {}", path.display());
     }
+    plugin_migration::normalize_plugins(&mut settings);
     ensure_settings_valid(&settings)?;
     persist_settings(path, &settings)?;
     Ok(settings)
