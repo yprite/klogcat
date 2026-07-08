@@ -23,15 +23,15 @@ describe('viewer plugin registry', () => {
     expect(isViewerPluginEnabled(undefined, 'unknown')).toBe(true)
   })
 
-  it('validates known viewer plugin setting shape and required raw viewer state', () => {
+  it('validates known viewer plugin setting shape without blocking stale raw disabled state', () => {
     const errors: Array<{ field: string; message: string }> = []
     validateViewerPluginSettings({ raw: { enabled: false, extra: true }, apiFlowGraph: { enabled: 'yes' }, unknown: {} }, errors)
 
     expect(errors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ field: 'plugins.viewers.raw.enabled' }),
       expect.objectContaining({ field: 'plugins.viewers.raw.extra' }),
       expect.objectContaining({ field: 'plugins.viewers.apiFlowGraph.enabled' }),
     ]))
+    expect(errors).not.toContainEqual(expect.objectContaining({ field: 'plugins.viewers.raw.enabled' }))
     expect(errors).not.toContainEqual(expect.objectContaining({ field: 'plugins.viewers.unknown' }))
   })
 

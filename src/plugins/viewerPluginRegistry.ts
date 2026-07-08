@@ -30,14 +30,13 @@ function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly strin
   }
 }
 
-function validateViewerPluginEnabledSettings(value: unknown, errors: SettingsValidationError[], prefix: string, options: { requiredEnabled?: true } = {}) {
+function validateViewerPluginEnabledSettings(value: unknown, errors: SettingsValidationError[], prefix: string) {
   if (!isRecord(value)) {
     errors.push({ field: prefix, message: 'viewer plugin config must be an object' })
     return
   }
   rejectExtraKeys(value, viewerPluginSettingKeys, prefix, errors)
   if (typeof value.enabled !== 'boolean') errors.push({ field: `${prefix}.enabled`, message: 'enabled must be a boolean' })
-  if (options.requiredEnabled && value.enabled === false) errors.push({ field: `${prefix}.enabled`, message: 'Raw Logs viewer cannot be disabled' })
 }
 
 export const viewerPluginDefinitions: readonly ViewerPluginDefinition[] = Object.freeze([
@@ -59,7 +58,7 @@ export const viewerPluginDefinitions: readonly ViewerPluginDefinition[] = Object
       return true
     },
     validate(value, errors) {
-      validateViewerPluginEnabledSettings(value, errors, 'plugins.viewers.raw', { requiredEnabled: true })
+      validateViewerPluginEnabledSettings(value, errors, 'plugins.viewers.raw')
     },
   },
   {

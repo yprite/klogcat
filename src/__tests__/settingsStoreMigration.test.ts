@@ -3,7 +3,7 @@ import { defaultSettings } from '../config/defaultSettings'
 import { defaultColorTheme } from '../utils/colorTheme'
 import { defaultFontSize } from '../utils/fontScale'
 import { useSettingsStore } from '../stores/settingsStore'
-import { getSettings } from '../commands/tauriSettings'
+import { getSettings, saveSettings } from '../commands/tauriSettings'
 
 vi.mock('../commands/tauriSettings', () => ({
   getSettings: vi.fn(),
@@ -14,6 +14,8 @@ vi.mock('../commands/tauriSettings', () => ({
 describe('settings store migration', () => {
   beforeEach(() => {
     vi.mocked(getSettings).mockReset()
+    vi.mocked(saveSettings).mockReset()
+    vi.mocked(saveSettings).mockImplementation(async (settings) => settings)
     useSettingsStore.setState({
       settings: defaultSettings,
       warning: undefined,
@@ -92,5 +94,40 @@ describe('settings store migration', () => {
     expect(settings?.plugins.targets.csvFile.enabled).toBe(true)
     expect(settings?.plugins.viewers.raw.enabled).toBe(true)
     expect(settings?.plugins.viewers.apiFlowGraph.enabled).toBe(false)
+  })
+
+  it('saves language-only changes when plugin extension config is present', async () => {
+    const dirtySettings = {
+      ...defaultSettings,
+      plugins: {
+        ...defaultSettings.plugins,
+        extensionRoot: { schema: 1, enabled: true },
+        targets: {
+          ...defaultSettings.plugins.targets,
+          thirdPartyTarget: { enabled: true, endpoint: 'https://example.invalid/targets' },
+        },
+        viewers: {
+          ...defaultSettings.plugins.viewers,
+          raw: { enabled: false },
+          thirdPartyViewer: { enabled: false, layout: 'timeline' },
+        },
+      },
+    } as unknown as typeof defaultSettings
+    useSettingsStore.setState({ settings: dirtySettings })
+
+    await expect(useSettingsStore.getState().saveSettings({ ...dirtySettings, language: 'ko' })).resolves.toBe(true)
+
+    const saved = vi.mocked(saveSettings).mock.calls[0]?.[0] as typeof defaultSettings & {
+      plugins: typeof defaultSettings.plugins & {
+        extensionRoot: { schema: number; enabled: boolean }
+        targets: typeof defaultSettings.plugins.targets & { thirdPartyTarget: { enabled: boolean; endpoint: string } }
+        viewers: typeof defaultSettings.plugins.viewers & { thirdPartyViewer: { enabled: boolean; layout: string } }
+      }
+    }
+    expect(saved.language).toBe('ko')
+    expect(saved.plugins.extensionRoot).toEqual({ schema: 1, enabled: true })
+    expect(saved.plugins.targets.thirdPartyTarget).toEqual({ enabled: true, endpoint: 'https://example.invalid/targets' })
+    expect(saved.plugins.viewers.raw.enabled).toBe(true)
+    expect(saved.plugins.viewers.thirdPartyViewer).toEqual({ enabled: false, layout: 'timeline' })
   })
 })
