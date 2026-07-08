@@ -21,18 +21,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function rejectExtraKeys(value: Record<string, unknown>, allowed: readonly string[], prefix: string, errors: SettingsValidationError[]) {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) errors.push({ field: `${prefix}.${key}`, message: `Unknown key: ${key}` })
-  }
-}
-
 export function validateTargetPluginSettings(value: unknown, errors: SettingsValidationError[]) {
   if (!isRecord(value)) {
     errors.push({ field: 'plugins.targets', message: 'plugins.targets must be an object' })
     return
   }
-  rejectExtraKeys(value, targetPluginDefinitions.map((plugin) => plugin.settingsKey), 'plugins.targets', errors)
   for (const plugin of targetPluginDefinitions) plugin.validate(value[plugin.settingsKey], errors)
 }
 

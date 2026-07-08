@@ -329,7 +329,7 @@ function TraceList({ onSelectTrId, selectedTrId, traces }: { onSelectTrId: (trId
         {selectedTrId && <button type="button" className="rounded border border-yellow-500/60 px-2 py-0.5 text-yellow-100 hover:bg-yellow-500/10" onClick={() => onSelectTrId(undefined)}>Clear selection</button>}
       </div>
     </div>
-    <div className="min-h-0 overflow-auto">
+    <div className="min-h-0 overflow-auto overscroll-contain">
     {visibleTraces.map((trace) => {
       const selected = selectedTrId === trace.trId
       return <button type="button" key={trace.trId} className={`block w-full border-b p-3 text-left last:border-b-0 ${selected ? 'border-yellow-400/40 bg-yellow-400/10' : 'border-slate-800 hover:bg-slate-900/80'}`} title={`${trace.entryApi}\nModules: ${trace.modules.join(' -> ')}`} onClick={() => onSelectTrId(selected ? undefined : trace.trId)}>
@@ -361,35 +361,61 @@ function traceRows(rows: readonly SdkLogRow[], trId: string | undefined) {
 function TraceTimeline({ rows, trId }: { rows: readonly SdkLogRow[]; trId: string }) {
   if (rows.length === 0) return null
   const start = timestampMs(rows[0])
-  return <section data-testid="api-flow-trace-timeline" className="rounded border border-slate-800 bg-slate-950 p-3">
+  const end = Math.max(start + 1, timestampMs(rows.at(-1) ?? rows[0]), ...rows.map((row) => timestampMs(row) + Math.max(1, elapsedMs(row))))
+  const span = Math.max(1, end - start)
+  const ticks = Array.from({ length: 6 }, (_, index) => index / 5)
+  return <section data-testid="api-flow-trace-timeline" className="rounded border border-slate-800 bg-[#10151f] p-3 shadow-inner shadow-black/30">
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-yellow-300">Timeline</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-yellow-300">Timeline editor</p>
         <h3 className="font-mono text-sm font-semibold text-white">{trId}</h3>
       </div>
-      <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{rows.length} events</span>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+        <span className="rounded border border-slate-700 px-2 py-1">{rows.length} clips</span>
+        <span className="rounded border border-slate-700 px-2 py-1">duration {formatDuration(span)}</span>
+      </div>
     </div>
-    <div className="space-y-2">
+    <div className="overflow-x-auto rounded border border-slate-800 bg-slate-950">
+      <div className="min-w-[760px]">
+        <div className="relative h-9 border-b border-slate-800 bg-slate-900/80">
+          {ticks.map((tick) => <div key={tick} className="absolute top-0 h-full border-l border-slate-700/70" style={{ left: `${tick * 100}%` }}>
+            <span className="ml-1 font-mono text-[10px] text-slate-400">+{formatDuration(span * tick)}</span>
+          </div>)}
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-yellow-500/20 via-yellow-300/70 to-yellow-500/20" />
+        </div>
+        <div className="relative">
+          {ticks.map((tick) => <div key={`grid-${tick}`} className="pointer-events-none absolute bottom-0 top-0 border-l border-slate-800/80" style={{ left: `${tick * 100}%` }} />)}
+          <div className="absolute bottom-0 top-0 z-10 w-px bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.8)]" style={{ left: '0%' }}>
+            <span className="absolute -top-2 left-1 rounded bg-red-500 px-1 font-mono text-[10px] text-white">IN</span>
+          </div>
       {rows.map((row, index) => {
         const currentTime = timestampMs(row)
         const previousTime = index > 0 ? timestampMs(rows[index - 1]) : currentTime
         const status = statusValue(row) ?? 'n/a'
-        return <article key={`${row.id}-${index}`} className="grid gap-2 rounded border border-slate-800 bg-slate-900/70 p-2 text-xs sm:grid-cols-[5rem_minmax(0,1fr)_7rem]">
-          <div className="font-mono text-slate-400">
-            <p>#{index + 1}</p>
-            <p>+{formatDuration(currentTime - start)}</p>
-            {index > 0 && <p className="text-slate-500">delta {formatDuration(currentTime - previousTime)}</p>}
+        const left = Math.max(0, Math.min(96, ((currentTime - start) / span) * 100))
+        const clipWidth = Math.max(9, Math.min(32, (Math.max(elapsedMs(row), currentTime - previousTime, 80) / span) * 100))
+        const severe = statusSeverity(status)
+        return <article key={`${row.id}-${index}`} className="grid min-h-[4.25rem] grid-cols-[8.5rem_minmax(0,1fr)] border-b border-slate-800/80 text-xs last:border-b-0">
+          <div className="border-r border-slate-800 bg-slate-900/80 p-2">
+            <p className="truncate font-semibold text-white">{serverId(row)}</p>
+            <p className="mt-1 font-mono text-slate-400">V{String(index + 1).padStart(2, '0')}</p>
+            <p className="mt-1 text-slate-500">delta {index > 0 ? formatDuration(currentTime - previousTime) : 'start'}</p>
           </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-white">{serverId(row)}</p>
-            <p className="mt-1 truncate text-slate-300">{requestLabel(row)}</p>
-            <p className="mt-1 truncate text-slate-500">{formatTime(currentTime)} · row #{row.id}</p>
-          </div>
-          <div className="flex items-start justify-end">
-            <span className={`rounded border px-2 py-0.5 font-semibold ${statusSeverity(status) >= 3 ? 'border-red-500/50 bg-red-500/10 text-red-100' : statusSeverity(status) >= 2 ? 'border-amber-500/50 bg-amber-500/10 text-amber-100' : 'border-slate-700 text-slate-200'}`}>{status}</span>
+          <div className="relative bg-[linear-gradient(90deg,rgba(148,163,184,0.06)_1px,transparent_1px)] bg-[length:24px_100%] p-2">
+            <button
+              type="button"
+              className={`absolute top-2 h-11 min-w-[5.25rem] rounded border px-2 text-left shadow-lg transition hover:-translate-y-0.5 ${severe >= 3 ? 'border-red-400/70 bg-red-500/20 text-red-50 shadow-red-950/40' : severe >= 2 ? 'border-amber-400/70 bg-amber-500/20 text-amber-50 shadow-amber-950/40' : 'border-cyan-300/60 bg-cyan-400/15 text-cyan-50 shadow-cyan-950/40'}`}
+              style={{ left: `${left}%`, width: `${clipWidth}%` }}
+              title={`${serverId(row)}\n${requestLabel(row)}\n${formatTime(currentTime)} · row #${row.id}\nstatus ${status}`}
+            >
+              <span className="block truncate font-semibold">{requestLabel(row)}</span>
+              <span className="mt-0.5 block truncate font-mono text-[10px] opacity-80">+{formatDuration(currentTime - start)} · {status}</span>
+            </button>
           </div>
         </article>
       })}
+        </div>
+      </div>
     </div>
   </section>
 }
@@ -403,7 +429,7 @@ export function ApiFlowGraphExtensionView({ snapshot }: LogViewerExtensionProps)
   useEffect(() => {
     if (selectedTrId && selectedRows.length === 0) setSelectedTrId(undefined)
   }, [selectedRows.length, selectedTrId])
-  return <section data-testid="api-flow-graph-view" className="min-h-0 flex-1 overflow-auto rounded border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
+  return <section data-testid="api-flow-graph-view" className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-yellow-300">API Flow</p>
@@ -418,15 +444,15 @@ export function ApiFlowGraphExtensionView({ snapshot }: LogViewerExtensionProps)
         <span className="rounded border border-slate-800 bg-slate-950 px-3 py-2"><b className="block text-base text-white">{graph.edges.length}</b>edges</span>
       </div>
     </header>
-    {fullGraph.correlatedRowCount === 0 ? <div className="rounded border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-300">
+    {fullGraph.correlatedRowCount === 0 ? <div className="mt-3 rounded border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-300">
       <p className="font-semibold text-slate-100">No trID correlated rows in the current view</p>
       <p className="mt-2">Filter to a time window or user, then include rows with trId or traceId to render the API flow graph.</p>
-    </div> : <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-3">
+    </div> : <div className="mt-3 grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
+      <div className="min-h-0">
         <GraphCanvas graph={graph} selectedTrId={selectedTrId} />
-        {selectedTrId && <TraceTimeline rows={selectedRows} trId={selectedTrId} />}
       </div>
-      <div className="min-h-[240px]">
+      {selectedTrId && <TraceTimeline rows={selectedRows} trId={selectedTrId} />}
+      <div className="min-h-0">
         {fullGraph.omittedTraceCount > 0 && <p className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">{fullGraph.omittedTraceCount} older trID groups omitted from this list.</p>}
         <TraceList traces={fullGraph.traces} selectedTrId={selectedTrId} onSelectTrId={setSelectedTrId} />
       </div>

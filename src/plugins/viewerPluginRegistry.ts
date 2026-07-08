@@ -90,7 +90,6 @@ export function validateViewerPluginSettings(value: unknown, errors: SettingsVal
     errors.push({ field: 'plugins.viewers', message: 'plugins.viewers must be an object' })
     return
   }
-  rejectExtraKeys(value, viewerPluginDefinitions.map((plugin) => plugin.settingsKey), 'plugins.viewers', errors)
   for (const plugin of viewerPluginDefinitions) plugin.validate(value[plugin.settingsKey], errors)
 }
 

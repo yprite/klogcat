@@ -4,22 +4,31 @@ use super::target_plugin_groups::{
 };
 use crate::error::SettingsValidationError;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 
 const REQUIRED_LOG_SOURCE_KEYS: [&str; 3] = ["access", "error", "info"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginSettings {
+    #[serde(default = "default_target_plugins")]
     pub targets: TargetPluginSettings,
+    #[serde(default = "default_viewer_plugins")]
     pub viewers: ViewerPluginSettings,
+    #[serde(default, flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetPluginSettings {
+    #[serde(default = "default_aws_vm_plugin")]
     pub aws_vm: AwsVmTargetPluginSettings,
+    #[serde(default = "default_csv_file_plugin")]
     pub csv_file: CsvFileTargetPluginSettings,
+    #[serde(default, flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,41 +59,55 @@ pub struct CsvFileTargetPluginSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ViewerPluginSettings {
+    #[serde(default = "default_enabled_viewer_plugin")]
     pub raw: ViewerPluginEnabledSettings,
+    #[serde(default = "default_enabled_viewer_plugin")]
     pub api_flow_graph: ViewerPluginEnabledSettings,
+    #[serde(default, flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ViewerPluginEnabledSettings {
+    #[serde(default = "default_true_bool")]
     pub enabled: bool,
 }
 
 pub(crate) fn default_target_plugins() -> TargetPluginSettings {
     TargetPluginSettings {
-        aws_vm: AwsVmTargetPluginSettings {
-            enabled: false,
-            bastion_host: String::new(),
-            bastion_port: 22,
-            bastion_username: String::new(),
-            bastion_password: String::new(),
-            bastion_totp_secret: Some(String::new()),
-            bastion_password_mode: "password".into(),
-            vm_username: String::new(),
-            vm_password: String::new(),
-            consul_catalog_command: "consul_catalog".into(),
-            strict_host_key_checking: true,
-            log_paths: default_vm_log_paths(),
-            target_groups: default_aws_vm_target_groups(),
-        },
-        csv_file: CsvFileTargetPluginSettings {
-            enabled: false,
-            csv_text:
-                "id,name,address,service,datacenter,tags\napi-1,api-1,10.0.0.7,api,prod,blue|critical"
-                    .into(),
-        },
+        aws_vm: default_aws_vm_plugin(),
+        csv_file: default_csv_file_plugin(),
+        extra: BTreeMap::new(),
+    }
+}
+
+fn default_aws_vm_plugin() -> AwsVmTargetPluginSettings {
+    AwsVmTargetPluginSettings {
+        enabled: false,
+        bastion_host: String::new(),
+        bastion_port: 22,
+        bastion_username: String::new(),
+        bastion_password: String::new(),
+        bastion_totp_secret: Some(String::new()),
+        bastion_password_mode: "password".into(),
+        vm_username: String::new(),
+        vm_password: String::new(),
+        consul_catalog_command: "consul_catalog".into(),
+        strict_host_key_checking: true,
+        log_paths: default_vm_log_paths(),
+        target_groups: default_aws_vm_target_groups(),
+    }
+}
+
+fn default_csv_file_plugin() -> CsvFileTargetPluginSettings {
+    CsvFileTargetPluginSettings {
+        enabled: false,
+        csv_text:
+            "id,name,address,service,datacenter,tags\napi-1,api-1,10.0.0.7,api,prod,blue|critical"
+                .into(),
     }
 }
 
@@ -92,14 +115,24 @@ pub(crate) fn default_plugins() -> PluginSettings {
     PluginSettings {
         targets: default_target_plugins(),
         viewers: default_viewer_plugins(),
+        extra: BTreeMap::new(),
     }
 }
 
 pub(crate) fn default_viewer_plugins() -> ViewerPluginSettings {
     ViewerPluginSettings {
-        raw: ViewerPluginEnabledSettings { enabled: true },
-        api_flow_graph: ViewerPluginEnabledSettings { enabled: true },
+        raw: default_enabled_viewer_plugin(),
+        api_flow_graph: default_enabled_viewer_plugin(),
+        extra: BTreeMap::new(),
     }
+}
+
+fn default_enabled_viewer_plugin() -> ViewerPluginEnabledSettings {
+    ViewerPluginEnabledSettings { enabled: true }
+}
+
+fn default_true_bool() -> bool {
+    true
 }
 
 fn default_vm_log_paths() -> BTreeMap<String, String> {
